@@ -1,0 +1,112 @@
+// ===== Datos de la tienda — ÚNICA fuente de verdad =====
+// Este archivo lo usan tanto la web (app.js) como la función de pago de MODO
+// (netlify/functions/modo-checkout.js). Editá precios y productos SOLO acá.
+
+const DESCUENTO_CANTIDAD = 5; // unidades mínimas para el descuento
+const DESCUENTO_PORCENTAJE = 5; // % de descuento
+
+const PRODUCTOS = [
+  {
+    id: "brasil-honey",
+    nombre: "Brasil Honey Cup",
+    precio: 1720,
+    origen: "Brasil",
+    region: "Alta Mogiana, Brasil",
+    variedad: "Caturra",
+    proceso: "Semi lavado",
+    sca: "83,5",
+    tostador: "Rito Tostadores",
+    notas: ["Azúcar morena", "Almendras", "Frambuesas"],
+    desc: "Un café brasileño de la región Alta Mogiana, cultivado entre 1000 y 1200 m y procesado mediante método semi lavado, que realza su dulzura natural. Proveniente de cooperativas locales, destaca por su cuerpo equilibrado. Una taza suave, dulce y persistente, perfecta para disfrutar en cualquier momento.",
+    img: "img/brasil-honey.webp",
+  },
+  {
+    id: "oldfashion",
+    nombre: "Oldfashion",
+    precio: 2360,
+    origen: "Colombia",
+    region: "Huila, Pitalito (Colombia)",
+    variedad: "Bourbon y Caturra",
+    proceso: "Lavado",
+    sca: "84,5",
+    tostador: "La Motofeca",
+    notas: ["Especias", "Chocolate", "Pasas de uva"],
+    desc: "Cultivado entre 1650 y 2100 m de altitud, destaca por su cuerpo medio, acidez equilibrada y una complejidad aromática que recuerda al clásico cóctel que le da nombre. Con una dulzura sutil y persistente, es un café redondo y aromático, ideal para quienes disfrutan de perfiles intensos y elegantes.",
+    img: "img/oldfashion.webp",
+  },
+  {
+    id: "peru",
+    nombre: "Perú",
+    precio: 2270,
+    origen: "Perú",
+    region: "Rodríguez de Mendoza, Perú",
+    variedad: "Blend de variedades",
+    proceso: "Lavado, secado en camas africanas",
+    sca: null,
+    tostador: "Jack Flash",
+    notas: ["Naranja", "Toffee", "Avellanas"],
+    desc: "Crece entre 1650 y 2100 m de altitud, donde el clima templado favorece una maduración lenta del grano. Ofrece una taza limpia y balanceada con acidez media melosa y un final dulce y persistente. Un café elegante y complejo, ideal para quienes disfrutan de matices cítricos y dulces.",
+    img: "img/peru.webp",
+  },
+  {
+    id: "volcanico",
+    nombre: "Volcánico",
+    precio: 2100,
+    origen: "Colombia",
+    region: "Tolima, Chaparral (Colombia)",
+    variedad: "Caturra, Colombia y Castillo",
+    proceso: "Lavado",
+    sca: null,
+    tostador: "Momo Tostadores",
+    notas: ["Miel", "Toffee", "Frutas amarillas"],
+    desc: "Cultivado entre 1500 y 2000 m de altitud, destaca por su buen cuerpo, una acidez media vibrante y un perfil que evoca el clásico café colombiano. Con un dulzor equilibrado y toques cítricos, es un café amable y balanceado, dulce, fresco y reconfortante.",
+    img: "img/volcanico.webp",
+  },
+  {
+    id: "brasil",
+    nombre: "Brasil",
+    precio: 2100,
+    origen: "Brasil",
+    region: "Espíritu Santo, Brasil",
+    variedad: "Catuaí Amarillo y Rojo",
+    proceso: "Natural",
+    sca: "87",
+    tostador: "Familia Cabrales",
+    notas: ["Caramelo", "Frutos rojos", "Cítricos dulces"],
+    desc: "Microlote cultivado entre 750 y 900 m de altitud por Wallace Junior Schneider. Su proceso natural potencia la dulzura y una acidez brillante y jugosa. Cuerpo medio y aroma intenso: ideal para quienes disfrutan de perfiles frutales y balanceados.",
+    img: "img/brasil.webp",
+  },
+  {
+    id: "silverio-nina",
+    nombre: "Silverio Nina",
+    precio: 2100,
+    origen: "Bolivia",
+    region: "Los Yungas, Bolivia",
+    variedad: "Caturra",
+    proceso: "Lavado",
+    sca: null,
+    tostador: "Momo Tostadores",
+    notas: ["Caramelo", "Cítricos", "Ciruela"],
+    desc: "Cultivado a más de 1550 m de altitud, destaca por su cuerpo agradable, una acidez refrescante y un perfil notablemente limpio, con un dulzor llamativo y persistente. Un café elegante y fresco, ideal para una taza frutal a cualquier hora del día.",
+    img: "img/silverio-nina.webp",
+  },
+  {
+    id: "andino",
+    nombre: "Andino",
+    precio: 2100,
+    origen: "Colombia",
+    region: "Quindío, Colombia",
+    variedad: "Caturra, Colombia, Catimor y Castillo",
+    proceso: "Lavado",
+    sca: null,
+    tostador: "Momo Tostadores",
+    notas: ["Caramelo", "Frutos rojos", "Cítrico"],
+    desc: "Cultivado entre 1500 y 2000 m de altitud, destaca por su buen cuerpo, acidez media vibrante y un perfil clásico irresistible, con una dulzura fresca y balanceada. Un café amable, ideal para quienes disfrutan de la elegancia de un tradicional café colombiano.",
+    img: "img/andino.webp",
+  },
+];
+
+// Export para Node (función serverless); en el browser quedan como globales.
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { PRODUCTOS, DESCUENTO_CANTIDAD, DESCUENTO_PORCENTAJE };
+}

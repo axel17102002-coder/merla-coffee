@@ -1,0 +1,9 @@
+# Configuración de Netlify para Merla Coffee
+# El sitio es estático; la única función serverless es el checkout de MODO.
+
+[build]
+  publish = "."
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
