@@ -1,0 +1,15 @@
+id,producto_id,nombre,precio,unidades_stock,activo
+brasil-honey-unidad,brasil-honey,Unidad,1720,1,true
+brasil-honey-pack5,brasil-honey,Pack x5,7740,5,true
+oldfashion-unidad,oldfashion,Unidad,2360,1,true
+oldfashion-pack5,oldfashion,Pack x5,10620,5,true
+peru-unidad,peru,Unidad,2270,1,true
+peru-pack5,peru,Pack x5,10215,5,true
+volcanico-unidad,volcanico,Unidad,2100,1,true
+volcanico-pack5,volcanico,Pack x5,9450,5,true
+brasil-unidad,brasil,Unidad,2100,1,true
+brasil-pack5,brasil,Pack x5,9450,5,true
+silverio-nina-unidad,silverio-nina,Unidad,2100,1,true
+silverio-nina-pack5,silverio-nina,Pack x5,9450,5,true
+andino-unidad,andino,Unidad,2100,1,true
+andino-pack5,andino,Pack x5,9450,5,true

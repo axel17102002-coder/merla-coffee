@@ -2,3 +2,7 @@
 /.claude
 # Local Netlify folder
 .netlify
+.env
+.netlify
+node_modules
+.DS_Store

@@ -1,68 +1,17 @@
-// ===== Función serverless: crear pago con MODO =====
-// Recibe el carrito desde la web y recalcula TODO con el motor de precios
-// compartido (productos.js): presentaciones, stock, descuentos, cupones y
-// canje de puntos. Nunca confía en montos que vengan del navegador.
-// Docs: https://merchants.modo.com.ar/docs (Botón de Pago SDK v2)
+// POST /.netlify/functions/modo-checkout
+//   { items: [{presentacion, qty}], cupon: "CODIGO"|null, canjePuntos: bool, email: string|null }
 //
-// Configuración por variables de entorno (en Netlify: Site settings → Environment variables):
-//   MODO_ENV            "test" (default) o "produccion"
-//   MODO_USERNAME       usuario de las credenciales MODO
-//   MODO_PASSWORD       contraseña de las credenciales MODO
-//   MODO_PROCESSOR_CODE código del gateway (ej. P1019 Decidir test; el productivo llega por mail con el alta)
-//   MODO_CC_CODE        condición comercial (ej. "1CSI" = 1 cuota sin interés)
-//   MODO_MERCHANT_NAME  nombre del comercio para el header User-Agent
-//
-// Sin variables configuradas usa las credenciales GENÉRICAS DE TEST publicadas
-// en la documentación de MODO: sirven para probar, pero el dinero NO llega a
-// ninguna cuenta. Para cobrar de verdad hay que pedir credenciales productivas
-// (ver README).
+// Crea un pago con MODO. Todo se recalcula acá con datos de Supabase (precios,
+// stock, cupón, puntos): nunca se confía en montos del navegador. Además deja
+// el pedido registrado en la tabla `pedidos`; cuando MODO confirma el pago
+// (webhook o confirmar-pedido), se descuenta el stock y se acreditan puntos.
 
-const { calcularPedido } = require("../../productos.js");
-
-const ENV = process.env.MODO_ENV || "test";
-
-const BASE_URL =
-  ENV === "produccion"
-    ? "https://merchants.playdigital.com.ar" // confirmar con el mail de alta de MODO
-    : "https://merchants.preprod.playdigital.com.ar";
-
-// Credenciales genéricas de test publicadas en https://merchants.modo.com.ar/docs
-const USERNAME = process.env.MODO_USERNAME || "PLAYDIGITAL SA-318979-preprod";
-const PASSWORD = process.env.MODO_PASSWORD || "318979-P75V/QLKfVKX";
-const PROCESSOR_CODE = process.env.MODO_PROCESSOR_CODE || "P1019"; // Decidir 2.0 (test)
-const CC_CODE = process.env.MODO_CC_CODE || "1CSI"; // 1 cuota sin interés
-const MERCHANT_NAME = process.env.MODO_MERCHANT_NAME || "Merla Coffee";
-
-// El token dura 7 días y el endpoint tiene rate limit (10 req/10 min):
-// lo cacheamos mientras la función siga "caliente".
-let tokenCache = { token: null, vence: 0 };
-
-async function obtenerToken() {
-  if (tokenCache.token && Date.now() < tokenCache.vence - 60_000) {
-    return tokenCache.token;
-  }
-  const res = await fetch(`${BASE_URL}/v2/stores/companies/token`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "User-Agent": MERCHANT_NAME,
-    },
-    body: JSON.stringify({ username: USERNAME, password: PASSWORD }),
-  });
-  if (!res.ok) {
-    throw new Error(`MODO token: HTTP ${res.status} ${await res.text()}`);
-  }
-  const data = await res.json();
-  tokenCache = {
-    token: data.access_token,
-    vence: Date.now() + (data.expires_in || 604800) * 1000,
-  };
-  return tokenCache.token;
-}
+const { sb, obtenerCatalogo, obtenerCupon, obtenerPuntos } = require("../lib/supabase.js");
+const { ENV, crearPago } = require("../lib/modo.js");
+const { CONFIG, calcularPedido } = require("../../motor.js");
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json" };
-
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, headers, body: JSON.stringify({ error: "Método no permitido" }) };
   }
@@ -74,73 +23,117 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: "Cuerpo inválido" }) };
   }
 
-  // El motor compartido valida productos, presentaciones, stock, cupón y canje
-  const pedido = calcularPedido(body.items, {
-    cupon: body.cupon || null,
-    canjePuntos: Boolean(body.canjePuntos),
-  });
-
-  if (!pedido.ok) {
-    return { statusCode: 400, headers, body: JSON.stringify({ error: pedido.error }) };
-  }
-
-  const detalles = [];
-  if (pedido.descuentoCantidad) detalles.push(`desc. cantidad -$${pedido.descuentoCantidad}`);
-  if (pedido.descuentoCupon) detalles.push(`cupón ${pedido.cupon} -$${pedido.descuentoCupon}`);
-  if (pedido.descuentoPuntos) detalles.push(`puntos Club Merla -$${pedido.descuentoPuntos}`);
-
   try {
-    const token = await obtenerToken();
-    const res = await fetch(`${BASE_URL}/v2/payment-requests/`, {
+    // Email (necesario solo para puntos)
+    const email = String(body.email || "").trim().toLowerCase();
+    const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if (body.canjePuntos && !emailValido) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: "Para canjear puntos ingresá tu email" }),
+      };
+    }
+
+    // Datos frescos desde la base
+    const productos = await obtenerCatalogo();
+
+    let cupon = null;
+    if (body.cupon) {
+      cupon = await obtenerCupon(body.cupon);
+      if (!cupon) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "Cupón inválido" }) };
+      }
+    }
+
+    let puntosDisponibles = null;
+    if (body.canjePuntos) {
+      puntosDisponibles = await obtenerPuntos(email);
+    }
+
+    const pedido = calcularPedido(
+      body.items,
+      { cupon, canjePuntos: Boolean(body.canjePuntos), puntosDisponibles },
+      { productos }
+    );
+    if (!pedido.ok) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: pedido.error }) };
+    }
+
+    // Registrar el pedido (estado pendiente) antes de crear el pago
+    const externalId = `merla-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const [fila] = await sb("pedidos", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": MERCHANT_NAME,
-        Authorization: `Bearer ${token}`,
+      headers: { Prefer: "return=representation" },
+      body: {
+        external_intention_id: externalId,
+        items: pedido.lineas.map((l) => ({
+          producto_id: l.producto_id,
+          presentacion_id: l.presentacion_id,
+          nombre: `${l.nombre} - ${l.presentacionNombre}`,
+          qty: l.qty,
+          unidades: l.unidades,
+          precio_unitario: l.precioUnitario,
+        })),
+        subtotal: pedido.subtotal,
+        descuento_cantidad: pedido.descuentoCantidad,
+        cupon: pedido.cupon,
+        descuento_cupon: pedido.descuentoCupon,
+        puntos_canjeados: pedido.puntosCanjeados,
+        descuento_puntos: pedido.descuentoPuntos,
+        total: pedido.total,
+        puntos_ganados: emailValido ? pedido.puntosGanados : 0,
+        cliente_email: emailValido ? email : null,
       },
-      body: JSON.stringify({
+    });
+
+    // URL pública del sitio para que MODO nos notifique el resultado
+    const sitio = process.env.URL || process.env.DEPLOY_PRIME_URL || "";
+    const webhook = sitio.startsWith("https://")
+      ? `${sitio}/.netlify/functions/modo-webhook`
+      : undefined;
+
+    let pago;
+    try {
+      pago = await crearPago({
         description: `Pedido Merla Coffee (${pedido.unidades} drip bags)`.slice(0, 100),
         amount: pedido.total,
-        currency: "ARS",
-        cc_code: CC_CODE,
-        processor_code: PROCESSOR_CODE,
-        external_intention_id: `merla-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        message: detalles.join(" | ").slice(0, 200),
+        external_intention_id: externalId,
+        ...(webhook ? { webhook_notification: webhook } : {}),
         items: pedido.lineas.map((l) => ({
           description: `${l.nombre} - Drip Bag (${l.presentacionNombre})`,
           quantity: l.qty,
           unit_price: l.precioUnitario,
-          sku: `${l.id}-${l.presentacion}`,
+          sku: l.presentacion_id,
           category_name: "Drip Bags",
         })),
-      }),
-    });
-
-    if (!res.ok) {
-      const detalle = await res.text();
-      console.error("MODO payment-request falló:", res.status, detalle);
-      return {
-        statusCode: 502,
-        headers,
-        body: JSON.stringify({ error: "MODO rechazó la solicitud de pago" }),
-      };
+      });
+    } catch (err) {
+      // Si MODO falló, no dejamos el pedido huérfano
+      await sb(`pedidos?id=eq.${fila.id}`, { method: "DELETE" }).catch(() => {});
+      throw err;
     }
 
-    const data = await res.json();
+    // Guardar el id de MODO para poder matchear el webhook
+    await sb(`pedidos?id=eq.${fila.id}`, {
+      method: "PATCH",
+      body: { modo_id: pago.id },
+    });
+
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
-        id: data.id,
-        qr: data.qr,
-        deeplink: data.deeplink,
+        id: pago.id,
+        qr: pago.qr,
+        deeplink: pago.deeplink,
         total: pedido.total,
-        puntosGanados: pedido.puntosGanados,
+        puntosGanados: emailValido ? pedido.puntosGanados : 0,
         ambiente: ENV,
       }),
     };
   } catch (err) {
-    console.error("Error creando pago MODO:", err);
+    console.error("modo-checkout:", err);
     return {
       statusCode: 502,
       headers,

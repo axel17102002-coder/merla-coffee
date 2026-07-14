@@ -1,77 +1,73 @@
 # Merla Coffee — Sitio web
 
-Tienda de café de especialidad en drip bags, con carrito, **stock**, **packs**, **cupones**, **puntos Club Merla**, **pago online con MODO** y pedido por WhatsApp.
+Tienda de café de especialidad en drip bags: carrito, packs, cupones ocultos, puntos Club Merla, **stock automático** y pago online con MODO. Los datos viven en **Supabase**; el sitio y las funciones corren en **Netlify**.
+
+## Arquitectura
+
+```
+Navegador ──> Funciones Netlify ──> Supabase (productos, stock, cupones, clientes, pedidos)
+                    │
+                    └──> API de MODO (pagos)  ──webhook──> descuenta stock + acredita puntos
+```
+
+- El navegador **nunca** toca Supabase directo: todo pasa por las funciones.
+- Los precios/descuentos se calculan con `motor.js` tanto en la web (para mostrar) como en el servidor (para cobrar): no se puede pagar un monto adulterado.
+- El stock se descuenta **solo cuando MODO confirma el pago** (webhook + verificación contra la API). Los pedidos por WhatsApp se descuentan a mano en Supabase.
 
 ## Archivos
 
-- `index.html` — estructura de la página
-- `styles.css` — estilos (colores de marca: crema y verde oscuro; fuentes Baloo 2 + Figtree)
-- `productos.js` — **acá se edita TODO**: productos, precios, stock, packs, cupones y puntos (lo usan la web y el pago con MODO)
-- `app.js` — carrito, cupones, puntos y checkouts (WhatsApp + MODO)
-- `netlify/functions/modo-checkout.js` — función que crea el pago contra la API de MODO
-- `netlify.toml` — configuración de Netlify
-- `img/` — fotos de productos y logo
+- `index.html` / `styles.css` / `app.js` — la web
+- `motor.js` — reglas de precios compartidas (descuentos, mínimos, puntos)
+- `netlify/lib/` — clientes de Supabase y MODO
+- `netlify/functions/`
+  - `tienda.js` — catálogo con stock (lo que carga la web)
+  - `validar-cupon.js` — valida códigos sin exponer la lista
+  - `puntos.js` — saldo Club Merla por email
+  - `modo-checkout.js` — crea el pago + registra el pedido
+  - `modo-webhook.js` — MODO avisa el resultado → aprueba el pedido
+  - `confirmar-pedido.js` — respaldo del webhook desde el navegador
+- `supabase/schema.sql` — tablas, seguridad y datos iniciales
 
-## Qué se configura en `productos.js`
+## Puesta en marcha (una sola vez)
 
-| Qué | Dónde | Hoy |
-|---|---|---|
-| Precio de cada café | campo `precio` | según producto |
-| **Stock** (drip bags disponibles) | campo `stock` (0 = "Agotado") | ⚠️ números de ejemplo, poné los reales |
-| Descuento por cantidad | `DESCUENTO_CANTIDAD` / `DESCUENTO_PORCENTAJE` | 5% llevando 5+ unidades sueltas |
-| **Pack x5** | `PACK_X5` | 10% OFF vs. 5 sueltas (se calcula solo) |
-| **Cupones** | lista `CUPONES` | BIENVENIDA10 (10%) y CAFETERO ($2.000, mín $15.000) |
-| **Club Merla** (puntos) | `FIDELIDAD` | 1 punto por $100; 300 puntos = $1.500 OFF |
+1. **Crear las tablas**: en [Supabase](https://supabase.com) → tu proyecto → **SQL Editor** → pegá todo el contenido de `supabase/schema.sql` → **Run**. Eso crea las tablas con los 7 cafés, las presentaciones y 2 cupones de ejemplo.
+2. **Claves locales**: copiá `.env.example` a `.env` y completá `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` (están en Supabase → Settings → API). El `.env` está gitignoreado: nunca se sube.
+3. **Probar local**: `npx netlify-cli dev --port 8888` y abrir http://localhost:8888
+4. **Publicar**: `netlify deploy --prod` y cargar las mismas 2 variables en Netlify → Site settings → **Environment variables**. El webhook de MODO solo funciona con el sitio publicado.
 
-Notas:
-- El stock **no se descuenta solo** al vender (no hay base de datos): cuando vendés, actualizá el número y volvé a publicar. El stock sí impide que un cliente compre más de lo disponible.
-- Un pack x5 consume 5 de stock. Si un café tiene menos de 5, el pack se deshabilita solo.
-- Cupones con `publico: true` se muestran en la sección "Cupones y Club Merla"; los que no, son códigos secretos para compartir donde quieras (ojo: alguien con conocimientos técnicos puede verlos en el código de la página).
-- Los puntos del Club Merla se guardan **en el navegador del cliente** y se suman solo pagando con MODO. Es simple y sin cuentas de usuario; si el cliente cambia de dispositivo, no se transfieren.
-- El descuento por cantidad (5%) aplica solo a unidades sueltas: los packs ya traen su 10%.
+## Administración diaria (sin tocar código)
 
-El número de WhatsApp está en `WHATSAPP` al inicio de `app.js`.
+Todo desde Supabase → **Table Editor**:
 
-## Cómo verlo en tu compu
+- **Stock**: tabla `productos`, columna `stock`. Se descuenta solo con cada venta por MODO; las ventas por WhatsApp restalas a mano. `stock = 0` muestra "Agotado".
+- **Precios**: tabla `presentaciones` (unidad y pack por separado).
+- **Cupones**: tabla `cupones`. Crear fila = cupón nuevo; `activo = false` lo apaga. **No se muestran en la web**: pasalos por Instagram/WhatsApp.
+- **Clientes y puntos**: tabla `clientes`. Podés regalar puntos editando el número.
+- **Pedidos**: tabla `pedidos` — historial completo con estado (pendiente/aprobado/rechazado).
+- **Pausar un café**: `productos.activo = false` (desaparece de la web sin borrar nada).
 
-```bash
-cd merla-coffee
-npx netlify-cli dev --port 8888
-```
+## Club Merla
 
-y abrí http://localhost:8888 (con esto también funciona el botón de MODO en modo prueba).
+1 punto por cada $100 pagando con MODO (el cliente deja su email al comprar; sin registro). Con 300 puntos canjea $1.500 desde el carrito. La config está en `motor.js` (`CONFIG.fidelidad`).
 
-## Cómo publicarlo
+## Reglas de precios (en `motor.js`)
 
-Como hay una función de pago (no solo archivos estáticos), conviene **Netlify**:
-
-```bash
-npm install -g netlify-cli
-cd merla-coffee
-netlify deploy --prod
-```
-
-(También funciona Netlify Drop arrastrando la carpeta en https://app.netlify.com/drop; si el botón de MODO no anduviera con ese método, usá la CLI.)
+- 5% OFF llevando 5+ unidades sueltas (los packs no cuentan: ya tienen su descuento).
+- El % de ahorro del pack se calcula solo comparando el precio del pack vs. las unidades.
+- Canje de puntos: requiere pedido de al menos 2× el descuento.
 
 ## Pago con MODO
 
-### Cómo funciona
+Hoy está en **modo de prueba** (credenciales públicas de test — no cobra de verdad, el carrito lo avisa). Para cobrar en serio:
 
-El cliente toca "Pagar con MODO" → la función `modo-checkout` recalcula el pedido completo con el motor de `productos.js` (precios, stock, packs, cupones y canje de puntos — nunca confía en el navegador), crea la intención de pago en MODO y devuelve un QR → se abre el modal oficial de MODO → el cliente paga desde su app bancaria. Al aprobarse, se acreditan los puntos Club Merla.
+1. Alta en un gateway (recomendado: Decidir Plus de [Payway](https://www.payway.com.ar)).
+2. Pedir credenciales productivas en [modo.com.ar/comercios/tiendas-online](https://www.modo.com.ar/comercios/tiendas-online) (~48 hs hábiles).
+3. En Netlify → Environment variables: `MODO_ENV=produccion`, `MODO_USERNAME`, `MODO_PASSWORD`, `MODO_PROCESSOR_CODE`, `MODO_CC_CODE=1CSI`.
+4. En `app.js`: `MODO_AMBIENTE = "produccion"`. Volver a publicar.
 
-### Estado actual: MODO DE PRUEBA
+Docs: https://merchants.modo.com.ar/docs
 
-El sitio usa las **credenciales de test públicas** de MODO: todo el flujo funciona pero **no se cobra de verdad** (el carrito lo avisa). Para probar pagos completos existe la app "MODO Testing" (sección "apk MODO Testing" en https://merchants.modo.com.ar/docs).
+## Notas
 
-### Para cobrar de verdad
-
-1. **Alta en un gateway de pagos**: si no tenés uno, MODO recomienda Decidir Plus de **Payway Ventas Online** (https://www.payway.com.ar).
-2. **Pedir credenciales productivas de MODO**: formulario en https://www.modo.com.ar/comercios/tiendas-online. En ~48 hs hábiles llegan por mail: `username`, `password` y `processor_code`.
-3. **Cargar las credenciales en Netlify** (Site settings → Environment variables — NUNCA en el código):
-   - `MODO_ENV` = `produccion`
-   - `MODO_USERNAME` / `MODO_PASSWORD` / `MODO_PROCESSOR_CODE` = (los que te llegaron)
-   - `MODO_CC_CODE` = `1CSI` (1 cuota sin interés; hay más opciones en la doc)
-4. **En `app.js`**: cambiar `MODO_AMBIENTE` de `"test"` a `"produccion"`.
-5. Volver a publicar.
-
-Documentación oficial: https://merchants.modo.com.ar/docs (Botón de Pago SDK v2).
+- `supabase-import/` fueron los CSV para la carga inicial; el `schema.sql` ya incluye esos datos, así que la carpeta se puede borrar.
+- El número de WhatsApp está en `WHATSAPP` al inicio de `app.js`.

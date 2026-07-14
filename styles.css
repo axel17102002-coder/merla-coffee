@@ -1101,3 +1101,142 @@ section[id], footer[id] { scroll-margin-top: 90px; }
   margin-left: 4px;
   vertical-align: middle;
 }
+
+/* ===== Filtros por región ===== */
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 28px;
+}
+
+.filtro {
+  background: var(--blanco);
+  border: 1.5px solid var(--crema-borde);
+  border-radius: 999px;
+  padding: 9px 20px;
+  font-family: var(--fuente-texto);
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #5a6552;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.15s;
+}
+
+.filtro:hover { border-color: var(--verde); transform: translateY(-1px); }
+
+.filtro.activo {
+  background: var(--verde);
+  border-color: var(--verde);
+  color: var(--crema);
+}
+
+/* ===== Estados de la grilla ===== */
+.grid__estado {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: #66705f;
+  padding: 40px 10px;
+  font-size: 1rem;
+}
+
+.grid__retry {
+  margin-left: 8px;
+  background: var(--verde);
+  color: var(--crema);
+  border: none;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-family: var(--fuente-texto);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+/* ===== Club Merla ===== */
+.club {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 20px;
+  max-width: 880px;
+  margin: 0 auto;
+}
+
+.club__card {
+  background: var(--verde-oscuro);
+  border-radius: var(--radio);
+  padding: 30px;
+  color: var(--crema);
+}
+
+.club__card h3 { color: var(--crema); font-size: 1.25rem; margin-bottom: 12px; }
+.club__card p { color: #c9d3c2; font-size: 0.95rem; margin-bottom: 10px; }
+.club__card p strong { color: var(--crema); }
+.club__nota { font-size: 0.8rem !important; color: #98a691 !important; }
+
+.club__card--consulta {
+  background: var(--blanco);
+  border: 1.5px solid var(--crema-borde);
+}
+
+.club__card--consulta h3 { color: var(--verde); }
+
+.club__form { display: flex; gap: 8px; margin: 14px 0 10px; }
+
+.club__form input {
+  flex: 1;
+  min-width: 0;
+  border: 1.5px solid var(--crema-borde);
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-family: var(--fuente-texto);
+  font-size: 0.9rem;
+  background: var(--crema-suave);
+  color: var(--tinta);
+}
+
+.club__form input:focus { outline: 2px solid var(--caramelo); border-color: var(--caramelo); }
+
+.club__form button {
+  background: var(--verde);
+  color: var(--crema);
+  border: none;
+  border-radius: 999px;
+  padding: 10px 20px;
+  font-family: var(--fuente-texto);
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.club__form button:hover { background: var(--verde-claro); }
+.club__form button:disabled { opacity: 0.6; cursor: wait; }
+
+.club__saldo {
+  font-family: var(--fuente-display);
+  font-weight: 800;
+  font-size: 1.15rem;
+  color: var(--verde) !important;
+  min-height: 1.4em;
+}
+
+/* ===== Email en el carrito ===== */
+.cart__email { margin-bottom: 10px; }
+
+.cart__email input {
+  width: 100%;
+  border: 1.5px solid var(--crema-borde);
+  border-radius: 999px;
+  padding: 9px 16px;
+  font-family: var(--fuente-texto);
+  font-size: 0.88rem;
+  background: var(--crema-suave);
+  color: var(--tinta);
+}
+
+.cart__email input:focus { outline: 2px solid var(--caramelo); border-color: var(--caramelo); }
+
+@media (max-width: 720px) {
+  .club { grid-template-columns: 1fr; }
+}
