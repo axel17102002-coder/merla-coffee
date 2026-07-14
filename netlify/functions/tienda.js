@@ -21,7 +21,17 @@ exports.handler = async () => {
     return {
       statusCode: 502,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ error: "No pudimos cargar la tienda. Probá de nuevo." }),
+      body: JSON.stringify({
+        error: "No pudimos cargar la tienda. Probá de nuevo.",
+        // Diagnóstico temporal (sin valores sensibles) — quitar cuando ande
+        diag: {
+          hayUrl: Boolean(process.env.SUPABASE_URL),
+          haySecretKey: Boolean(process.env.SUPABASE_SECRET_KEY),
+          hayLegacyKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+          hayAdminToken: Boolean(process.env.ADMIN_TOKEN),
+          motivo: String(err.message || err).slice(0, 120),
+        },
+      }),
     };
   }
 };
