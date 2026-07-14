@@ -12,7 +12,7 @@ Navegador ──> Funciones Netlify ──> Supabase (productos, stock, cupones,
 
 - El navegador **nunca** toca Supabase directo: todo pasa por las funciones.
 - Los precios/descuentos se calculan con `motor.js` tanto en la web (para mostrar) como en el servidor (para cobrar): no se puede pagar un monto adulterado.
-- El stock se descuenta **solo cuando MODO confirma el pago** (webhook + verificación contra la API). Los pedidos por WhatsApp se descuentan a mano en Supabase.
+- El stock se descuenta **solo cuando se confirma el pago**: MODO lo hace por webhook y WhatsApp desde la interfaz de administración privada.
 
 ## Archivos
 
@@ -26,12 +26,14 @@ Navegador ──> Funciones Netlify ──> Supabase (productos, stock, cupones,
   - `modo-checkout.js` — crea el pago + registra el pedido
   - `modo-webhook.js` — MODO avisa el resultado → aprueba el pedido
   - `confirmar-pedido.js` — respaldo del webhook desde el navegador
+  - `whatsapp-pedido.js` — registra el pedido manual como pendiente
+  - `admin-pedidos.js` — lista y aprueba/rechaza pedidos de WhatsApp
 - `supabase/schema.sql` — tablas, seguridad y datos iniciales
 
 ## Puesta en marcha (una sola vez)
 
 1. **Crear las tablas**: en [Supabase](https://supabase.com) → tu proyecto → **SQL Editor** → pegá todo el contenido de `supabase/schema.sql` → **Run**. Eso crea las tablas con los 7 cafés, las presentaciones y 2 cupones de ejemplo.
-2. **Claves locales**: copiá `.env.example` a `.env` y completá `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` (están en Supabase → Settings → API). El `.env` está gitignoreado: nunca se sube.
+2. **Claves locales**: copiá `.env.example` a `.env` y completá `SUPABASE_URL` (la **Project URL**, no la URL del Dashboard), `SUPABASE_SECRET_KEY` (la clave `sb_secret_...`) y `ADMIN_TOKEN` (una clave larga para administrar pedidos). Están en Supabase → **Connect** o **Settings → API Keys**. Si tu proyecto todavía usa claves legacy, podés usar `SUPABASE_SERVICE_ROLE_KEY`. El `.env` está gitignoreado: nunca se sube.
 3. **Probar local**: `npx netlify-cli dev --port 8888` y abrir http://localhost:8888
 4. **Publicar**: `netlify deploy --prod` y cargar las mismas 2 variables en Netlify → Site settings → **Environment variables**. El webhook de MODO solo funciona con el sitio publicado.
 
@@ -39,16 +41,17 @@ Navegador ──> Funciones Netlify ──> Supabase (productos, stock, cupones,
 
 Todo desde Supabase → **Table Editor**:
 
-- **Stock**: tabla `productos`, columna `stock`. Se descuenta solo con cada venta por MODO; las ventas por WhatsApp restalas a mano. `stock = 0` muestra "Agotado".
+- **Stock**: tabla `productos`, columna `stock`. Se descuenta al aprobar pagos por MODO o WhatsApp. `stock = 0` muestra "Agotado".
 - **Precios**: tabla `presentaciones` (unidad y pack por separado).
 - **Cupones**: tabla `cupones`. Crear fila = cupón nuevo; `activo = false` lo apaga. **No se muestran en la web**: pasalos por Instagram/WhatsApp.
 - **Clientes y puntos**: tabla `clientes`. Podés regalar puntos editando el número.
-- **Pedidos**: tabla `pedidos` — historial completo con estado (pendiente/aprobado/rechazado).
+- **Pedidos MODO**: se aprueban automáticamente al confirmarse el pago.
+- **Pedidos WhatsApp**: entrá a `/admin.html`, ingresá `ADMIN_TOKEN` y usá **Marcar cobrado**; eso descuenta stock y actualiza puntos. **Rechazar** no toca el stock.
 - **Pausar un café**: `productos.activo = false` (desaparece de la web sin borrar nada).
 
 ## Club Merla
 
-1 punto por cada $100 pagando con MODO (el cliente deja su email al comprar; sin registro). Con 300 puntos canjea $1.500 desde el carrito. La config está en `motor.js` (`CONFIG.fidelidad`).
+1 punto por cada $100 al confirmar un pago (MODO o WhatsApp; el cliente deja su email al comprar, sin registro). Con 300 puntos canjea $1.500 desde el carrito. La config está en `motor.js` (`CONFIG.fidelidad`).
 
 ## Reglas de precios (en `motor.js`)
 

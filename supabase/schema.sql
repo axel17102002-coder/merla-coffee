@@ -63,6 +63,7 @@ create table if not exists pedidos (
   total integer not null,
   puntos_ganados integer not null default 0,
   cliente_email text,
+  origen text not null default 'modo' check (origen in ('modo', 'whatsapp')),
   estado text not null default 'pendiente'
     check (estado in ('pendiente', 'aprobado', 'rechazado')),
   creado timestamptz not null default now(),
@@ -71,6 +72,11 @@ create table if not exists pedidos (
 
 create index if not exists pedidos_modo_id_idx on pedidos (modo_id);
 create index if not exists pedidos_estado_idx on pedidos (estado);
+
+-- Migración para proyectos donde la tabla pedidos ya había sido creada.
+alter table pedidos add column if not exists origen text not null default 'modo';
+alter table pedidos drop constraint if exists pedidos_origen_check;
+alter table pedidos add constraint pedidos_origen_check check (origen in ('modo', 'whatsapp'));
 
 -- ---------- Seguridad ----------
 -- RLS activado sin políticas públicas: solo la service_role key (las funciones
@@ -144,6 +150,81 @@ as $$
 begin
   update pedidos set estado = 'rechazado', actualizado = now()
     where modo_id = p_modo_id and estado = 'pendiente';
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+-- Los pedidos por WhatsApp se crean como pendientes. Desde la interfaz privada
+-- de administración se confirma el cobro: recién ahí se descuenta el stock y
+-- se acreditan/descuentan los puntos.
+create or replace function aprobar_pedido_manual(p_pedido_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_pedido pedidos%rowtype;
+  v_item jsonb;
+  v_email text;
+  v_puntos integer;
+begin
+  select * into v_pedido
+    from pedidos
+    where id = p_pedido_id and origen = 'whatsapp'
+    for update;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'Pedido de WhatsApp no encontrado');
+  end if;
+  if v_pedido.estado <> 'pendiente' then
+    return jsonb_build_object('ok', true, 'ya_procesado', true, 'estado', v_pedido.estado);
+  end if;
+
+  -- No permite confirmar una venta manual si otro pedido ya agotó el stock.
+  if exists (
+    select 1
+    from (
+      select valor->>'producto_id' as producto_id,
+             sum((valor->>'unidades')::integer) as unidades
+      from jsonb_array_elements(v_pedido.items) as valor
+      group by valor->>'producto_id'
+    ) requerido
+    join productos p on p.id = requerido.producto_id
+    where p.stock < requerido.unidades
+  ) then
+    return jsonb_build_object('ok', false, 'error', 'Stock insuficiente para confirmar este pedido');
+  end if;
+
+  for v_item in select * from jsonb_array_elements(v_pedido.items) loop
+    update productos
+      set stock = stock - (v_item->>'unidades')::integer
+      where id = v_item->>'producto_id';
+  end loop;
+
+  if v_pedido.cliente_email is not null and v_pedido.cliente_email <> '' then
+    v_email := lower(trim(v_pedido.cliente_email));
+    insert into clientes (email) values (v_email) on conflict (email) do nothing;
+    update clientes
+      set puntos = greatest(puntos - v_pedido.puntos_canjeados, 0) + v_pedido.puntos_ganados
+      where email = v_email
+      returning puntos into v_puntos;
+  end if;
+
+  update pedidos set estado = 'aprobado', actualizado = now() where id = v_pedido.id;
+  return jsonb_build_object('ok', true, 'puntos', coalesce(v_puntos, 0));
+end;
+$$;
+
+create or replace function rechazar_pedido_manual(p_pedido_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update pedidos set estado = 'rechazado', actualizado = now()
+    where id = p_pedido_id and origen = 'whatsapp' and estado = 'pendiente';
   return jsonb_build_object('ok', true);
 end;
 $$;

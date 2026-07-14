@@ -3,12 +3,15 @@
 // servidor, nunca en el código del navegador.
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Supabase actualmente recomienda las secret keys (`sb_secret_...`).
+// Conservamos el nombre legacy como alternativa para proyectos que todavía
+// usan una service_role JWT.
+const SERVICE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 async function sb(path, { method = "GET", body, headers = {} } = {}) {
   if (!SUPABASE_URL || !SERVICE_KEY) {
     throw new Error(
-      "Faltan las variables SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY (ver README)"
+      "Faltan SUPABASE_URL y SUPABASE_SECRET_KEY (o la legacy SUPABASE_SERVICE_ROLE_KEY; ver README)"
     );
   }
   const res = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/${path}`, {
@@ -33,15 +36,19 @@ function sbRpc(nombre, args) {
   return sb(`rpc/${nombre}`, { method: "POST", body: args });
 }
 
-// Trae el catálogo completo: productos activos con sus presentaciones activas
+// Trae el catálogo completo: productos activos con sus presentaciones activas.
+// Se consultan por separado para que también funcione mientras la relación
+// producto_id → productos.id todavía no fue creada en Supabase tras importar
+// las tablas desde CSV.
 async function obtenerCatalogo() {
-  const productos = await sb(
-    "productos?select=*,presentaciones(*)&activo=is.true&order=nombre.asc"
-  );
+  const [productos, presentaciones] = await Promise.all([
+    sb("productos?select=*&activo=is.true&order=nombre.asc"),
+    sb("presentaciones?select=*&activo=is.true"),
+  ]);
   return productos.map((p) => ({
     ...p,
     notas: p.notas ? p.notas.split(";").map((n) => n.trim()).filter(Boolean) : [],
-    presentaciones: (p.presentaciones || []).filter((x) => x.activo),
+    presentaciones: presentaciones.filter((x) => x.producto_id === p.id),
   }));
 }
 

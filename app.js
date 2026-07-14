@@ -283,8 +283,8 @@ function renderCarrito() {
         : "";
 
   $("#cart-earn").textContent = emailValido(emailCliente())
-    ? `Pagando con MODO sumás ${calc.puntosGanados} puntos Club Merla ⭐`
-    : `Dejá tu email y sumá ${calc.puntosGanados} puntos Club Merla pagando con MODO ⭐`;
+    ? `Al confirmar tu pago sumás ${calc.puntosGanados} puntos Club Merla ⭐`
+    : `Dejá tu email y sumá ${calc.puntosGanados} puntos Club Merla al confirmar el pago ⭐`;
 
   $("#modo-test-note").hidden = MODO_AMBIENTE !== "test";
 }
@@ -435,11 +435,44 @@ function quitarCanje() {
 }
 
 // ===== Checkout por WhatsApp =====
-function checkoutWhatsApp() {
+async function checkoutWhatsApp() {
   const { calc } = estadoPedido();
   if (!calc) return;
 
+  // Abrimos la pestaña dentro del click del usuario para que el navegador no
+  // bloquee WhatsApp mientras registramos el pedido en el servidor.
+  const ventana = window.open("", "_blank");
+  const btn = $("#checkout");
+  const textoOriginal = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = "Registrando pedido…";
+
+  let pedido;
+  try {
+    const res = await fetch("/.netlify/functions/whatsapp-pedido", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: itemsDelCarrito(),
+        cupon: cuponActivo() ? cuponActivo().codigo : null,
+        canjePuntos: canjeActivo(),
+        email: emailCliente() || null,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "No pudimos registrar el pedido");
+    pedido = data;
+  } catch (err) {
+    if (ventana) ventana.close();
+    mostrarToast(`⚠️ ${err.message || "No pudimos registrar el pedido"}`);
+    return;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = textoOriginal;
+  }
+
   let msg = "¡Hola Merla Coffee! Quiero hacer este pedido:\n\n";
+  msg += `Pedido #${pedido.codigo}\n\n`;
   calc.lineas.forEach((l) => {
     msg += `• ${l.qty}x ${l.nombre} - ${l.presentacionNombre} (${formatear(l.precioUnitario)} c/u)\n`;
   });
@@ -456,7 +489,12 @@ function checkoutWhatsApp() {
   msg += `\n*Total: ${formatear(calc.total)}*`;
   msg += "\n\n¿Me confirmás disponibilidad y cómo coordinamos envío y pago?";
 
-  window.open(`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(msg)}`, "_blank");
+  const urlWhatsApp = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(msg)}`;
+  if (ventana) ventana.location.href = urlWhatsApp;
+  else window.location.href = urlWhatsApp;
+  vaciarCarrito();
+  cerrarCarrito();
+  mostrarToast(`✅ Pedido #${pedido.codigo} registrado como pendiente`);
 }
 
 // ===== Checkout con MODO =====
