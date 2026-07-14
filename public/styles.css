@@ -426,6 +426,17 @@ section[id], footer[id] { scroll-margin-top: 90px; }
   color: var(--verde);
 }
 
+/* Precio con transferencia (10% OFF), debajo del precio de lista */
+.card__precios { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.precio-transf { font-size: 0.72rem; color: var(--caramelo); font-weight: 600; line-height: 1.25; }
+.precio-transf strong { font-weight: 800; }
+.cart__transf {
+  font-size: 0.8rem;
+  color: var(--caramelo);
+  font-weight: 600;
+  margin: -4px 0 10px;
+}
+
 .card__add {
   background: var(--verde);
   color: var(--crema);

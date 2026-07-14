@@ -147,7 +147,10 @@ function renderProductos() {
         <button class="card__more" data-modal="${p.id}">Ver detalle del café</button>
         ${p.stock > 0 ? selectorPresentaciones(p) : ""}
         <div class="card__foot">
-          <span class="card__price" data-precio-de="${p.id}">${base ? formatear(base.precio) : ""}</span>
+          <div class="card__precios">
+            <span class="card__price" data-precio-de="${p.id}">${base ? formatear(base.precio) : ""}</span>
+            ${base ? `<span class="precio-transf"><strong data-transf-de="${p.id}">${formatear(precioTransferencia(base.precio))}</strong> con transferencia</span>` : ""}
+          </div>
           <button class="card__add" data-add="${p.id}" ${p.stock === 0 || !base ? "disabled" : ""}>
             ${p.stock === 0 ? "Sin stock" : "Agregar"}
           </button>
@@ -272,6 +275,9 @@ function renderCarrito() {
   $("#cart-points-discount").textContent = "-" + formatear(calc.descuentoPuntos);
 
   $("#cart-total").textContent = formatear(calc.total);
+
+  $("#cart-transf").hidden = false;
+  $("#cart-transf").innerHTML = `💵 Por transferencia: <strong>${formatear(precioTransferencia(calc.total))}</strong> (${CONFIG.transferencia.descuento}% OFF, pedilo por WhatsApp)`;
 
   const cfg = DATOS.config;
   const faltan = cfg.descuentoCantidad - calc.unidadesSueltas;
@@ -487,6 +493,7 @@ async function checkoutWhatsApp() {
     msg += `\nCanje puntos Club Merla: -${formatear(calc.descuentoPuntos)}`;
   }
   msg += `\n*Total: ${formatear(calc.total)}*`;
+  msg += `\n💵 Pagando por transferencia o depósito: *${formatear(precioTransferencia(calc.total))}* (${CONFIG.transferencia.descuento}% OFF)`;
   msg += "\n\n¿Me confirmás disponibilidad y cómo coordinamos envío y pago?";
 
   const urlWhatsApp = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(msg)}`;
@@ -684,7 +691,10 @@ function abrirModal(id) {
       </div>
       ${p.stock > 0 ? selectorPresentaciones(p) : ""}
       <div class="modal__foot">
-        <span class="modal__price" data-precio-de="${p.id}">${base ? formatear(base.precio) : ""}</span>
+        <div class="card__precios">
+          <span class="modal__price" data-precio-de="${p.id}">${base ? formatear(base.precio) : ""}</span>
+          ${base ? `<span class="precio-transf"><strong data-transf-de="${p.id}">${formatear(precioTransferencia(base.precio))}</strong> con transferencia</span>` : ""}
+        </div>
         <button class="btn btn--primary" data-add-modal="${p.id}" ${p.stock === 0 || !base ? "disabled" : ""}>
           ${p.stock === 0 ? "Sin stock" : "Agregar al carrito"}
         </button>
@@ -758,6 +768,8 @@ document.addEventListener("click", (e) => {
     const contenedor = grupo.closest("[data-card]");
     const precioEl = contenedor.querySelector("[data-precio-de]");
     if (precioEl) precioEl.textContent = formatear(Number(presBtn.dataset.precio));
+    const transfEl = contenedor.querySelector("[data-transf-de]");
+    if (transfEl) transfEl.textContent = formatear(precioTransferencia(Number(presBtn.dataset.precio)));
     return;
   }
 

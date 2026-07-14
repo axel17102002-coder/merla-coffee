@@ -6,12 +6,21 @@
 const CONFIG = {
   descuentoCantidad: 5, // unidades sueltas mínimas para el descuento
   descuentoPorcentaje: 5, // % de descuento sobre las unidades sueltas
+  transferencia: {
+    descuento: 10, // % OFF pagando por transferencia o depósito (se coordina por WhatsApp)
+  },
   fidelidad: {
     puntosPorCien: 1, // 1 punto por cada $100 pagando con MODO
     canjePuntos: 300, // puntos necesarios para canjear
     canjeDescuento: 1500, // $ de descuento al canjear
   },
 };
+
+// Precio pagando por transferencia/depósito (solo informativo: el cobro se
+// coordina por WhatsApp; MODO cobra el precio de lista)
+function precioTransferencia(monto) {
+  return Math.round((monto * (100 - CONFIG.transferencia.descuento)) / 100);
+}
 
 // Presentaciones activas de un producto (vienen embebidas desde la base)
 function presentacionesDe(producto) {
@@ -158,5 +167,5 @@ function calcularPedido(items, opciones, datos) {
 
 // Export para Node (funciones de Netlify); en el browser quedan como globales.
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { CONFIG, presentacionesDe, ahorroDe, calcularPedido };
+  module.exports = { CONFIG, presentacionesDe, ahorroDe, precioTransferencia, calcularPedido };
 }
