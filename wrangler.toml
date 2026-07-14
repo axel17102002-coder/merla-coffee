@@ -5,6 +5,15 @@ compatibility_date = "2026-01-01"
 # nodejs_compat habilita node:crypto y process.env en el backend
 compatibility_flags = ["nodejs_compat"]
 
+# Conservar las variables/secretos cargados en el panel de Cloudflare
+# (sin esto, cada deploy desde Git los borra)
+keep_vars = true
+
+[vars]
+# La URL del proyecto de Supabase no es secreta; las claves sí, y van como
+# Secrets en el panel: SUPABASE_SECRET_KEY y ADMIN_TOKEN
+SUPABASE_URL = "https://goldreguogjsfpmkuiua.supabase.co"
+
 [assets]
 directory = "public"
 binding = "ASSETS"
