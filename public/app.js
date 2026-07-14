@@ -12,10 +12,13 @@ const MODO_SCRIPT =
     ? "https://ecommerce-modal.modo.com.ar/bundle.js"
     : "https://ecommerce-modal.preprod.modo.com.ar/bundle.js";
 
-const modoScript = document.createElement("script");
-modoScript.src = MODO_SCRIPT;
-modoScript.defer = true;
-document.head.appendChild(modoScript);
+// El SDK de MODO solo se carga si la pasarela está habilitada (CONFIG.pagos)
+if (CONFIG.pagos.modo) {
+  const modoScript = document.createElement("script");
+  modoScript.src = MODO_SCRIPT;
+  modoScript.defer = true;
+  document.head.appendChild(modoScript);
+}
 
 // ===== Estado =====
 // Carrito: { <id de presentación>: cantidad }  (ej. "volcanico-pack5": 1)
@@ -252,6 +255,7 @@ function renderCarrito() {
     $("#cart-summary").hidden = true;
     $("#cart-error").hidden = false;
     $("#cart-error").textContent = `⚠️ ${error}. Ajustá las cantidades para continuar.`;
+    $("#pay-mp").disabled = true;
     $("#pay-modo").disabled = true;
     $("#checkout").disabled = true;
     return;
@@ -259,6 +263,7 @@ function renderCarrito() {
 
   $("#cart-error").hidden = true;
   $("#cart-summary").hidden = false;
+  $("#pay-mp").disabled = false;
   $("#pay-modo").disabled = false;
   $("#checkout").disabled = false;
 
@@ -292,7 +297,7 @@ function renderCarrito() {
     ? `Al confirmar tu pago sumás ${calc.puntosGanados} puntos Club Merla ⭐`
     : `Dejá tu email y sumá ${calc.puntosGanados} puntos Club Merla al confirmar el pago ⭐`;
 
-  $("#modo-test-note").hidden = MODO_AMBIENTE !== "test";
+  $("#modo-test-note").hidden = (DATOS.config.pagoAmbiente || "test") !== "test";
 }
 
 // Widget de puntos dentro del carrito
@@ -504,6 +509,43 @@ async function checkoutWhatsApp() {
   mostrarToast(`✅ Pedido #${pedido.codigo} registrado como pendiente`);
 }
 
+// ===== Checkout con Mercado Pago (Checkout Pro) =====
+async function pagarConMercadoPago() {
+  const { calc } = estadoPedido();
+  if (!calc) return;
+
+  const btn = $("#pay-mp");
+  const textoOriginal = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = "Generando pago…";
+
+  try {
+    const cupon = cuponActivo();
+    const res = await fetch("/api/mercadopago-checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: itemsDelCarrito(),
+        cupon: cupon ? cupon.codigo : null,
+        canjePuntos: canjeActivo(),
+        email: emailCliente() || null,
+      }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `Error ${res.status} al generar el pago`);
+    }
+    const pago = await res.json();
+    // Redirigimos al checkout de MP; al volver (?pago=mp-ok) confirmamos
+    window.location.href = pago.init_point;
+  } catch (err) {
+    console.error(err);
+    mostrarToast(`⚠️ ${err.message || "No pudimos iniciar el pago. Probá por WhatsApp."}`);
+    btn.disabled = false;
+    btn.innerHTML = textoOriginal;
+  }
+}
+
 // ===== Checkout con MODO =====
 async function crearPagoModo() {
   const cupon = cuponActivo();
@@ -578,15 +620,15 @@ async function pagarConModo() {
 // Confirma el pedido en el servidor (verifica el pago real contra MODO,
 // descuenta stock y acredita puntos). El webhook hace lo mismo por su lado;
 // la operación es idempotente.
-async function confirmarCompra(pagoId) {
+async function confirmarCompra(pagoId, mpPaymentId) {
   const id = pagoId || localStorage.getItem("merla-ultimo-pago");
   let puntos = null;
-  if (id) {
+  if (id || mpPaymentId) {
     try {
       const res = await fetch("/api/confirmar-pedido", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify(mpPaymentId ? { mpPaymentId } : { id }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -616,6 +658,28 @@ async function confirmarCompra(pagoId) {
 if (new URLSearchParams(location.search).get("pago") === "ok") {
   history.replaceState(null, "", location.pathname);
   window.addEventListener("DOMContentLoaded", () => confirmarCompra(null));
+}
+
+// Si volvemos del checkout de Mercado Pago, confirmamos contra el servidor
+// (que verifica el estado real del pago en la API de MP antes de aprobar)
+{
+  const qp = new URLSearchParams(location.search);
+  const retornoMp = qp.get("pago");
+  if (retornoMp === "mp-ok") {
+    const mpPaymentId = qp.get("payment_id") || qp.get("collection_id");
+    history.replaceState(null, "", location.pathname);
+    window.addEventListener("DOMContentLoaded", () => confirmarCompra(null, mpPaymentId));
+  } else if (retornoMp === "mp-pendiente") {
+    history.replaceState(null, "", location.pathname);
+    window.addEventListener("DOMContentLoaded", () =>
+      mostrarToast("Tu pago quedó pendiente de acreditación. Apenas se apruebe, sumás tus puntos ⭐")
+    );
+  } else if (retornoMp === "mp-no") {
+    history.replaceState(null, "", location.pathname);
+    window.addEventListener("DOMContentLoaded", () =>
+      mostrarToast("El pago no se completó. Podés intentarlo de nuevo o pedir por WhatsApp.")
+    );
+  }
 }
 
 // ===== Sección Club Merla =====
@@ -836,6 +900,10 @@ $("#cart-open").addEventListener("click", abrirCarrito);
 $("#cart-close").addEventListener("click", cerrarCarrito);
 $("#overlay").addEventListener("click", cerrarCarrito);
 $("#checkout").addEventListener("click", checkoutWhatsApp);
+// Botones de pago según pasarelas habilitadas (CONFIG.pagos en motor.js)
+$("#pay-mp").hidden = !CONFIG.pagos.mercadopago;
+$("#pay-modo").hidden = !CONFIG.pagos.modo;
+$("#pay-mp").addEventListener("click", pagarConMercadoPago);
 $("#pay-modo").addEventListener("click", pagarConModo);
 
 $("#burger").addEventListener("click", () => $("#nav").classList.toggle("open"));

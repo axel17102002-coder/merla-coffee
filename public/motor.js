@@ -4,6 +4,12 @@
 // viven en Supabase; este motor solo calcula.
 
 const CONFIG = {
+  // Pasarelas de pago habilitadas. MODO queda implementado pero apagado:
+  // para reactivarlo poné `modo: true` (y cargá las credenciales productivas).
+  pagos: {
+    mercadopago: true,
+    modo: false,
+  },
   descuentoCantidad: 5, // unidades sueltas mínimas para el descuento
   descuentoPorcentaje: 5, // % de descuento sobre las unidades sueltas
   transferencia: {

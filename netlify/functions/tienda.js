@@ -3,6 +3,7 @@
 // configuración de descuentos y Club Merla. Es lo que carga la web al abrir.
 
 const { obtenerCatalogo } = require("../lib/supabase.js");
+const { ambienteMp } = require("../lib/mercadopago.js");
 const { CONFIG } = require("../../public/motor.js");
 
 exports.handler = async () => {
@@ -14,7 +15,11 @@ exports.handler = async () => {
         "Content-Type": "application/json",
         "Cache-Control": "public, max-age=30",
       },
-      body: JSON.stringify({ productos, config: CONFIG }),
+      body: JSON.stringify({
+        productos,
+        // pagoAmbiente le avisa al frontend si el cobro online es de prueba
+        config: { ...CONFIG, pagoAmbiente: CONFIG.pagos.mercadopago ? ambienteMp() : process.env.MODO_ENV || "test" },
+      }),
     };
   } catch (err) {
     console.error("tienda:", err);

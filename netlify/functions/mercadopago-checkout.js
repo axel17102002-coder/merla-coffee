@@ -1,13 +1,14 @@
-// POST /.netlify/functions/modo-checkout
+// POST /api/mercadopago-checkout
 //   { items: [{presentacion, qty}], cupon: "CODIGO"|null, canjePuntos: bool, email: string|null }
 //
-// Crea un pago con MODO. Todo se recalcula acá con datos de Supabase (precios,
-// stock, cupón, puntos): nunca se confía en montos del navegador. Además deja
-// el pedido registrado en la tabla `pedidos`; cuando MODO confirma el pago
-// (webhook o confirmar-pedido), se descuenta el stock y se acreditan puntos.
+// Crea una preferencia de Mercado Pago Checkout Pro y devuelve init_point
+// (la URL a la que se redirige al cliente para pagar). Igual que con MODO,
+// todo se recalcula acá con datos de Supabase: nunca se confía en montos del
+// navegador. El pedido queda `pendiente` y se aprueba cuando MP confirma el
+// pago (webhook o confirmar-pedido), descontando stock y acreditando puntos.
 
 const { sb, obtenerCatalogo, obtenerCupon, obtenerPuntos } = require("../lib/supabase.js");
-const { ambiente, crearPago } = require("../lib/modo.js");
+const { ambienteMp, crearPreferencia } = require("../lib/mercadopago.js");
 const { CONFIG, calcularPedido } = require("../../public/motor.js");
 
 exports.handler = async (event) => {
@@ -15,8 +16,8 @@ exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, headers, body: JSON.stringify({ error: "Método no permitido" }) };
   }
-  if (!CONFIG.pagos.modo) {
-    return { statusCode: 403, headers, body: JSON.stringify({ error: "El pago con MODO está deshabilitado por el momento" }) };
+  if (!CONFIG.pagos.mercadopago) {
+    return { statusCode: 403, headers, body: JSON.stringify({ error: "El pago con Mercado Pago está deshabilitado" }) };
   }
 
   let body;
@@ -63,13 +64,16 @@ exports.handler = async (event) => {
       return { statusCode: 400, headers, body: JSON.stringify({ error: pedido.error }) };
     }
 
-    // Registrar el pedido (estado pendiente) antes de crear el pago
+    // Registrar el pedido (estado pendiente) antes de crear la preferencia.
+    // `modo_id` guarda la referencia externa del pago (la columna es genérica:
+    // sirve para matchear el webhook de cualquier pasarela).
     const externalId = `merla-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const [fila] = await sb("pedidos", {
       method: "POST",
       headers: { Prefer: "return=representation" },
       body: {
         external_intention_id: externalId,
+        modo_id: externalId,
         items: pedido.lineas.map((l) => ({
           producto_id: l.producto_id,
           presentacion_id: l.presentacion_id,
@@ -90,57 +94,75 @@ exports.handler = async (event) => {
       },
     });
 
-    // URL pública del sitio para que MODO nos notifique el resultado
-    // (SITE_URL manual > Netlify URL > Cloudflare Pages URL)
-    const sitio =
-      process.env.SITE_URL ||
-      process.env.URL ||
-      process.env.CF_PAGES_URL ||
-      process.env.DEPLOY_PRIME_URL ||
-      "";
-    const webhook = sitio.startsWith("https://") ? `${sitio}/api/modo-webhook` : undefined;
+    // URL del sitio: SITE_URL manual, o la del propio request (Cloudflare/Netlify)
+    const host = (event.headers && event.headers.host) || "";
+    const esLocal = host.startsWith("localhost") || host.startsWith("127.");
+    const sitio = process.env.SITE_URL || (host ? `${esLocal ? "http" : "https"}://${host}` : "");
 
-    let pago;
+    let preferencia;
     try {
-      pago = await crearPago({
-        description: `Pedido Merla Coffee (${pedido.unidades} drip bags)`.slice(0, 100),
-        amount: pedido.total,
-        external_intention_id: externalId,
-        ...(webhook ? { webhook_notification: webhook } : {}),
-        items: pedido.lineas.map((l) => ({
-          description: `${l.nombre} - Drip Bag (${l.presentacionNombre})`,
-          quantity: l.qty,
-          unit_price: l.precioUnitario,
-          sku: l.presentacion_id,
-          category_name: "Drip Bags",
-        })),
+      // MP no acepta ítems con monto negativo, así que si hay descuentos
+      // mandamos un único ítem por el total final para que la cuenta cierre.
+      const itemsMp =
+        pedido.total === pedido.subtotal
+          ? pedido.lineas.map((l) => ({
+              id: l.presentacion_id,
+              title: `${l.nombre} - Drip Bag (${l.presentacionNombre})`,
+              category_id: "food",
+              quantity: l.qty,
+              currency_id: "ARS",
+              unit_price: l.precioUnitario,
+            }))
+          : [
+              {
+                id: "pedido",
+                title: `Pedido Merla Coffee (${pedido.unidades} drip bags, descuentos aplicados)`,
+                category_id: "food",
+                quantity: 1,
+                currency_id: "ARS",
+                unit_price: pedido.total,
+              },
+            ];
+
+      preferencia = await crearPreferencia({
+        items: itemsMp,
+        external_reference: externalId,
+        metadata: { pedido_id: fila.id },
+        statement_descriptor: "MERLA COFFEE",
+        ...(sitio
+          ? {
+              back_urls: {
+                success: `${sitio}/?pago=mp-ok`,
+                pending: `${sitio}/?pago=mp-pendiente`,
+                failure: `${sitio}/?pago=mp-no`,
+              },
+            }
+          : {}),
+        ...(sitio.startsWith("https://")
+          ? {
+              auto_return: "approved",
+              notification_url: `${sitio}/api/mercadopago-webhook`,
+            }
+          : {}),
       });
     } catch (err) {
-      // Si MODO falló, no dejamos el pedido huérfano
+      // Si MP falló, no dejamos el pedido huérfano
       await sb(`pedidos?id=eq.${fila.id}`, { method: "DELETE" }).catch(() => {});
       throw err;
     }
-
-    // Guardar el id de MODO para poder matchear el webhook
-    await sb(`pedidos?id=eq.${fila.id}`, {
-      method: "PATCH",
-      body: { modo_id: pago.id },
-    });
 
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
-        id: pago.id,
-        qr: pago.qr,
-        deeplink: pago.deeplink,
+        init_point: preferencia.init_point,
         total: pedido.total,
         puntosGanados: emailValido ? pedido.puntosGanados : 0,
-        ambiente: ambiente(),
+        ambiente: ambienteMp(),
       }),
     };
   } catch (err) {
-    console.error("modo-checkout:", err);
+    console.error("mercadopago-checkout:", err);
     return {
       statusCode: 502,
       headers,

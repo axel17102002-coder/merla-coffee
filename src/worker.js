@@ -9,6 +9,8 @@ import { handler as validarCupon } from "../netlify/functions/validar-cupon.js";
 import { handler as puntos } from "../netlify/functions/puntos.js";
 import { handler as modoCheckout } from "../netlify/functions/modo-checkout.js";
 import { handler as modoWebhook } from "../netlify/functions/modo-webhook.js";
+import { handler as mercadopagoCheckout } from "../netlify/functions/mercadopago-checkout.js";
+import { handler as mercadopagoWebhook } from "../netlify/functions/mercadopago-webhook.js";
 import { handler as confirmarPedido } from "../netlify/functions/confirmar-pedido.js";
 import { handler as adminPedidos } from "../netlify/functions/admin-pedidos.js";
 import { handler as whatsappPedido } from "../netlify/functions/whatsapp-pedido.js";
@@ -19,6 +21,8 @@ const rutas = {
   "puntos": adaptar(puntos),
   "modo-checkout": adaptar(modoCheckout),
   "modo-webhook": adaptar(modoWebhook),
+  "mercadopago-checkout": adaptar(mercadopagoCheckout),
+  "mercadopago-webhook": adaptar(mercadopagoWebhook),
   "confirmar-pedido": adaptar(confirmarPedido),
   "admin-pedidos": adaptar(adminPedidos),
   "whatsapp-pedido": adaptar(whatsappPedido),

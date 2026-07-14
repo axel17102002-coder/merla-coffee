@@ -437,6 +437,10 @@ section[id], footer[id] { scroll-margin-top: 90px; }
   margin: -4px 0 10px;
 }
 
+/* Botón de Mercado Pago (azul de marca) */
+.btn--mp { background: #009ee3; color: #fff; }
+.btn--mp:hover:not(:disabled) { background: #0084c2; }
+
 .card__add {
   background: var(--verde);
   color: var(--crema);

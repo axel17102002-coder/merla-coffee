@@ -6,6 +6,7 @@
 
 const { sbRpc } = require("../lib/supabase.js");
 const { obtenerPago } = require("../lib/modo.js");
+const { obtenerPagoMp } = require("../lib/mercadopago.js");
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json" };
@@ -13,7 +14,23 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers, body: JSON.stringify({ error: "Método no permitido" }) };
   }
   try {
-    const { id } = JSON.parse(event.body || "{}");
+    const { id, mpPaymentId } = JSON.parse(event.body || "{}");
+
+    // Pago con Mercado Pago: verificamos el estado real contra la API de MP
+    if (mpPaymentId) {
+      const pago = await obtenerPagoMp(mpPaymentId);
+      if (!pago || pago.status !== "approved" || !pago.external_reference) {
+        return {
+          statusCode: 409,
+          headers,
+          body: JSON.stringify({ error: "El pago todavía no figura aprobado en Mercado Pago" }),
+        };
+      }
+      const r = await sbRpc("aprobar_pedido", { p_modo_id: String(pago.external_reference) });
+      return { statusCode: 200, headers, body: JSON.stringify(r) };
+    }
+
+    // Pago con MODO
     const info = await obtenerPago(id);
     const estado = info ? String(info.status || "").toUpperCase() : null;
 

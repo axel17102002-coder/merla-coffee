@@ -71,14 +71,27 @@ Todo desde Supabase → **Table Editor**:
 - El % de ahorro del pack se calcula solo comparando el precio del pack vs. las unidades.
 - Canje de puntos: requiere pedido de al menos 2× el descuento.
 
-## Pago con MODO
+## Pago online (Mercado Pago / MODO)
 
-Hoy está en **modo de prueba** (credenciales públicas de test — no cobra de verdad, el carrito lo avisa). Para cobrar en serio:
+Las pasarelas se prenden y apagan en `public/motor.js` → `CONFIG.pagos`. Hoy: **Mercado Pago activo, MODO apagado** (implementado y listo para reactivar).
+
+### Mercado Pago (Checkout Pro) — pasarela activa
+
+El botón "Pagar con Mercado Pago" redirige al checkout de MP; al aprobarse el pago (webhook `mercadopago-webhook` + respaldo `confirmar-pedido`) se descuenta stock y se acreditan puntos. Solo necesita **una** variable: `MP_ACCESS_TOKEN`.
+
+1. Entrá al [panel de desarrolladores de MP](https://www.mercadopago.com.ar/developers/panel) → **Crear aplicación** (tipo: pagos online, Checkout Pro).
+2. En **Credenciales de prueba**: copiá el **Access Token** (`TEST-...`) para sandbox — no cobra de verdad y el carrito lo avisa.
+3. Cargalo como `MP_ACCESS_TOKEN` en `.env`/`.dev.vars` (local) y como **Secret** en Cloudflare → Settings → Variables and Secrets.
+4. Para cobrar en serio: repetir con el Access Token **productivo** (`APP_USR-...`). Nada más — el ambiente se detecta solo por el prefijo del token.
+
+Tarjetas de prueba y docs: https://www.mercadopago.com.ar/developers/es/docs/checkout-pro/additional-content/your-integrations/test/cards
+
+### MODO — apagado, para reactivar algún día
 
 1. Alta en un gateway (recomendado: Decidir Plus de [Payway](https://www.payway.com.ar)).
 2. Pedir credenciales productivas en [modo.com.ar/comercios/tiendas-online](https://www.modo.com.ar/comercios/tiendas-online) (~48 hs hábiles).
-3. En Netlify → Environment variables: `MODO_ENV=produccion`, `MODO_USERNAME`, `MODO_PASSWORD`, `MODO_PROCESSOR_CODE`, `MODO_CC_CODE=1CSI`.
-4. En `app.js`: `MODO_AMBIENTE = "produccion"`. Volver a publicar.
+3. Variables: `MODO_ENV=produccion`, `MODO_USERNAME`, `MODO_PASSWORD`, `MODO_PROCESSOR_CODE`, `MODO_CC_CODE=1CSI`.
+4. En `motor.js`: `CONFIG.pagos.modo = true`. En `app.js`: `MODO_AMBIENTE = "produccion"`. Volver a publicar.
 
 Docs: https://merchants.modo.com.ar/docs
 
