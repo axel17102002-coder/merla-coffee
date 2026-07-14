@@ -1,110 +1,23 @@
 // ===== Configuración =====
+// Los productos, precios y reglas de descuento viven en productos.js
 // Número de WhatsApp para recibir pedidos (formato internacional, sin + ni espacios)
 const WHATSAPP = "5492216803376";
-const DESCUENTO_CANTIDAD = 5; // unidades mínimas para el descuento
-const DESCUENTO_PORCENTAJE = 5; // % de descuento
 
-// ===== Productos =====
-const PRODUCTOS = [
-  {
-    id: "brasil-honey",
-    nombre: "Brasil Honey Cup",
-    precio: 1720,
-    origen: "Brasil",
-    region: "Alta Mogiana, Brasil",
-    variedad: "Caturra",
-    proceso: "Semi lavado",
-    sca: "83,5",
-    tostador: "Rito Tostadores",
-    notas: ["Azúcar morena", "Almendras", "Frambuesas"],
-    desc: "Un café brasileño de la región Alta Mogiana, cultivado entre 1000 y 1200 m y procesado mediante método semi lavado, que realza su dulzura natural. Proveniente de cooperativas locales, destaca por su cuerpo equilibrado. Una taza suave, dulce y persistente, perfecta para disfrutar en cualquier momento.",
-    img: "img/brasil-honey.webp",
-  },
-  {
-    id: "oldfashion",
-    nombre: "Oldfashion",
-    precio: 2360,
-    origen: "Colombia",
-    region: "Huila, Pitalito (Colombia)",
-    variedad: "Bourbon y Caturra",
-    proceso: "Lavado",
-    sca: "84,5",
-    tostador: "La Motofeca",
-    notas: ["Especias", "Chocolate", "Pasas de uva"],
-    desc: "Cultivado entre 1650 y 2100 m de altitud, destaca por su cuerpo medio, acidez equilibrada y una complejidad aromática que recuerda al clásico cóctel que le da nombre. Con una dulzura sutil y persistente, es un café redondo y aromático, ideal para quienes disfrutan de perfiles intensos y elegantes.",
-    img: "img/oldfashion.webp",
-  },
-  {
-    id: "peru",
-    nombre: "Perú",
-    precio: 2270,
-    origen: "Perú",
-    region: "Rodríguez de Mendoza, Perú",
-    variedad: "Blend de variedades",
-    proceso: "Lavado, secado en camas africanas",
-    sca: null,
-    tostador: "Jack Flash",
-    notas: ["Naranja", "Toffee", "Avellanas"],
-    desc: "Crece entre 1650 y 2100 m de altitud, donde el clima templado favorece una maduración lenta del grano. Ofrece una taza limpia y balanceada con acidez media melosa y un final dulce y persistente. Un café elegante y complejo, ideal para quienes disfrutan de matices cítricos y dulces.",
-    img: "img/peru.webp",
-  },
-  {
-    id: "volcanico",
-    nombre: "Volcánico",
-    precio: 2100,
-    origen: "Colombia",
-    region: "Tolima, Chaparral (Colombia)",
-    variedad: "Caturra, Colombia y Castillo",
-    proceso: "Lavado",
-    sca: null,
-    tostador: "Momo Tostadores",
-    notas: ["Miel", "Toffee", "Frutas amarillas"],
-    desc: "Cultivado entre 1500 y 2000 m de altitud, destaca por su buen cuerpo, una acidez media vibrante y un perfil que evoca el clásico café colombiano. Con un dulzor equilibrado y toques cítricos, es un café amable y balanceado, dulce, fresco y reconfortante.",
-    img: "img/volcanico.webp",
-  },
-  {
-    id: "brasil",
-    nombre: "Brasil",
-    precio: 2100,
-    origen: "Brasil",
-    region: "Espíritu Santo, Brasil",
-    variedad: "Catuaí Amarillo y Rojo",
-    proceso: "Natural",
-    sca: "87",
-    tostador: "Familia Cabrales",
-    notas: ["Caramelo", "Frutos rojos", "Cítricos dulces"],
-    desc: "Microlote cultivado entre 750 y 900 m de altitud por Wallace Junior Schneider. Su proceso natural potencia la dulzura y una acidez brillante y jugosa. Cuerpo medio y aroma intenso: ideal para quienes disfrutan de perfiles frutales y balanceados.",
-    img: "img/brasil.webp",
-  },
-  {
-    id: "silverio-nina",
-    nombre: "Silverio Nina",
-    precio: 2100,
-    origen: "Bolivia",
-    region: "Los Yungas, Bolivia",
-    variedad: "Caturra",
-    proceso: "Lavado",
-    sca: null,
-    tostador: "Momo Tostadores",
-    notas: ["Caramelo", "Cítricos", "Ciruela"],
-    desc: "Cultivado a más de 1550 m de altitud, destaca por su cuerpo agradable, una acidez refrescante y un perfil notablemente limpio, con un dulzor llamativo y persistente. Un café elegante y fresco, ideal para una taza frutal a cualquier hora del día.",
-    img: "img/silverio-nina.webp",
-  },
-  {
-    id: "andino",
-    nombre: "Andino",
-    precio: 2100,
-    origen: "Colombia",
-    region: "Quindío, Colombia",
-    variedad: "Caturra, Colombia, Catimor y Castillo",
-    proceso: "Lavado",
-    sca: null,
-    tostador: "Momo Tostadores",
-    notas: ["Caramelo", "Frutos rojos", "Cítrico"],
-    desc: "Cultivado entre 1500 y 2000 m de altitud, destaca por su buen cuerpo, acidez media vibrante y un perfil clásico irresistible, con una dulzura fresca y balanceada. Un café amable, ideal para quienes disfrutan de la elegancia de un tradicional café colombiano.",
-    img: "img/andino.webp",
-  },
-];
+// Ambiente de MODO: "test" (sandbox, no cobra de verdad) o "produccion".
+// Al pasar a producción también hay que configurar las credenciales reales
+// en Netlify (ver README).
+const MODO_AMBIENTE = "test";
+
+const MODO_SCRIPT =
+  MODO_AMBIENTE === "produccion"
+    ? "https://ecommerce-modal.modo.com.ar/bundle.js"
+    : "https://ecommerce-modal.preprod.modo.com.ar/bundle.js";
+
+// Cargamos el SDK del modal de MODO según el ambiente configurado
+const modoScript = document.createElement("script");
+modoScript.src = MODO_SCRIPT;
+modoScript.defer = true;
+document.head.appendChild(modoScript);
 
 // ===== Estado del carrito =====
 let carrito = JSON.parse(localStorage.getItem("merla-carrito") || "{}");
@@ -129,11 +42,17 @@ function subtotal() {
   }, 0);
 }
 
+function itemsDelCarrito() {
+  return Object.entries(carrito)
+    .filter(([, qty]) => qty > 0)
+    .map(([id, qty]) => ({ id, qty }));
+}
+
 // ===== Render de productos =====
 function renderProductos() {
   $("#product-grid").innerHTML = PRODUCTOS.map(
-    (p) => `
-    <article class="card">
+    (p, i) => `
+    <article class="card reveal" style="--delay:${i * 60}ms">
       <div class="card__img" data-modal="${p.id}">
         <img src="${p.img}" alt="${p.nombre} - Drip Bag" loading="lazy">
         <span class="card__origin">${p.origen}</span>
@@ -150,6 +69,7 @@ function renderProductos() {
       </div>
     </article>`
   ).join("");
+  observarReveals();
 }
 
 // ===== Render del carrito =====
@@ -209,6 +129,8 @@ function renderCarrito() {
   $("#discount-hint").textContent = aplicaDescuento
     ? "🎉 ¡Tenés el 5% de descuento por cantidad!"
     : `Agregá ${faltan} drip bag${faltan > 1 ? "s" : ""} más y llevate 5% OFF`;
+
+  $("#modo-test-note").hidden = MODO_AMBIENTE !== "test";
 }
 
 // ===== Acciones del carrito =====
@@ -234,8 +156,14 @@ function quitar(id) {
   renderCarrito();
 }
 
+function vaciarCarrito() {
+  carrito = {};
+  guardar();
+  renderCarrito();
+}
+
 // ===== Checkout por WhatsApp =====
-function checkout() {
+function checkoutWhatsApp() {
   const items = Object.entries(carrito).filter(([, qty]) => qty > 0);
   if (items.length === 0) return;
 
@@ -257,6 +185,81 @@ function checkout() {
   msg += "\n\n¿Me confirmás disponibilidad y cómo coordinamos envío y pago?";
 
   window.open(`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(msg)}`, "_blank");
+}
+
+// ===== Checkout con MODO =====
+async function crearPagoModo() {
+  const res = await fetch("/.netlify/functions/modo-checkout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items: itemsDelCarrito() }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Error ${res.status} al generar el pago`);
+  }
+  return res.json();
+}
+
+async function pagarConModo() {
+  if (cantidadTotal() === 0) return;
+
+  const btn = $("#pay-modo");
+  const textoOriginal = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = "Generando pago…";
+
+  const urlBase = location.origin + location.pathname;
+
+  try {
+    if (typeof ModoSDK === "undefined") {
+      throw new Error("No se pudo cargar el SDK de MODO. Revisá tu conexión y recargá la página.");
+    }
+    const pago = await crearPagoModo();
+    ModoSDK.modoInitPayment({
+      version: "2",
+      checkoutId: pago.id,
+      qrString: pago.qr,
+      deeplink: {
+        url: pago.deeplink,
+        callbackURL: urlBase,
+        callbackURLSuccess: `${urlBase}?pago=ok`,
+      },
+      callbackURL: `${urlBase}?pago=ok`,
+      // MODO llama a esto cuando el usuario pide "Generar nuevo QR"
+      refreshData: async () => {
+        const nuevo = await crearPagoModo();
+        return { checkoutId: nuevo.id, qrString: nuevo.qr, deeplink: nuevo.deeplink };
+      },
+      onSuccess: () => pagoExitoso(),
+      onFailure: () => mostrarToast("El pago no se completó. Podés intentarlo de nuevo."),
+    });
+  } catch (err) {
+    console.error(err);
+    mostrarToast(
+      err.message.includes("SDK")
+        ? err.message
+        : "No pudimos iniciar el pago con MODO. Probá de nuevo o pedí por WhatsApp."
+    );
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = textoOriginal;
+  }
+}
+
+function pagoExitoso() {
+  vaciarCarrito();
+  cerrarCarrito();
+  mostrarToast("✅ ¡Pago aprobado! Gracias por tu compra 💚");
+}
+
+// Si MODO nos redirige de vuelta con ?pago=ok (flujo mobile), confirmamos acá
+if (new URLSearchParams(location.search).get("pago") === "ok") {
+  vaciarCarrito();
+  history.replaceState(null, "", location.pathname);
+  window.addEventListener("DOMContentLoaded", () =>
+    mostrarToast("✅ ¡Pago aprobado! Gracias por tu compra 💚")
+  );
 }
 
 // ===== UI: carrito drawer =====
@@ -324,7 +327,32 @@ function mostrarToast(texto) {
   toastTimer = setTimeout(() => {
     toast.classList.remove("visible");
     setTimeout(() => (toast.hidden = true), 300);
-  }, 2200);
+  }, 2600);
+}
+
+// ===== Animaciones de aparición =====
+const prefiereMenosMovimiento = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const revealObserver = new IntersectionObserver(
+  (entries) => {
+    entries.forEach((e) => {
+      if (e.isIntersecting) {
+        e.target.classList.add("visible");
+        revealObserver.unobserve(e.target);
+      }
+    });
+  },
+  { threshold: 0.12 }
+);
+
+function observarReveals() {
+  document.querySelectorAll(".reveal:not(.visible)").forEach((el) => {
+    if (prefiereMenosMovimiento) {
+      el.classList.add("visible");
+    } else {
+      revealObserver.observe(el);
+    }
+  });
 }
 
 // ===== Eventos =====
@@ -351,7 +379,8 @@ document.addEventListener("click", (e) => {
 $("#cart-open").addEventListener("click", abrirCarrito);
 $("#cart-close").addEventListener("click", cerrarCarrito);
 $("#overlay").addEventListener("click", cerrarCarrito);
-$("#checkout").addEventListener("click", checkout);
+$("#checkout").addEventListener("click", checkoutWhatsApp);
+$("#pay-modo").addEventListener("click", pagarConModo);
 
 $("#burger").addEventListener("click", () => $("#nav").classList.toggle("open"));
 $("#nav").addEventListener("click", (e) => {
@@ -368,3 +397,4 @@ document.addEventListener("keydown", (e) => {
 // ===== Inicio =====
 renderProductos();
 renderCarrito();
+observarReveals();
