@@ -1,4 +1,4 @@
-const crypto = require("crypto");
+const crypto = require("node:crypto");
 
 // La pantalla /admin.html nunca recibe esta clave: el administrador la ingresa
 // y cada llamada la envía en un header. Sin ADMIN_TOKEN no hay administración.

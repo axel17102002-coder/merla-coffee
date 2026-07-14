@@ -1,9 +1,15 @@
 # Configuración de Netlify para Merla Coffee
-# El sitio es estático; la única función serverless es el checkout de MODO.
+# (el hosting principal es Cloudflare Pages; esto queda por compatibilidad)
 
 [build]
-  publish = "."
+  publish = "public"
 
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+
+# La web llama a /api/<funcion> en cualquier hosting; acá se traduce a Netlify Functions
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200

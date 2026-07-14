@@ -3,7 +3,7 @@
 // El stock y los puntos se mueven recién desde /admin.html al marcarlo cobrado.
 
 const { sb, obtenerCatalogo, obtenerCupon, obtenerPuntos } = require("../lib/supabase.js");
-const { calcularPedido } = require("../../motor.js");
+const { calcularPedido } = require("../../public/motor.js");
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json" };

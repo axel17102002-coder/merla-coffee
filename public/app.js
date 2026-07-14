@@ -54,7 +54,7 @@ const emailValido = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 async function cargarTienda() {
   $("#product-grid").innerHTML = `<p class="grid__estado">Cargando cafés… ☕</p>`;
   try {
-    const res = await fetch("/.netlify/functions/tienda");
+    const res = await fetch("/api/tienda");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     DATOS = await res.json();
     renderFiltros();
@@ -317,7 +317,7 @@ function renderPuntosWidget() {
 }
 
 async function consultarPuntos(email) {
-  const res = await fetch(`/.netlify/functions/puntos?email=${encodeURIComponent(email)}`);
+  const res = await fetch(`/api/puntos?email=${encodeURIComponent(email)}`);
   if (!res.ok) throw new Error("No pudimos consultar tus puntos");
   const data = await res.json();
   return data.puntos;
@@ -377,7 +377,7 @@ async function aplicarCupon(codigo) {
   }
   let cupon;
   try {
-    const res = await fetch("/.netlify/functions/validar-cupon", {
+    const res = await fetch("/api/validar-cupon", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ codigo }),
@@ -449,7 +449,7 @@ async function checkoutWhatsApp() {
 
   let pedido;
   try {
-    const res = await fetch("/.netlify/functions/whatsapp-pedido", {
+    const res = await fetch("/api/whatsapp-pedido", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -500,7 +500,7 @@ async function checkoutWhatsApp() {
 // ===== Checkout con MODO =====
 async function crearPagoModo() {
   const cupon = cuponActivo();
-  const res = await fetch("/.netlify/functions/modo-checkout", {
+  const res = await fetch("/api/modo-checkout", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -576,7 +576,7 @@ async function confirmarCompra(pagoId) {
   let puntos = null;
   if (id) {
     try {
-      const res = await fetch("/.netlify/functions/confirmar-pedido", {
+      const res = await fetch("/api/confirmar-pedido", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),

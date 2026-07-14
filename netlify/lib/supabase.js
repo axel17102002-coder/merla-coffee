@@ -2,13 +2,14 @@
 // Usa la SERVICE ROLE key: solo puede vivir en variables de entorno del
 // servidor, nunca en el código del navegador.
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
 // Supabase actualmente recomienda las secret keys (`sb_secret_...`).
 // Conservamos el nombre legacy como alternativa para proyectos que todavía
 // usan una service_role JWT.
-const SERVICE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-
+// Las credenciales se leen en CADA llamada (no al cargar el módulo): en
+// Cloudflare Workers las variables de entorno recién existen con el request.
 async function sb(path, { method = "GET", body, headers = {} } = {}) {
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SERVICE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!SUPABASE_URL || !SERVICE_KEY) {
     throw new Error(
       "Faltan SUPABASE_URL y SUPABASE_SECRET_KEY (o la legacy SUPABASE_SERVICE_ROLE_KEY; ver README)"

@@ -3,7 +3,7 @@
 // configuración de descuentos y Club Merla. Es lo que carga la web al abrir.
 
 const { obtenerCatalogo } = require("../lib/supabase.js");
-const { CONFIG } = require("../../motor.js");
+const { CONFIG } = require("../../public/motor.js");
 
 exports.handler = async () => {
   try {

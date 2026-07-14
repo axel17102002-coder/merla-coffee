@@ -45,7 +45,7 @@ function renderPedidos(pedidos) {
 async function cargarPedidos() {
   mensaje("#panel-message", "Cargando pedidos…");
   try {
-    const { pedidos } = await api("/.netlify/functions/admin-pedidos");
+    const { pedidos } = await api("/api/admin-pedidos");
     renderPedidos(pedidos);
     mensaje("#panel-message", "");
   } catch (err) {
@@ -73,7 +73,7 @@ $("#login-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   sessionStorage.setItem(TOKEN_KEY, $("#token").value);
   try {
-    await api("/.netlify/functions/admin-pedidos");
+    await api("/api/admin-pedidos");
     mensaje("#login-message", "");
     abrirPanel();
   } catch (err) {
@@ -90,7 +90,7 @@ $("#pedidos").addEventListener("click", async (e) => {
   if (accion === "aprobar" && !confirm("¿Confirmar el cobro? Esto descuenta stock y actualiza puntos.")) return;
   boton.disabled = true;
   try {
-    await api("/.netlify/functions/admin-pedidos", {
+    await api("/api/admin-pedidos", {
       method: "POST",
       body: JSON.stringify({ accion, id: boton.dataset.id }),
     });

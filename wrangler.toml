@@ -1,0 +1,6 @@
+# Configuración de Cloudflare Pages para Merla Coffee
+name = "merla-coffee"
+pages_build_output_dir = "public"
+compatibility_date = "2026-01-01"
+# nodejs_compat habilita node:crypto y process.env en las funciones
+compatibility_flags = ["nodejs_compat"]

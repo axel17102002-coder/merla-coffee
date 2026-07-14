@@ -7,8 +7,8 @@
 // (webhook o confirmar-pedido), se descuenta el stock y se acreditan puntos.
 
 const { sb, obtenerCatalogo, obtenerCupon, obtenerPuntos } = require("../lib/supabase.js");
-const { ENV, crearPago } = require("../lib/modo.js");
-const { CONFIG, calcularPedido } = require("../../motor.js");
+const { ambiente, crearPago } = require("../lib/modo.js");
+const { CONFIG, calcularPedido } = require("../../public/motor.js");
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json" };
@@ -88,10 +88,14 @@ exports.handler = async (event) => {
     });
 
     // URL pública del sitio para que MODO nos notifique el resultado
-    const sitio = process.env.URL || process.env.DEPLOY_PRIME_URL || "";
-    const webhook = sitio.startsWith("https://")
-      ? `${sitio}/.netlify/functions/modo-webhook`
-      : undefined;
+    // (SITE_URL manual > Netlify URL > Cloudflare Pages URL)
+    const sitio =
+      process.env.SITE_URL ||
+      process.env.URL ||
+      process.env.CF_PAGES_URL ||
+      process.env.DEPLOY_PRIME_URL ||
+      "";
+    const webhook = sitio.startsWith("https://") ? `${sitio}/api/modo-webhook` : undefined;
 
     let pago;
     try {
@@ -129,7 +133,7 @@ exports.handler = async (event) => {
         deeplink: pago.deeplink,
         total: pedido.total,
         puntosGanados: emailValido ? pedido.puntosGanados : 0,
-        ambiente: ENV,
+        ambiente: ambiente(),
       }),
     };
   } catch (err) {
