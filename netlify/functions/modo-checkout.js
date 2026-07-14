@@ -1,6 +1,7 @@
 // ===== Función serverless: crear pago con MODO =====
-// Recibe el carrito desde la web, recalcula el total con los precios reales
-// (productos.js) y crea una Payment Request contra la API de MODO.
+// Recibe el carrito desde la web y recalcula TODO con el motor de precios
+// compartido (productos.js): presentaciones, stock, descuentos, cupones y
+// canje de puntos. Nunca confía en montos que vengan del navegador.
 // Docs: https://merchants.modo.com.ar/docs (Botón de Pago SDK v2)
 //
 // Configuración por variables de entorno (en Netlify: Site settings → Environment variables):
@@ -16,7 +17,7 @@
 // ninguna cuenta. Para cobrar de verdad hay que pedir credenciales productivas
 // (ver README).
 
-const { PRODUCTOS, DESCUENTO_CANTIDAD, DESCUENTO_PORCENTAJE } = require("../../productos.js");
+const { calcularPedido } = require("../../productos.js");
 
 const ENV = process.env.MODO_ENV || "test";
 
@@ -66,41 +67,27 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers, body: JSON.stringify({ error: "Método no permitido" }) };
   }
 
-  let items;
+  let body;
   try {
-    items = JSON.parse(event.body || "{}").items;
+    body = JSON.parse(event.body || "{}");
   } catch {
     return { statusCode: 400, headers, body: JSON.stringify({ error: "Cuerpo inválido" }) };
   }
 
-  if (!Array.isArray(items) || items.length === 0) {
-    return { statusCode: 400, headers, body: JSON.stringify({ error: "Carrito vacío" }) };
+  // El motor compartido valida productos, presentaciones, stock, cupón y canje
+  const pedido = calcularPedido(body.items, {
+    cupon: body.cupon || null,
+    canjePuntos: Boolean(body.canjePuntos),
+  });
+
+  if (!pedido.ok) {
+    return { statusCode: 400, headers, body: JSON.stringify({ error: pedido.error }) };
   }
 
-  // Recalcular el total en el servidor: nunca confiar en precios del navegador.
-  let subtotal = 0;
-  let unidades = 0;
-  const itemsModo = [];
-  for (const { id, qty } of items) {
-    const p = PRODUCTOS.find((p) => p.id === id);
-    const cantidad = Number.parseInt(qty, 10);
-    if (!p || !Number.isInteger(cantidad) || cantidad < 1 || cantidad > 99) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: `Ítem inválido: ${id}` }) };
-    }
-    subtotal += p.precio * cantidad;
-    unidades += cantidad;
-    itemsModo.push({
-      description: `${p.nombre} - Drip Bag`,
-      quantity: cantidad,
-      unit_price: p.precio,
-      sku: p.id,
-      category_name: "Drip Bags",
-    });
-  }
-
-  const descuento =
-    unidades >= DESCUENTO_CANTIDAD ? Math.round((subtotal * DESCUENTO_PORCENTAJE) / 100) : 0;
-  const total = subtotal - descuento;
+  const detalles = [];
+  if (pedido.descuentoCantidad) detalles.push(`desc. cantidad -$${pedido.descuentoCantidad}`);
+  if (pedido.descuentoCupon) detalles.push(`cupón ${pedido.cupon} -$${pedido.descuentoCupon}`);
+  if (pedido.descuentoPuntos) detalles.push(`puntos Club Merla -$${pedido.descuentoPuntos}`);
 
   try {
     const token = await obtenerToken();
@@ -112,14 +99,20 @@ exports.handler = async (event) => {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        description: `Pedido Merla Coffee (${unidades} drip bags)`.slice(0, 100),
-        amount: total,
+        description: `Pedido Merla Coffee (${pedido.unidades} drip bags)`.slice(0, 100),
+        amount: pedido.total,
         currency: "ARS",
         cc_code: CC_CODE,
         processor_code: PROCESSOR_CODE,
         external_intention_id: `merla-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        message: descuento ? `Incluye ${DESCUENTO_PORCENTAJE}% off por ${unidades} unidades` : "",
-        items: itemsModo,
+        message: detalles.join(" | ").slice(0, 200),
+        items: pedido.lineas.map((l) => ({
+          description: `${l.nombre} - Drip Bag (${l.presentacionNombre})`,
+          quantity: l.qty,
+          unit_price: l.precioUnitario,
+          sku: `${l.id}-${l.presentacion}`,
+          category_name: "Drip Bags",
+        })),
       }),
     });
 
@@ -141,7 +134,8 @@ exports.handler = async (event) => {
         id: data.id,
         qr: data.qr,
         deeplink: data.deeplink,
-        total,
+        total: pedido.total,
+        puntosGanados: pedido.puntosGanados,
         ambiente: ENV,
       }),
     };

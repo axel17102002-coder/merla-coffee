@@ -221,6 +221,9 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 
 .hero__cta { display: flex; gap: 14px; flex-wrap: wrap; }
 
+/* min-width evita que las fotos inflen las columnas del grid en pantallas chicas */
+.hero__content, .hero__img, .about__text, .about__img { min-width: 0; }
+
 .hero__img { position: relative; }
 
 .hero__img::before {
@@ -234,6 +237,7 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 }
 
 .hero__img img {
+  width: 100%;
   border-radius: var(--radio);
   box-shadow: var(--sombra);
   aspect-ratio: 4 / 5;
@@ -508,6 +512,7 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 }
 
 .about__img img {
+  width: 100%;
   border-radius: var(--radio);
   box-shadow: var(--sombra);
   aspect-ratio: 4 / 5;
@@ -850,4 +855,249 @@ section[id], footer[id] { scroll-margin-top: 90px; }
   .benefits { grid-template-columns: 1fr; }
   .announcement { font-size: 0.72rem; }
   .hero::before, .hero::after { display: none; }
+}
+
+/* ===== Presentaciones (Unidad / Pack x5) ===== */
+.pres {
+  display: flex;
+  gap: 8px;
+}
+
+.pres__btn {
+  flex: 1;
+  background: var(--crema-suave);
+  border: 1.5px solid var(--crema-borde);
+  border-radius: 999px;
+  padding: 8px 10px;
+  font-family: var(--fuente-texto);
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: #5a6552;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.pres__btn em {
+  font-style: normal;
+  color: var(--caramelo);
+  font-weight: 800;
+}
+
+.pres__btn.activo {
+  background: var(--verde);
+  border-color: var(--verde);
+  color: var(--crema);
+}
+
+.pres__btn.activo em { color: var(--caramelo-suave); }
+
+.pres__btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.modal__body .pres { margin-bottom: 18px; }
+
+/* ===== Stock ===== */
+.card__stock {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  background: #fdf3e3;
+  color: #a3540d;
+  border: 1px solid #f0ddbb;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 5px 10px;
+  border-radius: 999px;
+}
+
+.card__stock--agotado {
+  background: #3a3a3a;
+  color: #fff;
+  border-color: #3a3a3a;
+}
+
+.card--agotado .card__img img { filter: grayscale(0.9); opacity: 0.7; }
+
+.card__add:disabled,
+.btn--primary:disabled {
+  background: #b9c0b2;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ===== Cupones (sección) ===== */
+.coupon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.coupon {
+  position: relative;
+  background: var(--blanco);
+  border: 2px dashed var(--caramelo);
+  border-radius: var(--radio);
+  padding: 24px;
+  text-align: center;
+}
+
+.coupon--club {
+  border-style: solid;
+  border-color: var(--verde);
+  background: var(--verde-oscuro);
+}
+
+.coupon--club .coupon__desc, .coupon--club .coupon__min { color: #c9d3c2; }
+.coupon--club .coupon__code { color: var(--crema); background: rgba(255, 253, 248, 0.08); }
+
+.coupon__code {
+  display: inline-block;
+  font-family: var(--fuente-display);
+  font-weight: 800;
+  font-size: 1.15rem;
+  color: var(--verde);
+  background: var(--crema-suave);
+  border-radius: 10px;
+  padding: 6px 16px;
+  letter-spacing: 0.06em;
+  margin-bottom: 12px;
+}
+
+.coupon__desc { font-size: 0.92rem; color: #4a5744; margin-bottom: 6px; }
+.coupon__min { font-size: 0.78rem; color: #8a927f; margin-bottom: 4px; }
+
+.coupon__use {
+  margin-top: 12px;
+  background: var(--caramelo);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 9px 22px;
+  font-family: var(--fuente-texto);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: transform 0.15s, background 0.2s;
+}
+
+.coupon__use:hover { background: #a06d3a; transform: translateY(-1px); }
+
+/* ===== Cupón en el carrito ===== */
+.cart__coupon {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cart__coupon input {
+  flex: 1;
+  border: 1.5px solid var(--crema-borde);
+  border-radius: 999px;
+  padding: 9px 16px;
+  font-family: var(--fuente-texto);
+  font-size: 0.88rem;
+  background: var(--crema-suave);
+  color: var(--tinta);
+  text-transform: uppercase;
+}
+
+.cart__coupon input::placeholder { text-transform: none; color: #8a927f; }
+.cart__coupon input:focus { outline: 2px solid var(--caramelo); border-color: var(--caramelo); }
+
+.cart__coupon button {
+  background: var(--caramelo);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 9px 18px;
+  font-family: var(--fuente-texto);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.cart__coupon button:hover { background: #a06d3a; }
+
+.cart__coupon-applied {
+  background: #eaf6ec;
+  border: 1px solid #bfe3c8;
+  color: #1d7a3d;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cart__coupon-applied button,
+.points-box__quitar {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: #b05c3c;
+  font-size: 0.78rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ===== Puntos Club Merla en el carrito ===== */
+.points-box {
+  background: var(--crema-suave);
+  border: 1px solid var(--crema-borde);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 0.82rem;
+  color: #4a5744;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.points-box__canjear {
+  background: var(--verde);
+  color: var(--crema);
+  border: none;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-family: var(--fuente-texto);
+  font-weight: 700;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.points-box__canjear:hover { background: var(--verde-claro); }
+
+.cart__earn {
+  font-size: 0.78rem;
+  color: #66705f;
+  margin-bottom: 12px;
+}
+
+.cart__error {
+  background: #fdecea;
+  border: 1px solid #f2c4be;
+  color: #a13c2f;
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 0.84rem;
+  margin-bottom: 12px;
+}
+
+.cart-item__pres {
+  display: inline-block;
+  background: var(--crema-suave);
+  border: 1px solid var(--crema-borde);
+  color: #8a927f;
+  font-size: 0.68rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 1px 8px;
+  margin-left: 4px;
+  vertical-align: middle;
 }

@@ -1,15 +1,59 @@
 // ===== Datos de la tienda — ÚNICA fuente de verdad =====
 // Este archivo lo usan tanto la web (app.js) como la función de pago de MODO
-// (netlify/functions/modo-checkout.js). Editá precios y productos SOLO acá.
+// (netlify/functions/modo-checkout.js). Editá TODO acá: precios, stock,
+// packs, cupones y el programa de puntos.
 
-const DESCUENTO_CANTIDAD = 5; // unidades mínimas para el descuento
-const DESCUENTO_PORCENTAJE = 5; // % de descuento
+// --- Descuento por cantidad (unidades sueltas) ---
+const DESCUENTO_CANTIDAD = 5; // unidades sueltas mínimas para el descuento
+const DESCUENTO_PORCENTAJE = 5; // % de descuento sobre las unidades sueltas
 
+// --- Pack x5: se genera automáticamente para cada café ---
+const PACK_X5 = {
+  unidades: 5,
+  descuento: 10, // % de descuento vs. comprar 5 unidades sueltas
+};
+
+// --- Cupones ---
+// tipo: "porcentaje" (valor = %) o "monto" (valor = $ fijos)
+// minimo: monto mínimo del pedido (después del descuento por cantidad)
+// publico: true → se muestra en la sección "Cupones" de la web
+const CUPONES = [
+  {
+    codigo: "BIENVENIDA10",
+    tipo: "porcentaje",
+    valor: 10,
+    minimo: 0,
+    publico: true,
+    descripcion: "10% OFF en tu primer pedido",
+  },
+  {
+    codigo: "CAFETERO",
+    tipo: "monto",
+    valor: 2000,
+    minimo: 15000,
+    publico: true,
+    descripcion: "$2.000 OFF en pedidos desde $15.000",
+  },
+];
+
+// --- Club Merla (fidelidad) ---
+// Se suman puntos pagando online con MODO: puntosPorCien puntos por cada $100.
+// Juntando canjePuntos puntos se canjean por canjeDescuento pesos de descuento
+// (el pedido debe ser de al menos el doble del descuento).
+const FIDELIDAD = {
+  puntosPorCien: 1, // 1 punto por cada $100
+  canjePuntos: 300, // puntos necesarios para canjear
+  canjeDescuento: 1500, // $ de descuento al canjear
+};
+
+// --- Productos ---
+// stock: drip bags disponibles (0 = agotado; un pack x5 descuenta 5)
 const PRODUCTOS = [
   {
     id: "brasil-honey",
     nombre: "Brasil Honey Cup",
     precio: 1720,
+    stock: 18,
     origen: "Brasil",
     region: "Alta Mogiana, Brasil",
     variedad: "Caturra",
@@ -24,6 +68,7 @@ const PRODUCTOS = [
     id: "oldfashion",
     nombre: "Oldfashion",
     precio: 2360,
+    stock: 24,
     origen: "Colombia",
     region: "Huila, Pitalito (Colombia)",
     variedad: "Bourbon y Caturra",
@@ -38,6 +83,7 @@ const PRODUCTOS = [
     id: "peru",
     nombre: "Perú",
     precio: 2270,
+    stock: 4,
     origen: "Perú",
     region: "Rodríguez de Mendoza, Perú",
     variedad: "Blend de variedades",
@@ -52,6 +98,7 @@ const PRODUCTOS = [
     id: "volcanico",
     nombre: "Volcánico",
     precio: 2100,
+    stock: 20,
     origen: "Colombia",
     region: "Tolima, Chaparral (Colombia)",
     variedad: "Caturra, Colombia y Castillo",
@@ -66,6 +113,7 @@ const PRODUCTOS = [
     id: "brasil",
     nombre: "Brasil",
     precio: 2100,
+    stock: 12,
     origen: "Brasil",
     region: "Espíritu Santo, Brasil",
     variedad: "Catuaí Amarillo y Rojo",
@@ -80,6 +128,7 @@ const PRODUCTOS = [
     id: "silverio-nina",
     nombre: "Silverio Nina",
     precio: 2100,
+    stock: 16,
     origen: "Bolivia",
     region: "Los Yungas, Bolivia",
     variedad: "Caturra",
@@ -94,6 +143,7 @@ const PRODUCTOS = [
     id: "andino",
     nombre: "Andino",
     precio: 2100,
+    stock: 30,
     origen: "Colombia",
     region: "Quindío, Colombia",
     variedad: "Caturra, Colombia, Catimor y Castillo",
@@ -106,7 +156,140 @@ const PRODUCTOS = [
   },
 ];
 
+// ===== Motor de precios =====
+// Las mismas reglas corren en el navegador (para mostrar) y en el servidor
+// (para cobrar): así nunca quedan desincronizadas.
+
+function presentacionesDe(p) {
+  const precioPack = Math.round((p.precio * PACK_X5.unidades * (100 - PACK_X5.descuento)) / 100);
+  return [
+    { id: "unidad", nombre: "Unidad", unidades: 1, precio: p.precio },
+    { id: "pack5", nombre: `Pack x${PACK_X5.unidades}`, unidades: PACK_X5.unidades, precio: precioPack },
+  ];
+}
+
+function buscarCupon(codigo) {
+  if (!codigo) return null;
+  return CUPONES.find((c) => c.codigo.toUpperCase() === String(codigo).trim().toUpperCase()) || null;
+}
+
+// items: [{ id, presentacion, qty }] — opciones: { cupon, canjePuntos }
+// Devuelve { ok: true, lineas, subtotal, descuentos..., total, unidades, puntosGanados }
+// o { ok: false, error }
+function calcularPedido(items, opciones = {}) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return { ok: false, error: "El carrito está vacío" };
+  }
+
+  const lineas = [];
+  const unidadesPorProducto = {};
+
+  for (const it of items) {
+    const p = PRODUCTOS.find((x) => x.id === it.id);
+    const qty = Number.parseInt(it.qty, 10);
+    if (!p) return { ok: false, error: `Producto inválido: ${it.id}` };
+    if (!Number.isInteger(qty) || qty < 1 || qty > 99) {
+      return { ok: false, error: `Cantidad inválida (${p.nombre})` };
+    }
+    const pres = presentacionesDe(p).find((x) => x.id === (it.presentacion || "unidad"));
+    if (!pres) return { ok: false, error: `Presentación inválida (${p.nombre})` };
+
+    unidadesPorProducto[p.id] = (unidadesPorProducto[p.id] || 0) + pres.unidades * qty;
+    if (unidadesPorProducto[p.id] > p.stock) {
+      return {
+        ok: false,
+        error:
+          p.stock === 0
+            ? `${p.nombre} está agotado`
+            : `Stock insuficiente de ${p.nombre} (quedan ${p.stock} drip bags)`,
+      };
+    }
+
+    lineas.push({
+      id: p.id,
+      nombre: p.nombre,
+      presentacion: pres.id,
+      presentacionNombre: pres.nombre,
+      esPack: pres.unidades > 1,
+      precioUnitario: pres.precio,
+      qty,
+      unidades: pres.unidades * qty,
+      subtotal: pres.precio * qty,
+    });
+  }
+
+  const subtotal = lineas.reduce((a, l) => a + l.subtotal, 0);
+  const unidades = lineas.reduce((a, l) => a + l.unidades, 0);
+
+  // Descuento por cantidad: solo sobre unidades sueltas (los packs ya tienen su descuento)
+  const sueltas = lineas.filter((l) => !l.esPack);
+  const unidadesSueltas = sueltas.reduce((a, l) => a + l.unidades, 0);
+  const subtotalSueltas = sueltas.reduce((a, l) => a + l.subtotal, 0);
+  const descuentoCantidad =
+    unidadesSueltas >= DESCUENTO_CANTIDAD
+      ? Math.round((subtotalSueltas * DESCUENTO_PORCENTAJE) / 100)
+      : 0;
+
+  // Cupón (sobre el subtotal ya descontado por cantidad)
+  let descuentoCupon = 0;
+  let cupon = null;
+  if (opciones.cupon) {
+    const c = buscarCupon(opciones.cupon);
+    if (!c) return { ok: false, error: "Cupón inválido" };
+    const base = subtotal - descuentoCantidad;
+    if (base < (c.minimo || 0)) {
+      return {
+        ok: false,
+        error: `El cupón ${c.codigo} es para pedidos desde $${c.minimo.toLocaleString("es-AR")}`,
+      };
+    }
+    descuentoCupon =
+      c.tipo === "porcentaje" ? Math.round((base * c.valor) / 100) : Math.min(c.valor, base);
+    cupon = c.codigo;
+  }
+
+  // Canje de puntos Club Merla
+  let descuentoPuntos = 0;
+  if (opciones.canjePuntos) {
+    const restante = subtotal - descuentoCantidad - descuentoCupon;
+    if (restante < FIDELIDAD.canjeDescuento * 2) {
+      return {
+        ok: false,
+        error: `Para canjear puntos el pedido debe superar $${(FIDELIDAD.canjeDescuento * 2).toLocaleString("es-AR")}`,
+      };
+    }
+    descuentoPuntos = FIDELIDAD.canjeDescuento;
+  }
+
+  const total = subtotal - descuentoCantidad - descuentoCupon - descuentoPuntos;
+  const puntosGanados = Math.floor(total / 100) * FIDELIDAD.puntosPorCien;
+
+  return {
+    ok: true,
+    lineas,
+    subtotal,
+    unidades,
+    unidadesSueltas,
+    descuentoCantidad,
+    descuentoCupon,
+    cupon,
+    descuentoPuntos,
+    total,
+    puntosGanados,
+  };
+}
+
 // Export para Node (función serverless); en el browser quedan como globales.
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { PRODUCTOS, DESCUENTO_CANTIDAD, DESCUENTO_PORCENTAJE };
+  module.exports = {
+    PRODUCTOS,
+    DESCUENTO_CANTIDAD,
+    DESCUENTO_PORCENTAJE,
+    PACK_X5,
+    CUPONES,
+    FIDELIDAD,
+    presentacionesDe,
+    buscarCupon,
+    calcularPedido,
+  };
 }
