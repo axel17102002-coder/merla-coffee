@@ -54,11 +54,86 @@ async function cargarPedidos() {
   }
 }
 
+// ===== Stock por gramos de café =====
+let gramosPorUnidad = 12;
+
+function renderStock(productos) {
+  const contenedor = $("#stock");
+  $("#stock-gpu").textContent = gramosPorUnidad;
+  contenedor.innerHTML = productos
+    .map(
+      (p) => `<article class="stock__fila${p.activo ? "" : " stock__fila--inactivo"}" data-producto="${escapar(p.id)}">
+        <div class="stock__info">
+          <strong>${escapar(p.nombre)}</strong>
+          <span class="stock__actual">Stock: <b data-stock-de="${escapar(p.id)}">${p.stock}</b> bags${p.activo ? "" : " · inactivo"}</span>
+        </div>
+        <div class="stock__form">
+          <input type="number" min="0" step="1" inputmode="numeric" placeholder="Gramos de café" data-gramos aria-label="Gramos de café para ${escapar(p.nombre)}">
+          <span class="stock__preview" data-preview>= 0 bags</span>
+          <button data-stock-action="sumar" disabled>Sumar</button>
+          <button data-stock-action="fijar" disabled>Fijar</button>
+        </div>
+      </article>`
+    )
+    .join("");
+}
+
+async function cargarStock() {
+  try {
+    const data = await api("/api/admin-stock");
+    gramosPorUnidad = data.gramosPorUnidad || 12;
+    renderStock(data.productos);
+    mensaje("#stock-message", "");
+  } catch (err) {
+    mensaje("#stock-message", `⚠️ ${err.message}`);
+  }
+}
+
+$("#stock").addEventListener("input", (e) => {
+  const input = e.target.closest("[data-gramos]");
+  if (!input) return;
+  const fila = input.closest(".stock__fila");
+  const unidades = Math.floor((Number(input.value) || 0) / gramosPorUnidad);
+  fila.querySelector("[data-preview]").textContent = `= ${unidades} bags`;
+  fila.querySelectorAll("[data-stock-action]").forEach((b) => (b.disabled = unidades <= 0));
+});
+
+$("#stock").addEventListener("click", async (e) => {
+  const boton = e.target.closest("[data-stock-action]");
+  if (!boton) return;
+  const fila = boton.closest(".stock__fila");
+  const gramos = Number(fila.querySelector("[data-gramos]").value) || 0;
+  const unidades = Math.floor(gramos / gramosPorUnidad);
+  const accion = boton.dataset.stockAction;
+  const nombre = fila.querySelector("strong").textContent;
+  const pregunta =
+    accion === "sumar"
+      ? `¿Sumar ${unidades} bags (${gramos} g) al stock de ${nombre}?`
+      : `¿Reemplazar el stock de ${nombre} por ${unidades} bags (${gramos} g)?`;
+  if (!confirm(pregunta)) return;
+
+  fila.querySelectorAll("button").forEach((b) => (b.disabled = true));
+  try {
+    const r = await api("/api/admin-stock", {
+      method: "POST",
+      body: JSON.stringify({ producto_id: fila.dataset.producto, gramos, accion }),
+    });
+    fila.querySelector("[data-stock-de]").textContent = r.stock;
+    fila.querySelector("[data-gramos]").value = "";
+    fila.querySelector("[data-preview]").textContent = "= 0 bags";
+    mensaje("#stock-message", `✅ ${nombre}: stock actualizado a ${r.stock} bags`);
+  } catch (err) {
+    mensaje("#stock-message", `⚠️ ${err.message}`);
+    fila.querySelectorAll("button").forEach((b) => (b.disabled = false));
+  }
+});
+
 function abrirPanel() {
   $("#login").hidden = true;
   $("#panel").hidden = false;
   $("#logout").hidden = false;
   cargarPedidos();
+  cargarStock();
 }
 
 function cerrarSesion() {

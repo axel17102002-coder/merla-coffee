@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <title>Pedidos · Merla Coffee</title>
+  <title>Admin · Merla Coffee</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -13,7 +13,7 @@
 <body>
   <main class="admin">
     <header class="admin__head">
-      <div><p class="admin__eyebrow">Merla Coffee</p><h1>Pedidos por WhatsApp</h1></div>
+      <div><p class="admin__eyebrow">Merla Coffee</p><h1>Administración</h1></div>
       <button class="admin__logout" id="logout" hidden>Cerrar sesión</button>
     </header>
 
@@ -28,12 +28,20 @@
     </section>
 
     <section id="panel" hidden>
+      <h2 class="admin__subtitulo">Pedidos por WhatsApp</h2>
       <div class="panel__bar">
         <p>Los pedidos se crean pendientes. Al aprobar, se descuenta el stock y se aplican los puntos.</p>
         <button id="reload">Actualizar</button>
       </div>
       <p class="mensaje" id="panel-message"></p>
       <div class="pedidos" id="pedidos"></div>
+
+      <h2 class="admin__subtitulo">Stock por gramos de café</h2>
+      <div class="panel__bar">
+        <p>Cargá los gramos de café en grano y calculamos cuántas drip bags salen (<strong id="stock-gpu">12</strong> g por unidad). "Sumar" agrega al stock actual; "Fijar" lo reemplaza.</p>
+      </div>
+      <p class="mensaje" id="stock-message"></p>
+      <div class="stock" id="stock"></div>
     </section>
   </main>
   <script src="admin.js"></script>

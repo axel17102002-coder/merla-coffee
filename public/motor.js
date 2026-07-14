@@ -15,6 +15,9 @@ const CONFIG = {
   transferencia: {
     descuento: 10, // % OFF pagando por transferencia o depósito (se coordina por WhatsApp)
   },
+  drip: {
+    gramosPorUnidad: 12, // gramos de café por drip bag (confirmado con el packaging)
+  },
   fidelidad: {
     puntosPorCien: 1, // 1 punto por cada $100 pagando con MODO
     canjePuntos: 300, // puntos necesarios para canjear
