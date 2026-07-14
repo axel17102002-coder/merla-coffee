@@ -158,7 +158,7 @@ exports.handler = async (event) => {
         init_point: preferencia.init_point,
         total: pedido.total,
         puntosGanados: emailValido ? pedido.puntosGanados : 0,
-        ambiente: ambienteMp(),
+        ambiente: await ambienteMp(),
       }),
     };
   } catch (err) {

@@ -10,9 +10,21 @@ function token() {
   return t;
 }
 
-// "produccion" si el token es productivo (APP_USR-...), "test" en cualquier otro caso
-function ambienteMp() {
-  return (process.env.MP_ACCESS_TOKEN || "").startsWith("APP_USR-") ? "produccion" : "test";
+// "test" si el token pertenece a una cuenta de prueba de MP, "produccion" si
+// es una cuenta real. No alcanza con mirar el prefijo (los tokens de las
+// cuentas de prueba también empiezan con APP_USR-): consultamos /users/me una
+// sola vez y cacheamos el resultado.
+let _ambiente = null;
+async function ambienteMp() {
+  if (!process.env.MP_ACCESS_TOKEN) return "test";
+  if (_ambiente) return _ambiente;
+  try {
+    const yo = await mp("/users/me");
+    _ambiente = (yo.tags || []).includes("test_user") ? "test" : "produccion";
+  } catch {
+    _ambiente = "test"; // ante la duda, avisamos que es prueba
+  }
+  return _ambiente;
 }
 
 async function mp(ruta, opciones = {}) {
