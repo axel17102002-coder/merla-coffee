@@ -17,7 +17,7 @@ Navegador ──> Funciones Netlify ──> Supabase (productos, stock, cupones,
 ## Archivos
 
 - `public/` — la web (HTML, CSS, JS, imágenes)
-- `functions/api/` — adaptadores de Cloudflare Pages (reusan el backend de `netlify/functions/`)
+- `src/worker.js` + `functions/_adaptador.js` — entrada de Cloudflare (reusa el backend de `netlify/functions/`)
 - `wrangler.toml` — configuración de Cloudflare
 
 - `index.html` / `styles.css` / `app.js` — la web
@@ -38,16 +38,16 @@ Navegador ──> Funciones Netlify ──> Supabase (productos, stock, cupones,
 
 1. **Crear las tablas**: en [Supabase](https://supabase.com) → tu proyecto → **SQL Editor** → pegá todo el contenido de `supabase/schema.sql` → **Run**. Eso crea las tablas con los 7 cafés, las presentaciones y 2 cupones de ejemplo.
 2. **Claves locales**: copiá `.env.example` a `.env` y completá `SUPABASE_URL` (la **Project URL**, no la URL del Dashboard), `SUPABASE_SECRET_KEY` (la clave `sb_secret_...`) y `ADMIN_TOKEN` (una clave larga para administrar pedidos). Están en Supabase → **Connect** o **Settings → API Keys**. Si tu proyecto todavía usa claves legacy, podés usar `SUPABASE_SERVICE_ROLE_KEY`. El `.env` está gitignoreado: nunca se sube. Para probar con Cloudflare local también: `cp .env .dev.vars`.
-3. **Probar local**: `npx wrangler pages dev public --port 8788` y abrir http://localhost:8788
+3. **Probar local**: `npx wrangler dev --port 8788` y abrir http://localhost:8788
 
-## Publicar en Cloudflare Pages (hosting principal)
+## Publicar en Cloudflare (hosting principal)
 
-1. Entrá a [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages** → **Create** → **Pages** → **Import an existing Git repository** y elegí `merla-coffee`.
-2. En la configuración del build dejá **Framework preset: None**, **Build command: (vacío)** y **Build output directory: `public`** (lo toma solo de `wrangler.toml`).
-3. En **Settings → Environment variables** cargá: `SUPABASE_URL`, `SUPABASE_SECRET_KEY` (o `SUPABASE_SERVICE_ROLE_KEY`) y `ADMIN_TOKEN`.
-4. Deploy. Cada push a `main` publica solo. La URL queda tipo `https://merla-coffee.pages.dev` (el webhook de MODO la usa automáticamente).
+1. Entrá a [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages** → **Create** → **Import a repository** y elegí `merla-coffee`.
+2. Build command: `echo listo` (no hay build). Deploy command: `npx wrangler deploy` (el default). Toda la configuración real está en `wrangler.toml`.
+3. En el proyecto → **Settings → Variables and Secrets** cargá: `SUPABASE_URL`, `SUPABASE_SECRET_KEY` (o `SUPABASE_SERVICE_ROLE_KEY`) y `ADMIN_TOKEN`. Después **Retry deployment**.
+4. Cada push a `main` publica solo. La URL queda tipo `https://merla-coffee.<tu-cuenta>.workers.dev` (el webhook de MODO la usa automáticamente).
 
-La web llama al backend por `/api/<funcion>`: en Cloudflare lo resuelven los adaptadores de `functions/api/` y en Netlify un redirect de `netlify.toml` — el mismo código sirve en las dos plataformas (Netlify queda como plan B).
+La web llama al backend por `/api/<funcion>`: en Cloudflare lo rutea `src/worker.js` y en Netlify un redirect de `netlify.toml` — el mismo código sirve en las dos plataformas (Netlify queda como plan B).
 
 ## Administración diaria (sin tocar código)
 

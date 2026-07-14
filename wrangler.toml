@@ -1,6 +1,10 @@
-# Configuración de Cloudflare Pages para Merla Coffee
+# Configuración de Cloudflare (Workers + assets estáticos) para Merla Coffee
 name = "merla-coffee"
-pages_build_output_dir = "public"
+main = "src/worker.js"
 compatibility_date = "2026-01-01"
-# nodejs_compat habilita node:crypto y process.env en las funciones
+# nodejs_compat habilita node:crypto y process.env en el backend
 compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "public"
+binding = "ASSETS"
