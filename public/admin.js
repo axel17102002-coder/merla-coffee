@@ -28,6 +28,14 @@ function numeroDe(p) {
 }
 const CANALES = { mercadopago: "Mercado Pago", whatsapp: "WhatsApp", modo: "MODO" };
 
+// Línea de entrega para la tarjeta del pedido (retiro o dirección de envío)
+function renderEntrega(envio) {
+  if (!envio || !envio.metodo) return "";
+  if (envio.metodo === "retiro") return `<p class="pedido__extra">🏪 Retiro en el local</p>`;
+  const partes = [envio.direccion, envio.ciudad, envio.provincia, envio.cp && `CP ${envio.cp}`].filter(Boolean).map(escapar).join(", ");
+  return `<p class="pedido__extra">📦 Envío a: ${escapar(envio.nombre)} — ${partes}${envio.telefono ? " · Tel " + escapar(envio.telefono) : ""}${envio.notas ? " · " + escapar(envio.notas) : ""}</p>`;
+}
+
 // ===== Pedidos =====
 let pedidosCache = [];
 let filtroCanal = "todos";
@@ -46,6 +54,7 @@ function renderPedidos() {
     const pendienteWsp = p.estado === "pendiente" && p.origen === "whatsapp";
     const cupon = p.cupon ? `<p class="pedido__extra">Cupón ${escapar(p.cupon)}: -${formato.format(p.descuento_cupon || 0)}</p>` : "";
     const puntos = p.cliente_email ? `<p class="pedido__extra">Puntos: +${p.puntos_ganados}${p.puntos_canjeados ? ` · canje -${p.puntos_canjeados}` : ""}</p>` : "";
+    const entrega = renderEntrega(p.envio);
     return `<article class="pedido pedido--${escapar(p.estado)}">
       <div class="pedido__top">
         <div class="pedido__top-izq">
@@ -60,7 +69,7 @@ function renderPedidos() {
         <span class="pedido__email">${escapar(p.cliente_email || "Sin email")}</span>
         <strong>${formato.format(p.total)}</strong>
       </div>
-      ${cupon}${puntos}
+      ${cupon}${puntos}${entrega}
       <div class="pedido__actions">
         <button class="borrar" data-action="eliminar" data-id="${escapar(p.id)}" title="Eliminar pedido">🗑 Eliminar</button>
         ${pendienteWsp ? `<button class="rechazar" data-action="rechazar" data-id="${escapar(p.id)}">Rechazar</button>

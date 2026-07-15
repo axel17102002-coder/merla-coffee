@@ -4,6 +4,7 @@
 
 const { sb, obtenerCatalogo, obtenerCupon, obtenerPuntos, cuponYaUsado } = require("../lib/supabase.js");
 const { calcularPedido, numeroPedido: formatearNumero } = require("../../public/motor.js");
+const { sanitizarEnvio } = require("../lib/entrega.js");
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json" };
@@ -69,6 +70,7 @@ exports.handler = async (event) => {
         total: pedido.total,
         puntos_ganados: emailValido ? pedido.puntosGanados : 0,
         cliente_email: emailValido ? email : null,
+        envio: sanitizarEnvio(body.envio),
       },
     });
 

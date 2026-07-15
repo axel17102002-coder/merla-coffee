@@ -451,6 +451,9 @@ async function checkoutWhatsApp() {
   const { calc } = estadoPedido();
   if (!calc) return;
 
+  const errorEntrega = validarEntrega();
+  if (errorEntrega) { mostrarToast(`⚠️ ${errorEntrega}`); return; }
+
   // Abrimos la pestaña dentro del click del usuario para que el navegador no
   // bloquee WhatsApp mientras registramos el pedido en el servidor.
   const ventana = window.open("", "_blank");
@@ -469,6 +472,7 @@ async function checkoutWhatsApp() {
         cupon: cuponActivo() ? cuponActivo().codigo : null,
         canjePuntos: canjeActivo(),
         email: emailCliente() || null,
+        envio: datosEntrega(),
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -500,7 +504,18 @@ async function checkoutWhatsApp() {
   }
   msg += `\n*Total: ${formatear(calc.total)}*`;
   msg += `\n💵 Pagando por transferencia o depósito: *${formatear(precioTransferencia(calc.total))}* (${CONFIG.transferencia.descuento}% OFF)`;
-  msg += "\n\n¿Me confirmás disponibilidad y cómo coordinamos envío y pago?";
+
+  const entrega = datosEntrega();
+  if (entrega.metodo === "envio") {
+    msg += `\n\n📦 *Envío a domicilio*`;
+    msg += `\n${entrega.nombre} — ${entrega.direccion}`;
+    msg += `\n${entrega.ciudad}${entrega.provincia ? ", " + entrega.provincia : ""}${entrega.cp ? " (CP " + entrega.cp + ")" : ""}`;
+    msg += `\nTel: ${entrega.telefono}`;
+    if (entrega.notas) msg += `\nNotas: ${entrega.notas}`;
+  } else {
+    msg += `\n\n🏪 *Retiro en el local*`;
+  }
+  msg += "\n\n¿Me confirmás disponibilidad y cómo coordinamos el pago?";
 
   const urlWhatsApp = `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(msg)}`;
   if (ventana) ventana.location.href = urlWhatsApp;
@@ -510,10 +525,53 @@ async function checkoutWhatsApp() {
   mostrarToast(`✅ Pedido ${pedido.codigo} registrado como pendiente`);
 }
 
+// ===== Entrega (retiro / envío) =====
+function metodoEntrega() {
+  const sel = document.querySelector('input[name="entrega"]:checked');
+  return sel ? sel.value : "retiro";
+}
+
+// Devuelve el objeto de envío para el pedido, o null si es retiro
+function datosEntrega() {
+  if (metodoEntrega() === "retiro") return { metodo: "retiro" };
+  return {
+    metodo: "envio",
+    nombre: $("#envio-nombre").value.trim(),
+    direccion: $("#envio-direccion").value.trim(),
+    ciudad: $("#envio-ciudad").value.trim(),
+    provincia: $("#envio-provincia").value.trim(),
+    cp: $("#envio-cp").value.trim(),
+    telefono: $("#envio-telefono").value.trim(),
+    notas: $("#envio-notas").value.trim(),
+  };
+}
+
+// Valida los datos de envío; devuelve un mensaje de error o null si está OK
+function validarEntrega() {
+  if (metodoEntrega() === "retiro") return null;
+  const e = datosEntrega();
+  if (!e.nombre) return "Ingresá tu nombre para el envío";
+  if (!e.direccion) return "Ingresá la dirección de envío";
+  if (!e.ciudad) return "Ingresá la ciudad";
+  if (!e.telefono) return "Ingresá un teléfono de contacto";
+  return null;
+}
+
+// Muestra u oculta el formulario de envío según el método elegido
+function actualizarEntrega() {
+  $("#envio-form").hidden = metodoEntrega() !== "envio";
+}
+document.querySelectorAll('input[name="entrega"]').forEach((r) =>
+  r.addEventListener("change", actualizarEntrega)
+);
+
 // ===== Checkout con Mercado Pago (Checkout Pro) =====
 async function pagarConMercadoPago() {
   const { calc } = estadoPedido();
   if (!calc) return;
+
+  const errorEntrega = validarEntrega();
+  if (errorEntrega) { mostrarToast(`⚠️ ${errorEntrega}`); return; }
 
   const btn = $("#pay-mp");
   const textoOriginal = btn.innerHTML;
@@ -530,6 +588,7 @@ async function pagarConMercadoPago() {
         cupon: cupon ? cupon.codigo : null,
         canjePuntos: canjeActivo(),
         email: emailCliente() || null,
+        envio: datosEntrega(),
       }),
     });
     if (!res.ok) {
