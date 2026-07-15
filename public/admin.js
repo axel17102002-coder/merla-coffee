@@ -60,6 +60,7 @@ let gramosPorUnidad = 12;
 function renderStock(productos) {
   const contenedor = $("#stock");
   $("#stock-gpu").textContent = gramosPorUnidad;
+  if (!productos) return;
   contenedor.innerHTML = productos
     .map(
       (p) => `<article class="stock__fila${p.activo ? "" : " stock__fila--inactivo"}" data-producto="${escapar(p.id)}">
@@ -78,20 +79,10 @@ function renderStock(productos) {
     .join("");
 }
 
-async function cargarStock() {
-  try {
-    const data = await api("/api/admin-stock");
-    gramosPorUnidad = data.gramosPorUnidad || 12;
-    renderStock(data.productos);
-    mensaje("#stock-message", "");
-  } catch (err) {
-    mensaje("#stock-message", `⚠️ ${err.message}`);
-  }
-}
 // ===== Gestión de Precios =====
-
 function renderPrecios(productos) {
   const contenedor = $("#precios");
+  if (!productos) return;
   contenedor.innerHTML = productos
     .map(
       (p) => `<article class="stock__fila${p.activo ? "" : " stock__fila--inactivo"}" data-producto="${escapar(p.id)}">
@@ -108,7 +99,24 @@ function renderPrecios(productos) {
     .join("");
 }
 
-// Evento para guardar el nuevo precio
+// Única función para cargar todo
+async function cargarStock() {
+  try {
+    const data = await api("/api/admin-stock");
+    gramosPorUnidad = data.gramosPorUnidad || 12;
+    renderStock(data.productos);
+    renderPrecios(data.productos);
+    mensaje("#stock-message", "");
+    mensaje("#precio-message", "");
+  } catch (err) {
+    mensaje("#stock-message", `⚠️ ${err.message}`);
+    mensaje("#precio-message", `⚠️ ${err.message}`);
+  }
+}
+
+// ===== Eventos =====
+
+// Evento de Precios
 $("#precios").addEventListener("click", async (e) => {
   const boton = e.target.closest("[data-precio-action]");
   if (!boton) return;
@@ -123,13 +131,11 @@ $("#precios").addEventListener("click", async (e) => {
   fila.querySelectorAll("button").forEach((b) => (b.disabled = true));
   
   try {
-    // Petición al backend para guardar el precio
     const r = await api("/api/admin-precios", {
       method: "POST",
       body: JSON.stringify({ producto_id: fila.dataset.producto, precio: nuevoPrecio }),
     });
     
-    // Actualiza la vista si la API responde bien
     fila.querySelector("[data-precio-de]").textContent = formato.format(r.precio || nuevoPrecio);
     fila.querySelector("[data-precio]").value = "";
     mensaje("#precio-message", `✅ ${nombre}: precio actualizado a ${formato.format(r.precio || nuevoPrecio)}`);
@@ -140,20 +146,7 @@ $("#precios").addEventListener("click", async (e) => {
   }
 });
 
-async function cargarStock() {
-  try {
-    const data = await api("/api/admin-stock");
-    gramosPorUnidad = data.gramosPorUnidad || 12;
-    renderStock(data.productos);
-    renderPrecios(data.productos); // Agregamos esta línea para pintar los precios
-    mensaje("#stock-message", "");
-    mensaje("#precio-message", "");
-  } catch (err) {
-    mensaje("#stock-message", `⚠️ ${err.message}`);
-    mensaje("#precio-message", `⚠️ ${err.message}`);
-  }
-}
-
+// Eventos de Stock
 $("#stock").addEventListener("input", (e) => {
   const input = e.target.closest("[data-gramos]");
   if (!input) return;
@@ -193,6 +186,7 @@ $("#stock").addEventListener("click", async (e) => {
   }
 });
 
+// Panel y Login
 function abrirPanel() {
   $("#login").hidden = true;
   $("#panel").hidden = false;

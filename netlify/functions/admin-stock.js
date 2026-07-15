@@ -15,7 +15,7 @@ exports.handler = async (event) => {
 
   try {
     if (event.httpMethod === "GET") {
-      const productos = await sb("productos?select=id,nombre,stock,activo&order=nombre.asc");
+      const productos = await sb("productos?select=id,nombre,stock,activo,precio&order=nombre.asc");
       return {
         statusCode: 200,
         headers,

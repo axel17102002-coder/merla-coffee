@@ -4,6 +4,7 @@
 
 import { adaptar } from "../functions/_adaptador.js";
 import { limpiarPedidosPendientes } from "../netlify/lib/mantenimiento.js";
+import { handler as adminPrecios } from "../netlify/functions/admin-precios.js";
 
 import { handler as tienda } from "../netlify/functions/tienda.js";
 import { handler as validarCupon } from "../netlify/functions/validar-cupon.js";
@@ -29,6 +30,7 @@ const rutas = {
   "admin-pedidos": adaptar(adminPedidos),
   "admin-stock": adaptar(adminStock),
   "whatsapp-pedido": adaptar(whatsappPedido),
+  "admin-precios": adaptar(adminPrecios),
 };
 
 // Vuelca las variables de entorno del Worker (env) a process.env para que el
