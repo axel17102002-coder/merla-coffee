@@ -15,3 +15,38 @@
 .stock__form button { border:0; border-radius:9px; padding:9px 13px; background:var(--verde); color:#fff; font-weight:700; }
 .stock__form button[data-stock-action="fijar"] { background:transparent; border:1px solid var(--borde); color:var(--texto); }
 @media (max-width:560px) { .stock__fila { flex-direction:column; align-items:stretch; } .stock__form input { flex:1; width:auto; } }
+
+/* ===== Layout de dos columnas ===== */
+.panel__layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* Divide el espacio en 50% y 50% */
+  gap: 2rem; /* Espacio entre las dos columnas */
+  align-items: start; /* Para que cada columna crezca según su propio contenido */
+}
+
+/* ===== Botones del Toggle ===== */
+.panel__tabs {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid #eee;
+  padding-bottom: 0.5rem;
+}
+
+/* Opcional: Estilo para diferenciar el botón activo */
+.panel__tabs button {
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+.panel__tabs button.tab-activo {
+  opacity: 1;
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+/* ===== Diseño Responsive para celulares ===== */
+@media (max-width: 900px) {
+  .panel__layout {
+    grid-template-columns: 1fr; /* En pantallas chicas, vuelve a ser 1 sola columna */
+  }
+}

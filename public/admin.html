@@ -27,29 +27,50 @@
       <p class="mensaje" id="login-message"></p>
     </section>
 
+    <!-- EL PANEL EMPIEZA ACÁ -->
     <section id="panel" hidden>
-      <h2 class="admin__subtitulo">Pedidos por WhatsApp</h2>
-      <div class="panel__bar">
-        <p>Los pedidos se crean pendientes. Al aprobar, se descuenta el stock y se aplican los puntos.</p>
-        <button id="reload">Actualizar</button>
-      </div>
-      <p class="mensaje" id="panel-message"></p>
-      <div class="pedidos" id="pedidos"></div>
+      <div class="panel__layout">
+        
+        <!-- COLUMNA IZQUIERDA: Pedidos -->
+        <div class="columna-pedidos">
+          <h2 class="admin__subtitulo">Pedidos por WhatsApp</h2>
+          <div class="panel__bar">
+            <p>Los pedidos se crean pendientes. Al aprobar, se descuenta el stock y se aplican los puntos.</p>
+            <button id="reload">Actualizar</button>
+          </div>
+          <p class="mensaje" id="panel-message"></p>
+          <div class="pedidos" id="pedidos"></div>
+        </div>
 
-      <h2 class="admin__subtitulo">Stock por gramos de café</h2>
-      <div class="panel__bar">
-        <p>Cargá los gramos de café en grano y calculamos cuántas drip bags salen (<strong id="stock-gpu">12</strong> g por unidad). "Sumar" agrega al stock actual; "Fijar" lo reemplaza.</p>
-      </div>
-      <p class="mensaje" id="stock-message"></p>
-      <div class="stock" id="stock"></div>
-      
-      <h2 class="admin__subtitulo">Gestión de Precios</h2>
-      <div class="panel__bar">
-        <p>Actualizá el precio de venta (ARS) de tus productos.</p>
-      </div>
-      <p class="mensaje" id="precio-message"></p>
-      <div class="stock" id="precios"></div>
+        <!-- COLUMNA DERECHA: Inventario (Stock + Precios) -->
+        <div class="columna-inventario">
+          
+          <!-- Botones del Toggle -->
+          <div class="panel__tabs">
+            <button id="tab-stock" class="tab-activo">Gestión de Stock</button>
+            <button id="tab-precios">Gestión de Precios</button>
+          </div>
 
+          <!-- VISTA 1: Stock (Visible por defecto) -->
+          <div id="vista-stock">
+            <div class="panel__bar">
+              <p>Cargá los gramos de café en grano y calculamos cuántas drip bags salen (<strong id="stock-gpu">12</strong> g por unidad). "Sumar" agrega al stock; "Fijar" lo reemplaza.</p>
+            </div>
+            <p class="mensaje" id="stock-message"></p>
+            <div class="stock" id="stock"></div>
+          </div>
+          
+          <!-- VISTA 2: Precios (Oculto por defecto con "hidden") -->
+          <div id="vista-precios" hidden>
+            <div class="panel__bar">
+              <p>Actualizá el precio de venta (ARS) de tus productos.</p>
+            </div>
+            <p class="mensaje" id="precio-message"></p>
+            <div class="stock" id="precios"></div>
+          </div>
+
+        </div>
+      </div>
     </section>
   </main>
   <script src="admin.js"></script>

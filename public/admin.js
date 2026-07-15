@@ -257,3 +257,25 @@ $("#pedidos").addEventListener("click", async (e) => {
 $("#reload").addEventListener("click", cargarPedidos);
 $("#logout").addEventListener("click", cerrarSesion);
 if (token()) abrirPanel();
+
+// ===== Lógica del Toggle (Stock / Precios) =====
+
+$("#tab-stock").addEventListener("click", () => {
+  // Mostramos Stock, ocultamos Precios
+  $("#vista-stock").hidden = false;
+  $("#vista-precios").hidden = true;
+  
+  // Cambiamos el estilo del botón
+  $("#tab-stock").classList.add("tab-activo");
+  $("#tab-precios").classList.remove("tab-activo");
+});
+
+$("#tab-precios").addEventListener("click", () => {
+  // Mostramos Precios, ocultamos Stock
+  $("#vista-stock").hidden = true;
+  $("#vista-precios").hidden = false;
+  
+  // Cambiamos el estilo del botón
+  $("#tab-precios").classList.add("tab-activo");
+  $("#tab-stock").classList.remove("tab-activo");
+});
