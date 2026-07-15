@@ -13,9 +13,9 @@ exports.handler = async (event) => {
   if (!esAdmin(event)) return respuestaNoAutorizado();
 
   try {
-    // NUEVO: Método GET para consultar solo los datos necesarios de precios
     if (event.httpMethod === "GET") {
-      const productos = await sb("productos?select=id,nombre,precio,activo&order=nombre.asc");
+      // ACÁ APUNTAMOS A LA TABLA PRESENTACIONES
+      const productos = await sb("presentaciones?select=id,nombre,precio,activo&order=nombre.asc");
       return {
         statusCode: 200,
         headers,
@@ -23,20 +23,20 @@ exports.handler = async (event) => {
       };
     }
 
-    // Método POST para actualizar el precio
     if (event.httpMethod === "POST") {
-        const body = JSON.parse(event.body || "{}");
-        const { producto_id, precio } = body;
-    
-    if (!producto_id || isNaN(Number(precio)) || Number(precio) <= 0) {
+      const body = JSON.parse(event.body || "{}");
+      const { producto_id, precio } = body;
+      
+      if (!producto_id || isNaN(Number(precio)) || Number(precio) <= 0) {
         return { 
             statusCode: 400, 
             headers, 
             body: JSON.stringify({ error: "Ingresá un precio mayor a 0" }) 
         };
-    }
+      }
 
-      await sb(`productos?id=eq.${encodeURIComponent(producto_id)}`, {
+      // ACÁ TAMBIÉN ACTUALIZAMOS EN LA TABLA PRESENTACIONES
+      await sb(`presentaciones?id=eq.${encodeURIComponent(producto_id)}`, {
         method: "PATCH",
         body: { precio: Number(precio) },
       });
