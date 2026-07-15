@@ -10,6 +10,7 @@
 
 const { sbRpc } = require("../lib/supabase.js");
 const { obtenerPagoMp } = require("../lib/mercadopago.js");
+const { avisarAdminPorRef } = require("../lib/avisos.js");
 
 exports.handler = async (event) => {
   // MP espera un 200 rápido; cualquier problema interno se loguea y listo.
@@ -30,6 +31,8 @@ exports.handler = async (event) => {
       if (ref && pago.status === "approved") {
         const r = await sbRpc("aprobar_pedido", { p_modo_id: String(ref) });
         console.log("mp-webhook aprobado:", id, ref, JSON.stringify(r));
+        // Solo avisamos la primera vez (la RPC es idempotente)
+        if (r && r.ok && !r.ya_procesado) await avisarAdminPorRef(String(ref));
       } else {
         // rejected/pending/etc: no rechazamos el pedido — en Checkout Pro el
         // cliente puede reintentar con otra tarjeta sobre la misma preferencia.

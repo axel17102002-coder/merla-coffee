@@ -5,6 +5,7 @@
 const { sb, obtenerCatalogo, obtenerCupon, obtenerPuntos, cuponYaUsado } = require("../lib/supabase.js");
 const { calcularPedido, numeroPedido: formatearNumero } = require("../../public/motor.js");
 const { sanitizarEnvio } = require("../lib/entrega.js");
+const { avisarAdminPorId } = require("../lib/avisos.js");
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json" };
@@ -73,6 +74,9 @@ exports.handler = async (event) => {
         envio: sanitizarEnvio(body.envio),
       },
     });
+
+    // Aviso al admin de que entró un pedido nuevo (no bloquea la respuesta)
+    await avisarAdminPorId(fila.id);
 
     return {
       statusCode: 201,

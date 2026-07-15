@@ -22,7 +22,7 @@ Navegador ──> Funciones Netlify ──> Supabase (productos, stock, cupones,
 
 - `index.html` / `styles.css` / `app.js` — la web
 - `motor.js` — reglas de precios compartidas (descuentos, mínimos, puntos)
-- `netlify/lib/` — clientes de Supabase y MODO
+- `netlify/lib/` — clientes de Supabase, Mercado Pago, MODO y Brevo (mails)
 - `netlify/functions/` — el backend (compartido por ambos hostings)
   - `tienda.js` — catálogo con stock (lo que carga la web)
   - `validar-cupon.js` — valida códigos sin exponer la lista
@@ -94,6 +94,21 @@ Tarjetas de prueba y docs: https://www.mercadopago.com.ar/developers/es/docs/che
 4. En `motor.js`: `CONFIG.pagos.modo = true`. En `app.js`: `MODO_AMBIENTE = "produccion"`. Volver a publicar.
 
 Docs: https://merchants.modo.com.ar/docs
+
+## Mails (Brevo)
+
+Avisos automáticos y confirmaciones al cliente. Se usa **Brevo** (plan gratis: 300 mails/día) porque permite enviar desde una casilla de Gmail verificada, sin dominio propio.
+
+- **Automático**: cuando entra un pedido de WhatsApp o se cobra uno de Mercado Pago, llega un aviso a `MAIL_ADMIN`.
+- **Manual**: en `/admin`, el botón ✉️ de cada pedido le manda la confirmación al cliente.
+
+Configuración (una sola vez):
+
+1. En [brevo.com](https://www.brevo.com) → **Settings → Senders** → agregar `merlacoffee@gmail.com` y verificarlo con el link que llega por mail.
+2. **Settings → SMTP & API → API Keys** → generar una key.
+3. Cargar en `.env`/`.dev.vars` (local) y como **Secret** en Cloudflare: `BREVO_API_KEY`. Opcionales: `MAIL_REMITENTE` y `MAIL_ADMIN` (por defecto `merlacoffee@gmail.com`).
+
+Sin `BREVO_API_KEY` no se rompe nada: los mails simplemente no se envían y queda el aviso en los logs.
 
 ## Notas
 

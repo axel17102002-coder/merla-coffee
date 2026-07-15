@@ -72,6 +72,7 @@ function renderPedidos() {
       ${cupon}${puntos}${entrega}
       <div class="pedido__actions">
         <button class="borrar" data-action="eliminar" data-id="${escapar(p.id)}" title="Eliminar pedido">🗑 Eliminar</button>
+        ${p.cliente_email ? `<button class="mail" data-action="mail" data-id="${escapar(p.id)}" title="Enviar confirmación por mail">✉️ Confirmación</button>` : ""}
         ${pendienteWsp ? `<button class="rechazar" data-action="rechazar" data-id="${escapar(p.id)}">Rechazar</button>
         <button class="aprobar" data-action="aprobar" data-id="${escapar(p.id)}">Marcar cobrado</button>` : ""}
       </div>
@@ -107,10 +108,16 @@ $("#pedidos").addEventListener("click", async (e) => {
   if (action === "eliminar" && !confirm("¿Eliminar este pedido definitivamente? No se puede deshacer.")) return;
   if (action === "rechazar" && !confirm("¿Rechazar este pedido pendiente?")) return;
   if (action === "aprobar" && !confirm("¿Confirmar el cobro? Esto descuenta stock y actualiza puntos.")) return;
+  if (action === "mail" && !confirm("¿Enviar el mail de confirmación al cliente?")) return;
   boton.disabled = true;
   try {
     if (action === "eliminar") {
       await api(`/api/admin-pedidos?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    } else if (action === "mail") {
+      const r = await api("/api/admin-mail", { method: "POST", body: JSON.stringify({ pedido_id: id }) });
+      mensaje("#panel-message", `✅ Confirmación enviada a ${r.para}`, true);
+      boton.disabled = false;
+      return;
     } else {
       await api("/api/admin-pedidos", { method: "POST", body: JSON.stringify({ accion: action, id }) });
     }

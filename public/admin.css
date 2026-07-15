@@ -72,6 +72,8 @@ button { cursor: pointer; }
 .rechazar { background: transparent; border: 1px solid var(--borde) !important; color: var(--rojo); }
 .borrar { background: transparent; border: 1px solid var(--borde) !important; color: var(--gris); margin-right: auto; }
 .borrar:hover { color: var(--rojo); border-color: var(--rojo) !important; }
+.mail { background: transparent; border: 1px solid var(--borde) !important; color: var(--verde); }
+.mail:hover { border-color: var(--verde) !important; background: #eef3ec; }
 
 .vacio { background: var(--papel); border: 1px dashed var(--borde); border-radius: 16px; padding: 28px; text-align: center; color: var(--gris); }
 
