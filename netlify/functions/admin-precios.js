@@ -10,7 +10,7 @@ const { sb } = require("../lib/supabase.js");
 const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
 const {
   CONFIG, precioPack, precioUnidadDesdeCosto, costoBolsaDesdePrecio,
-  costoUnidad, costoPack, margenPack,
+  costoUnidad, costoPack, margenPack, margenUnidadReal,
 } = require("../../public/motor.js");
 
 exports.handler = async (event) => {
@@ -51,6 +51,9 @@ exports.handler = async (event) => {
           costoPack: costo != null ? Math.round(costoPack(costo)) : null,
           precio: unidad ? unidad.precio : null,
           precioPack: pack ? pack.precio : null,
+          // Sugerido = el que sale del costo; el real puede estar redondeado a mano
+          precioSugerido: costo != null ? precioUnidadDesdeCosto(costo) : null,
+          margenUnidad: costo != null && unidad ? margenUnidadReal(costo, unidad.precio) : null,
           margenPack: costo != null && pack ? margenPack(costo, pack.precio) : null,
           tienePack: Boolean(pack),
         };
@@ -64,13 +67,24 @@ exports.handler = async (event) => {
     }
 
     if (event.httpMethod === "POST") {
-      const { producto_id, costo_250g } = JSON.parse(event.body || "{}");
-      const costo = Number(costo_250g);
+      const body = JSON.parse(event.body || "{}");
+      const { producto_id } = body;
+      const costo = Number(body.costo_250g);
       if (!producto_id || !(costo > 0)) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: "Ingresá el costo de los 250 g (mayor a 0)" }) };
       }
 
-      const precio = precioUnidadDesdeCosto(costo);
+      // El precio se puede fijar a mano (para redondearlo); si no viene, se
+      // calcula desde el costo con el margen objetivo.
+      const aMano = Number(body.precio);
+      const precio = aMano > 0 ? Math.round(aMano) : precioUnidadDesdeCosto(costo);
+      if (precio < Math.round(costoUnidad(costo))) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ error: `Ese precio (${precio}) es menor al costo (${Math.round(costoUnidad(costo))}): perderías plata` }),
+        };
+      }
       const pack = precioPack(precio);
       const filtro = `producto_id=eq.${encodeURIComponent(producto_id)}`;
 
@@ -110,6 +124,7 @@ exports.handler = async (event) => {
           costoPack: Math.round(costoPack(costo)),
           precio,
           precioPack: pack,
+          margenUnidad: margenUnidadReal(costo, precio),
           margenPack: margenPack(costo, pack),
         }),
       };

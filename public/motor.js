@@ -91,6 +91,19 @@ function margenPack(costoBolsa, precioDelPack) {
   return Math.round((1 - costoPack(costoBolsa) / precioDelPack) * 100);
 }
 
+// % de margen real de la unidad con el precio que se fijó a mano (1 decimal).
+// Sirve para ver el costo de "redondear" un precio feo ($2.202 → $2.200).
+function margenUnidadReal(costoBolsa, precioUnidad) {
+  if (!precioUnidad) return 0;
+  return Math.round((1 - costoUnidad(costoBolsa) / precioUnidad) * 1000) / 10;
+}
+
+// Redondea a un múltiplo lindo (por defecto, de a $50): 2202 → 2200
+function redondearPrecio(precio, multiplo = 50) {
+  const m = Number(multiplo) > 0 ? Number(multiplo) : 50;
+  return Math.round(Number(precio) / m) * m;
+}
+
 // Presentaciones activas de un producto (vienen embebidas desde la base)
 function presentacionesDe(producto) {
   return (producto.presentaciones || [])
@@ -240,5 +253,6 @@ if (typeof module !== "undefined" && module.exports) {
     CONFIG, presentacionesDe, ahorroDe, precioTransferencia, numeroPedido, calcularPedido,
     precioPack, costoCafePorUnidad, costoUnidad, costoPack,
     precioUnidadDesdeCosto, costoBolsaDesdePrecio, margenPack,
+    margenUnidadReal, redondearPrecio,
   };
 }

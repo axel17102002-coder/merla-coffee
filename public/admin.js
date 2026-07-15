@@ -197,36 +197,64 @@ $("#stock").addEventListener("click", async (e) => {
   }
 });
 
-// ===== Precios (se cargan desde el costo del café) =====
+// ===== Precios (desde el costo del café, con precio ajustable a mano) =====
 let cfgPrecios = null;
 
-// Vista previa de la cadena de precios mientras se escribe el costo
-function previewPrecios(costo) {
-  const precio = precioUnidadDesdeCosto(costo);
+// Vista previa de la cadena de precios. Si se fija un precio a mano, se usa ese.
+function previewPrecios(costo, precioAMano) {
+  const precio = precioAMano > 0 ? Math.round(precioAMano) : precioUnidadDesdeCosto(costo);
   const pack = precioPack(precio);
-  return { precio, pack, margen: margenPack(costo, pack) };
+  return { precio, pack, margen: margenPack(costo, pack), margenU: margenUnidadReal(costo, precio) };
 }
 
 function renderPrecios(productos) {
   const contenedor = $("#precios");
   if (!productos) return;
-  contenedor.innerHTML = productos.map((p) => `<article class="fila${p.activo ? "" : " fila--inactivo"}" data-producto="${escapar(p.id)}">
+  contenedor.innerHTML = productos.map((p) => `<article class="fila fila--precio${p.activo ? "" : " fila--inactivo"}" data-producto="${escapar(p.id)}">
       <div class="fila__info">
         <strong>${escapar(p.nombre || p.id)}</strong>
         <span class="fila__dato">
           Unidad <b data-precio-de="${escapar(p.id)}">${formato.format(p.precio || 0)}</b>
           ${p.tienePack ? ` · Pack <b data-pack-de="${escapar(p.id)}">${formato.format(p.precioPack || 0)}</b>` : ""}
-          ${p.margenPack != null ? ` · margen pack <b data-margen-de="${escapar(p.id)}">${p.margenPack}%</b>` : ""}
+          ${p.margenUnidad != null ? ` · margen <b data-margenu-de="${escapar(p.id)}">${p.margenUnidad}%</b>` : ""}
+          ${p.margenPack != null ? ` / pack <b data-margen-de="${escapar(p.id)}">${p.margenPack}%</b>` : ""}
         </span>
       </div>
-      <div class="fila__form">
-        <input type="number" min="0" step="1" inputmode="numeric" placeholder="Costo 250 g"
-               value="${p.costo_250g != null ? Math.round(p.costo_250g) : ""}"
-               data-costo aria-label="Costo de 250 g de ${escapar(p.nombre || p.id)}">
-        <span class="fila__preview" data-preview></span>
+      <div class="fila__form fila__form--precio">
+        <label class="mini">Costo 250 g
+          <input type="number" min="0" step="1" inputmode="numeric" placeholder="17000"
+                 value="${p.costo_250g != null ? Math.round(p.costo_250g) : ""}"
+                 data-costo aria-label="Costo de 250 g de ${escapar(p.nombre || p.id)}">
+        </label>
+        <label class="mini">Precio unidad
+          <span class="mini__campo">
+            <input type="number" min="0" step="1" inputmode="numeric" placeholder="auto"
+                   value="${p.precio != null ? p.precio : ""}"
+                   data-precio aria-label="Precio de venta de ${escapar(p.nombre || p.id)}">
+            <button type="button" class="mini__btn" data-redondear title="Redondear a $50">≈</button>
+          </span>
+        </label>
         <button data-precio-action="guardar">Guardar</button>
       </div>
+      <p class="fila__preview" data-preview></p>
     </article>`).join("");
+}
+
+// Muestra a cuánto queda todo y avisa si el margen se aleja del objetivo
+function refrescarPreview(fila) {
+  const costo = Number(fila.querySelector("[data-costo]").value) || 0;
+  const aMano = Number(fila.querySelector("[data-precio]").value) || 0;
+  const prev = fila.querySelector("[data-preview]");
+  if (costo <= 0) { prev.textContent = ""; prev.className = "fila__preview"; return; }
+
+  const { precio, pack, margen, margenU } = previewPrecios(costo, aMano);
+  const objetivo = cfgPrecios ? cfgPrecios.costos.margenUnidad : 40;
+  const sugerido = precioUnidadDesdeCosto(costo);
+  const bajo = margenU < objetivo - 1;
+
+  prev.className = "fila__preview" + (bajo ? " fila__preview--ojo" : "");
+  prev.innerHTML = `Unidad <b>${formato.format(precio)}</b> (margen ${margenU}%) · Pack x5 <b>${formato.format(pack)}</b> (margen ${margen}%)` +
+    (aMano > 0 && precio !== sugerido ? ` · sugerido ${formato.format(sugerido)}` : "");
 }
 
 async function cargarPrecios() {
@@ -241,13 +269,33 @@ async function cargarPrecios() {
   }
 }
 
-// Al tipear el costo, mostramos a cuánto quedaría la unidad y el pack
 $("#precios").addEventListener("input", (e) => {
-  const input = e.target.closest("[data-costo]");
-  if (!input) return;
-  const costo = Number(input.value) || 0;
-  const prev = input.closest(".fila").querySelector("[data-preview]");
-  prev.textContent = costo > 0 ? `→ ${formato.format(previewPrecios(costo).precio)} c/u` : "";
+  const fila = e.target.closest(".fila--precio");
+  if (!fila) return;
+  // Al cambiar el COSTO, proponemos el precio calculado (se puede pisar a mano)
+  if (e.target.matches("[data-costo]")) {
+    const costo = Number(e.target.value) || 0;
+    const campoPrecio = fila.querySelector("[data-precio]");
+    if (costo > 0 && !campoPrecio.dataset.tocado) {
+      campoPrecio.value = precioUnidadDesdeCosto(costo);
+    }
+  }
+  // Si tocan el precio a mano, dejamos de pisarlo
+  if (e.target.matches("[data-precio]")) e.target.dataset.tocado = "1";
+  refrescarPreview(fila);
+});
+
+// Botón ≈ : redondea el precio a múltiplos de $50
+$("#precios").addEventListener("click", (e) => {
+  const boton = e.target.closest("[data-redondear]");
+  if (!boton) return;
+  const fila = boton.closest(".fila--precio");
+  const campo = fila.querySelector("[data-precio]");
+  const actual = Number(campo.value) || Number(precioUnidadDesdeCosto(Number(fila.querySelector("[data-costo]").value) || 0));
+  if (!actual) return;
+  campo.value = redondearPrecio(actual, 50);
+  campo.dataset.tocado = "1";
+  refrescarPreview(fila);
 });
 
 $("#precios").addEventListener("click", async (e) => {
@@ -255,20 +303,31 @@ $("#precios").addEventListener("click", async (e) => {
   if (!boton) return;
   const fila = boton.closest(".fila");
   const costo = Number(fila.querySelector("[data-costo]").value);
-  if (!costo || costo <= 0) return;
+  if (!costo || costo <= 0) {
+    mensaje("#precio-message", "⚠️ Cargá el costo de los 250 g");
+    return;
+  }
+  const aMano = Number(fila.querySelector("[data-precio]").value) || 0;
   const nombre = fila.querySelector("strong").textContent;
-  const { precio, pack, margen } = previewPrecios(costo);
-  if (!confirm(`${nombre}\n\nCosto 250 g: ${formato.format(costo)}\n→ Unidad: ${formato.format(precio)}\n→ Pack x5: ${formato.format(pack)} (${cfgPrecios ? cfgPrecios.pack.descuento : 10}% OFF, margen ${margen}%)\n\n¿Guardar estos precios?`)) return;
+  const { precio, pack, margen, margenU } = previewPrecios(costo, aMano);
+  const sugerido = precioUnidadDesdeCosto(costo);
+  const nota = precio !== sugerido ? `\n(el calculado era ${formato.format(sugerido)})` : "";
+  if (!confirm(`${nombre}\n\nCosto 250 g: ${formato.format(costo)}\n→ Unidad: ${formato.format(precio)} · margen ${margenU}%${nota}\n→ Pack x5: ${formato.format(pack)} · margen ${margen}%\n\n¿Guardar estos precios?`)) return;
 
   fila.querySelectorAll("button").forEach((b) => (b.disabled = true));
   try {
-    const r = await api("/api/admin-precios", { method: "POST", body: JSON.stringify({ producto_id: fila.dataset.producto, costo_250g: costo }) });
+    const r = await api("/api/admin-precios", {
+      method: "POST",
+      body: JSON.stringify({ producto_id: fila.dataset.producto, costo_250g: costo, precio: aMano || undefined }),
+    });
     fila.querySelector("[data-precio-de]").textContent = formato.format(r.precio);
     const elPack = fila.querySelector("[data-pack-de]");
     if (elPack) elPack.textContent = formato.format(r.precioPack);
+    const elMargenU = fila.querySelector("[data-margenu-de]");
+    if (elMargenU) elMargenU.textContent = `${r.margenUnidad}%`;
     const elMargen = fila.querySelector("[data-margen-de]");
     if (elMargen) elMargen.textContent = `${r.margenPack}%`;
-    fila.querySelector("[data-preview]").textContent = "";
+    fila.querySelector("[data-precio]").value = r.precio;
     mensaje("#precio-message", `✅ ${nombre}: unidad ${formato.format(r.precio)} · pack ${formato.format(r.precioPack)}`, true);
   } catch (err) {
     mensaje("#precio-message", `⚠️ ${err.message}`);
