@@ -15,6 +15,7 @@ import { handler as mercadopagoWebhook } from "../netlify/functions/mercadopago-
 import { handler as confirmarPedido } from "../netlify/functions/confirmar-pedido.js";
 import { handler as adminPedidos } from "../netlify/functions/admin-pedidos.js";
 import { handler as adminStock } from "../netlify/functions/admin-stock.js";
+import { handler as adminCupones } from "../netlify/functions/admin-cupones.js";
 import { handler as whatsappPedido } from "../netlify/functions/whatsapp-pedido.js";
 import { handler as adminPrecios } from "../netlify/functions/admin-precios.js"; // <-- NUEVO IMPORT
 
@@ -29,6 +30,7 @@ const rutas = {
   "confirmar-pedido": adaptar(confirmarPedido),
   "admin-pedidos": adaptar(adminPedidos),
   "admin-stock": adaptar(adminStock),
+  "admin-cupones": adaptar(adminCupones),
   "whatsapp-pedido": adaptar(whatsappPedido),
   "admin-precios": adaptar(adminPrecios), // <-- NUEVA RUTA
 };

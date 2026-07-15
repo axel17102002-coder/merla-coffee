@@ -1,52 +1,113 @@
-:root { --verde:#2f4a36; --crema:#f2ead8; --borde:#ded2b5; --rojo:#9d3e34; --texto:#22301f; font-family:Figtree,Arial,sans-serif; color:var(--texto); }
-* { box-sizing:border-box; } body { margin:0; background:var(--crema); } button,input { font:inherit; } button { cursor:pointer; }
-.admin { width:min(850px,calc(100% - 32px)); margin:0 auto; padding:48px 0 80px; }.admin__head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:28px; }.admin__eyebrow { margin:0; color:var(--verde); font-weight:800; text-transform:uppercase; letter-spacing:.1em; font-size:.75rem; }.admin h1,.admin h2 { margin:0; font-family:"Baloo 2",sans-serif; color:var(--verde); }.admin h1 { font-size:2rem; }.login,.pedido,.vacio { background:#fffdf8; border:1px solid var(--borde); border-radius:16px; padding:24px; box-shadow:0 5px 18px #22301f10; }.login { max-width:480px; }.login p { color:#596552; }.login form { display:flex; gap:8px; }.login input { min-width:0; flex:1; border:1px solid var(--borde); border-radius:9px; padding:11px; }.login button,.panel__bar button,.aprobar { border:0; border-radius:9px; padding:11px 14px; background:var(--verde); color:white; font-weight:700; }.admin__logout,.rechazar { border:1px solid var(--borde); border-radius:9px; padding:9px 12px; background:transparent; color:var(--texto); font-weight:700; }.mensaje { min-height:1.5em; color:var(--rojo); }.panel__bar { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:8px; }.panel__bar p { margin:0; max-width:570px; }.pedidos { display:grid; gap:14px; }.pedido__top,.pedido__meta,.pedido__actions { display:flex; justify-content:space-between; gap:12px; align-items:center; }.pedido__top strong { margin-left:8px; }.pedido time { color:#66705f; font-size:.88rem; }.estado { display:inline-block; padding:3px 8px; border-radius:999px; text-transform:capitalize; font-size:.75rem; font-weight:800; background:#f3dfac; color:#705400; }.pedido--aprobado .estado { background:#d9ead4; color:#2f6931; }.pedido--rechazado .estado { background:#f3d8d3; color:#8d3328; }.pedido ul { padding:0; list-style:none; }.pedido li { display:flex; justify-content:space-between; gap:16px; padding:5px 0; }.pedido__meta { border-top:1px solid var(--borde); padding-top:13px; }.pedido__points { color:#596552; font-size:.86rem; }.pedido__actions { justify-content:flex-end; margin-top:16px; }.rechazar { color:var(--rojo); }.vacio { text-align:center; color:#596552; } button:disabled { opacity:.55; cursor:wait; } @media (max-width:560px) { .admin { padding-top:28px; }.login form,.panel__bar { align-items:stretch; flex-direction:column; }.pedido__top { align-items:flex-start; flex-direction:column; }.pedido__actions button { flex:1; } }
-
-/* Sección de stock por gramos */
-.admin__subtitulo { font-size:1.3rem; margin:34px 0 12px !important; }
-.stock { display:grid; gap:10px; }
-.stock__fila { background:#fffdf8; border:1px solid var(--borde); border-radius:14px; padding:16px 18px; display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; }
-.stock__fila--inactivo { opacity:.6; }
-.stock__info { display:flex; flex-direction:column; gap:3px; min-width:150px; }
-.stock__actual { color:#596552; font-size:.88rem; }
-.stock__form { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
-.stock__form input { width:150px; border:1px solid var(--borde); border-radius:9px; padding:9px 11px; }
-.stock__preview { min-width:74px; font-weight:700; color:var(--verde); }
-.stock__form button { border:0; border-radius:9px; padding:9px 13px; background:var(--verde); color:#fff; font-weight:700; }
-.stock__form button[data-stock-action="fijar"] { background:transparent; border:1px solid var(--borde); color:var(--texto); }
-@media (max-width:560px) { .stock__fila { flex-direction:column; align-items:stretch; } .stock__form input { flex:1; width:auto; } }
-
-/* ===== Layout de dos columnas ===== */
-.panel__layout {
-  display: grid;
-  grid-template-columns: 1fr 1fr; /* Divide el espacio en 50% y 50% */
-  gap: 2rem; /* Espacio entre las dos columnas */
-  align-items: start; /* Para que cada columna crezca según su propio contenido */
+:root {
+  --verde: #2f4a36;
+  --verde-claro: #3d6047;
+  --crema: #f2ead8;
+  --papel: #fffdf8;
+  --borde: #ded2b5;
+  --rojo: #9d3e34;
+  --texto: #22301f;
+  --gris: #66705f;
+  font-family: Figtree, Arial, sans-serif;
+  color: var(--texto);
 }
 
-/* ===== Botones del Toggle ===== */
-.panel__tabs {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  border-bottom: 2px solid #eee;
-  padding-bottom: 0.5rem;
-}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--crema); }
+button, input, select { font: inherit; }
+button { cursor: pointer; }
 
-/* Opcional: Estilo para diferenciar el botón activo */
-.panel__tabs button {
-  opacity: 0.6;
-  transition: opacity 0.2s;
-}
-.panel__tabs button.tab-activo {
-  opacity: 1;
-  font-weight: bold;
-  text-decoration: underline;
-}
+.admin { width: min(1400px, calc(100% - 40px)); margin: 0 auto; padding: 40px 0 80px; }
+.admin__head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.admin__eyebrow { margin: 0; color: var(--verde); font-weight: 800; text-transform: uppercase; letter-spacing: .1em; font-size: .75rem; }
+.admin h1, .admin h2 { margin: 0; font-family: "Baloo 2", sans-serif; color: var(--verde); }
+.admin h1 { font-size: 2rem; }
+.admin__subtitulo { font-size: 1.35rem; }
+.admin__logout { border: 1px solid var(--borde); border-radius: 9px; padding: 9px 14px; background: transparent; color: var(--texto); font-weight: 700; }
 
-/* ===== Diseño Responsive para celulares ===== */
-@media (max-width: 900px) {
-  .panel__layout {
-    grid-template-columns: 1fr; /* En pantallas chicas, vuelve a ser 1 sola columna */
-  }
+/* Login */
+.login { background: var(--papel); border: 1px solid var(--borde); border-radius: 16px; padding: 24px; box-shadow: 0 5px 18px #22301f10; max-width: 480px; }
+.login p { color: var(--gris); }
+.login form { display: flex; gap: 8px; }
+.login input { min-width: 0; flex: 1; border: 1px solid var(--borde); border-radius: 9px; padding: 11px; }
+.login button { border: 0; border-radius: 9px; padding: 11px 16px; background: var(--verde); color: #fff; font-weight: 700; }
+
+.mensaje { min-height: 1.4em; color: var(--rojo); font-size: .9rem; }
+.mensaje.ok { color: var(--verde); }
+.panel__hint { color: var(--gris); font-size: .88rem; margin: 4px 0 12px; }
+
+/* Layout de dos columnas full-width */
+.panel__layout { display: grid; grid-template-columns: 1.25fr 1fr; gap: 32px; align-items: start; }
+.col__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.btn-sec { border: 1px solid var(--borde); border-radius: 9px; padding: 9px 14px; background: var(--papel); color: var(--texto); font-weight: 700; }
+
+/* Filtros de canal */
+.filtros { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.filtros button { border: 1px solid var(--borde); border-radius: 999px; padding: 7px 16px; background: var(--papel); color: var(--texto); font-weight: 600; font-size: .88rem; }
+.filtros button.filtro-activo { background: var(--verde); color: #fff; border-color: var(--verde); }
+
+/* Pedidos */
+.pedidos { display: grid; gap: 14px; }
+.pedido { background: var(--papel); border: 1px solid var(--borde); border-radius: 16px; padding: 20px; box-shadow: 0 5px 18px #22301f10; }
+.pedido__top { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
+.pedido__top-izq { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pedido__num { font-family: "Baloo 2", sans-serif; font-weight: 800; color: var(--verde); }
+.pedido time { color: var(--gris); font-size: .85rem; }
+.estado, .canal { display: inline-block; padding: 3px 9px; border-radius: 999px; text-transform: capitalize; font-size: .72rem; font-weight: 800; }
+.estado { background: #f3dfac; color: #705400; }
+.pedido--aprobado .estado { background: #d9ead4; color: #2f6931; }
+.pedido--rechazado .estado { background: #f3d8d3; color: #8d3328; }
+.canal { text-transform: none; }
+.canal--mercadopago { background: #d5ecfa; color: #0a5a8a; }
+.canal--whatsapp { background: #d9f2df; color: #1f7a3d; }
+.canal--modo { background: #e6ddf2; color: #5a3a8a; }
+.pedido ul { padding: 0; margin: 12px 0; list-style: none; }
+.pedido li { display: flex; justify-content: space-between; gap: 16px; padding: 4px 0; font-size: .92rem; }
+.pedido__meta { display: flex; justify-content: space-between; gap: 12px; align-items: center; border-top: 1px solid var(--borde); padding-top: 12px; }
+.pedido__meta strong { font-size: 1.05rem; }
+.pedido__email { color: var(--gris); font-size: .88rem; word-break: break-word; }
+.pedido__extra { color: var(--gris); font-size: .84rem; margin: 6px 0 0; }
+.pedido__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.pedido__actions button { border: 0; border-radius: 9px; padding: 9px 14px; font-weight: 700; }
+.aprobar { background: var(--verde); color: #fff; }
+.rechazar { background: transparent; border: 1px solid var(--borde) !important; color: var(--rojo); }
+.borrar { background: transparent; border: 1px solid var(--borde) !important; color: var(--gris); margin-right: auto; }
+.borrar:hover { color: var(--rojo); border-color: var(--rojo) !important; }
+
+.vacio { background: var(--papel); border: 1px dashed var(--borde); border-radius: 16px; padding: 28px; text-align: center; color: var(--gris); }
+
+/* Tabs de gestión */
+.columna-gestion { position: sticky; top: 24px; }
+.panel__tabs { display: flex; gap: 6px; margin-bottom: 16px; background: var(--papel); border: 1px solid var(--borde); border-radius: 12px; padding: 5px; }
+.panel__tabs button { flex: 1; border: 0; border-radius: 8px; padding: 10px; background: transparent; color: var(--gris); font-weight: 700; }
+.panel__tabs button.tab-activo { background: var(--verde); color: #fff; }
+
+/* Listas de gestión (stock / precios / cupones) */
+.lista { display: grid; gap: 10px; }
+.fila { background: var(--papel); border: 1px solid var(--borde); border-radius: 14px; padding: 15px 17px; display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; }
+.fila--inactivo { opacity: .55; }
+.fila__info { display: flex; flex-direction: column; gap: 3px; min-width: 140px; }
+.fila__dato { color: var(--gris); font-size: .86rem; }
+.fila__form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fila__form input { width: 140px; border: 1px solid var(--borde); border-radius: 9px; padding: 9px 11px; }
+.fila__preview { min-width: 70px; font-weight: 700; color: var(--verde); }
+.fila__form button { border: 0; border-radius: 9px; padding: 9px 13px; background: var(--verde); color: #fff; font-weight: 700; }
+.fila__form button.sec, .fila__form button[data-stock-action="fijar"] { background: transparent; border: 1px solid var(--borde); color: var(--texto); }
+
+/* Formulario de cupón */
+.cupon-form { display: grid; gap: 8px; background: var(--papel); border: 1px solid var(--borde); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+.cupon-form input, .cupon-form select { border: 1px solid var(--borde); border-radius: 9px; padding: 10px 11px; width: 100%; }
+.cupon-form button { border: 0; border-radius: 9px; padding: 11px; background: var(--verde); color: #fff; font-weight: 700; }
+.cupon__badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--crema); font-size: .74rem; font-weight: 700; color: var(--verde); }
+
+button:disabled { opacity: .55; cursor: wait; }
+
+@media (max-width: 960px) {
+  .panel__layout { grid-template-columns: 1fr; }
+  .columna-gestion { position: static; }
+}
+@media (max-width: 560px) {
+  .admin { padding-top: 24px; }
+  .login form { flex-direction: column; }
+  .fila { flex-direction: column; align-items: stretch; }
+  .fila__form input { flex: 1; width: auto; }
 }

@@ -1,4 +1,8 @@
-// Administración protegida de pedidos por WhatsApp.
+// Administración protegida de pedidos (todos los canales).
+//
+//   GET                      → { pedidos: [...] }  (todos, más nuevos primero)
+//   POST { accion, id }      → aprobar/rechazar un pedido de WhatsApp
+//   DELETE ?id=<uuid>        → borra un pedido definitivamente
 
 const { sb, sbRpc } = require("../lib/supabase.js");
 const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
@@ -10,7 +14,7 @@ exports.handler = async (event) => {
   try {
     if (event.httpMethod === "GET") {
       const pedidos = await sb(
-        "pedidos?select=id,origen,items,total,cliente_email,estado,creado,puntos_ganados,puntos_canjeados&origen=eq.whatsapp&order=creado.desc&limit=100"
+        "pedidos?select=id,numero,origen,items,total,cupon,descuento_cupon,cliente_email,estado,creado,puntos_ganados,puntos_canjeados,envio&order=creado.desc&limit=200"
       );
       return { statusCode: 200, headers, body: JSON.stringify({ pedidos }) };
     }
@@ -26,6 +30,15 @@ exports.handler = async (event) => {
         return { statusCode: 409, headers, body: JSON.stringify({ error: resultado.error || "No se pudo actualizar" }) };
       }
       return { statusCode: 200, headers, body: JSON.stringify(resultado) };
+    }
+
+    if (event.httpMethod === "DELETE") {
+      const id = (event.queryStringParameters || {}).id;
+      if (!id) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "Falta el id del pedido" }) };
+      }
+      await sb(`pedidos?id=eq.${encodeURIComponent(id)}`, { method: "DELETE" });
+      return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };
     }
 
     return { statusCode: 405, headers, body: JSON.stringify({ error: "Método no permitido" }) };

@@ -1,13 +1,16 @@
 const TOKEN_KEY = "merla-admin-token";
-const $ = (selector) => document.querySelector(selector);
+const $ = (s) => document.querySelector(s);
 const formato = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 });
 
-function escapar(valor) {
-  return String(valor || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c]));
+function escapar(v) {
+  return String(v || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c]));
 }
-
 function token() { return sessionStorage.getItem(TOKEN_KEY) || ""; }
-function mensaje(id, texto = "") { $(id).textContent = texto; }
+function mensaje(id, texto = "", ok = false) {
+  const el = $(id);
+  el.textContent = texto;
+  el.classList.toggle("ok", ok);
+}
 
 async function api(url, opciones = {}) {
   const res = await fetch(url, {
@@ -19,25 +22,50 @@ async function api(url, opciones = {}) {
   return data;
 }
 
-function renderPedidos(pedidos) {
+// número legible del pedido (#0001); antes de la migración usa el id como respaldo
+function numeroDe(p) {
+  return p.numero ? numeroPedido(p.numero) : "#" + String(p.id).slice(0, 8).toUpperCase();
+}
+const CANALES = { mercadopago: "Mercado Pago", whatsapp: "WhatsApp", modo: "MODO" };
+
+// ===== Pedidos =====
+let pedidosCache = [];
+let filtroCanal = "todos";
+
+function renderPedidos() {
   const contenedor = $("#pedidos");
-  if (!pedidos.length) {
-    contenedor.innerHTML = `<div class="vacio">No hay pedidos de WhatsApp todavía.</div>`;
+  const lista = filtroCanal === "todos" ? pedidosCache : pedidosCache.filter((p) => p.origen === filtroCanal);
+  if (!lista.length) {
+    contenedor.innerHTML = `<div class="vacio">No hay pedidos${filtroCanal === "todos" ? " todavía" : ` de ${CANALES[filtroCanal] || filtroCanal}`}.</div>`;
     return;
   }
-  contenedor.innerHTML = pedidos.map((p) => {
-    const lineas = (p.items || []).map((i) => `<li>${escapar(i.qty)}× ${escapar(i.nombre)} <span>${formato.format(i.precio_unitario * i.qty)}</span></li>`).join("");
+  contenedor.innerHTML = lista.map((p) => {
+    const lineas = (p.items || []).map((i) => `<li><span>${escapar(i.qty)}× ${escapar(i.nombre)}</span> <span>${formato.format(i.precio_unitario * i.qty)}</span></li>`).join("");
     const fecha = new Date(p.creado).toLocaleString("es-AR", { dateStyle: "medium", timeStyle: "short" });
-    const pendiente = p.estado === "pendiente";
+    const canal = CANALES[p.origen] || p.origen || "—";
+    const pendienteWsp = p.estado === "pendiente" && p.origen === "whatsapp";
+    const cupon = p.cupon ? `<p class="pedido__extra">Cupón ${escapar(p.cupon)}: -${formato.format(p.descuento_cupon || 0)}</p>` : "";
+    const puntos = p.cliente_email ? `<p class="pedido__extra">Puntos: +${p.puntos_ganados}${p.puntos_canjeados ? ` · canje -${p.puntos_canjeados}` : ""}</p>` : "";
     return `<article class="pedido pedido--${escapar(p.estado)}">
       <div class="pedido__top">
-        <div><span class="estado">${escapar(p.estado)}</span><strong>#${escapar(p.id.slice(0, 8).toUpperCase())}</strong></div>
+        <div class="pedido__top-izq">
+          <span class="pedido__num">${escapar(numeroDe(p))}</span>
+          <span class="estado">${escapar(p.estado)}</span>
+          <span class="canal canal--${escapar(p.origen)}">${escapar(canal)}</span>
+        </div>
         <time>${fecha}</time>
       </div>
       <ul>${lineas}</ul>
-      <div class="pedido__meta"><span>${escapar(p.cliente_email || "Sin email / sin puntos")}</span><strong>${formato.format(p.total)}</strong></div>
-      ${p.cliente_email ? `<p class="pedido__points">Puntos al cobrar: +${p.puntos_ganados}${p.puntos_canjeados ? ` · Canje: -${p.puntos_canjeados}` : ""}</p>` : ""}
-      ${pendiente ? `<div class="pedido__actions"><button class="aprobar" data-action="aprobar" data-id="${escapar(p.id)}">Marcar cobrado</button><button class="rechazar" data-action="rechazar" data-id="${escapar(p.id)}">Rechazar</button></div>` : ""}
+      <div class="pedido__meta">
+        <span class="pedido__email">${escapar(p.cliente_email || "Sin email")}</span>
+        <strong>${formato.format(p.total)}</strong>
+      </div>
+      ${cupon}${puntos}
+      <div class="pedido__actions">
+        <button class="borrar" data-action="eliminar" data-id="${escapar(p.id)}" title="Eliminar pedido">🗑 Eliminar</button>
+        ${pendienteWsp ? `<button class="rechazar" data-action="rechazar" data-id="${escapar(p.id)}">Rechazar</button>
+        <button class="aprobar" data-action="aprobar" data-id="${escapar(p.id)}">Marcar cobrado</button>` : ""}
+      </div>
     </article>`;
   }).join("");
 }
@@ -46,13 +74,45 @@ async function cargarPedidos() {
   mensaje("#panel-message", "Cargando pedidos…");
   try {
     const { pedidos } = await api("/api/admin-pedidos");
-    renderPedidos(pedidos);
+    pedidosCache = pedidos;
+    renderPedidos();
     mensaje("#panel-message", "");
   } catch (err) {
     mensaje("#panel-message", `⚠️ ${err.message}`);
     if (/autorizado/i.test(err.message)) cerrarSesion();
   }
 }
+
+$("#filtros").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-filtro]");
+  if (!b) return;
+  filtroCanal = b.dataset.filtro;
+  $("#filtros").querySelectorAll("button").forEach((x) => x.classList.toggle("filtro-activo", x === b));
+  renderPedidos();
+});
+
+$("#pedidos").addEventListener("click", async (e) => {
+  const boton = e.target.closest("[data-action]");
+  if (!boton) return;
+  const { action, id } = boton.dataset;
+  if (action === "eliminar" && !confirm("¿Eliminar este pedido definitivamente? No se puede deshacer.")) return;
+  if (action === "rechazar" && !confirm("¿Rechazar este pedido pendiente?")) return;
+  if (action === "aprobar" && !confirm("¿Confirmar el cobro? Esto descuenta stock y actualiza puntos.")) return;
+  boton.disabled = true;
+  try {
+    if (action === "eliminar") {
+      await api(`/api/admin-pedidos?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    } else {
+      await api("/api/admin-pedidos", { method: "POST", body: JSON.stringify({ accion: action, id }) });
+    }
+    await cargarPedidos();
+  } catch (err) {
+    mensaje("#panel-message", `⚠️ ${err.message}`);
+    boton.disabled = false;
+  }
+});
+
+$("#reload").addEventListener("click", cargarPedidos);
 
 // ===== Stock por gramos de café =====
 let gramosPorUnidad = 12;
@@ -61,45 +121,20 @@ function renderStock(productos) {
   const contenedor = $("#stock");
   $("#stock-gpu").textContent = gramosPorUnidad;
   if (!productos) return;
-  contenedor.innerHTML = productos
-    .map(
-      (p) => `<article class="stock__fila${p.activo ? "" : " stock__fila--inactivo"}" data-producto="${escapar(p.id)}">
-        <div class="stock__info">
-          <strong>${escapar(p.nombre)}</strong>
-          <span class="stock__actual">Stock: <b data-stock-de="${escapar(p.id)}">${p.stock}</b> bags${p.activo ? "" : " · inactivo"}</span>
-        </div>
-        <div class="stock__form">
-          <input type="number" min="0" step="1" inputmode="numeric" placeholder="Gramos de café" data-gramos aria-label="Gramos de café para ${escapar(p.nombre)}">
-          <span class="stock__preview" data-preview>= 0 bags</span>
-          <button data-stock-action="sumar" disabled>Sumar</button>
-          <button data-stock-action="fijar" disabled>Fijar</button>
-        </div>
-      </article>`
-    )
-    .join("");
+  contenedor.innerHTML = productos.map((p) => `<article class="fila${p.activo ? "" : " fila--inactivo"}" data-producto="${escapar(p.id)}">
+      <div class="fila__info">
+        <strong>${escapar(p.nombre)}</strong>
+        <span class="fila__dato">Stock: <b data-stock-de="${escapar(p.id)}">${p.stock}</b> bags${p.activo ? "" : " · inactivo"}</span>
+      </div>
+      <div class="fila__form">
+        <input type="number" min="0" step="1" inputmode="numeric" placeholder="Gramos de café" data-gramos aria-label="Gramos de café para ${escapar(p.nombre)}">
+        <span class="fila__preview" data-preview>= 0 bags</span>
+        <button data-stock-action="sumar" disabled>Sumar</button>
+        <button class="sec" data-stock-action="fijar" disabled>Fijar</button>
+      </div>
+    </article>`).join("");
 }
 
-// ===== Gestión de Precios =====
-function renderPrecios(productos) {
-  const contenedor = $("#precios");
-  if (!productos) return;
-  contenedor.innerHTML = productos
-    .map(
-      (p) => `<article class="stock__fila${p.activo ? "" : " stock__fila--inactivo"}" data-producto="${escapar(p.id)}">
-        <div class="stock__info">
-          <strong>${escapar(p.nombre)}</strong>
-          <span class="stock__actual">Precio actual: <b data-precio-de="${escapar(p.id)}">${formato.format(p.precio || 0)}</b></span>
-        </div>
-        <div class="stock__form">
-          <input type="number" min="0" step="1" inputmode="numeric" placeholder="Nuevo precio" data-precio aria-label="Nuevo precio para ${escapar(p.nombre)}">
-          <button data-precio-action="guardar">Guardar</button>
-        </div>
-      </article>`
-    )
-    .join("");
-}
-
-// Única función para cargar Stock (ya no carga precios)
 async function cargarStock() {
   try {
     const data = await api("/api/admin-stock");
@@ -111,7 +146,57 @@ async function cargarStock() {
   }
 }
 
-// NUEVA función exclusiva para cargar Precios
+$("#stock").addEventListener("input", (e) => {
+  const input = e.target.closest("[data-gramos]");
+  if (!input) return;
+  const fila = input.closest(".fila");
+  const unidades = Math.floor((Number(input.value) || 0) / gramosPorUnidad);
+  fila.querySelector("[data-preview]").textContent = `= ${unidades} bags`;
+  fila.querySelectorAll("[data-stock-action]").forEach((b) => (b.disabled = unidades <= 0));
+});
+
+$("#stock").addEventListener("click", async (e) => {
+  const boton = e.target.closest("[data-stock-action]");
+  if (!boton) return;
+  const fila = boton.closest(".fila");
+  const gramos = Number(fila.querySelector("[data-gramos]").value) || 0;
+  const unidades = Math.floor(gramos / gramosPorUnidad);
+  const accion = boton.dataset.stockAction;
+  const nombre = fila.querySelector("strong").textContent;
+  const pregunta = accion === "sumar"
+    ? `¿Sumar ${unidades} bags (${gramos} g) al stock de ${nombre}?`
+    : `¿Reemplazar el stock de ${nombre} por ${unidades} bags (${gramos} g)?`;
+  if (!confirm(pregunta)) return;
+
+  fila.querySelectorAll("button").forEach((b) => (b.disabled = true));
+  try {
+    const r = await api("/api/admin-stock", { method: "POST", body: JSON.stringify({ producto_id: fila.dataset.producto, gramos, accion }) });
+    fila.querySelector("[data-stock-de]").textContent = r.stock;
+    fila.querySelector("[data-gramos]").value = "";
+    fila.querySelector("[data-preview]").textContent = "= 0 bags";
+    mensaje("#stock-message", `✅ ${nombre}: stock actualizado a ${r.stock} bags`, true);
+  } catch (err) {
+    mensaje("#stock-message", `⚠️ ${err.message}`);
+    fila.querySelectorAll("button").forEach((b) => (b.disabled = false));
+  }
+});
+
+// ===== Precios =====
+function renderPrecios(productos) {
+  const contenedor = $("#precios");
+  if (!productos) return;
+  contenedor.innerHTML = productos.map((p) => `<article class="fila${p.activo ? "" : " fila--inactivo"}" data-producto="${escapar(p.id)}">
+      <div class="fila__info">
+        <strong>${escapar(p.nombre || p.id)}</strong>
+        <span class="fila__dato">Precio: <b data-precio-de="${escapar(p.id)}">${formato.format(p.precio || 0)}</b></span>
+      </div>
+      <div class="fila__form">
+        <input type="number" min="0" step="1" inputmode="numeric" placeholder="Nuevo precio" data-precio aria-label="Nuevo precio para ${escapar(p.nombre || p.id)}">
+        <button data-precio-action="guardar">Guardar</button>
+      </div>
+    </article>`).join("");
+}
+
 async function cargarPrecios() {
   mensaje("#precio-message", "Cargando precios…");
   try {
@@ -123,41 +208,21 @@ async function cargarPrecios() {
   }
 }
 
-// Modificamos abrirPanel para que llame a las tres cosas por separado
-function abrirPanel() {
-  $("#login").hidden = true;
-  $("#panel").hidden = false;
-  $("#logout").hidden = false;
-  cargarPedidos();
-  cargarStock();
-  cargarPrecios(); // <-- Llama a la nueva función
-}
-
-// ===== Eventos =====
-
-// Evento de Precios
 $("#precios").addEventListener("click", async (e) => {
   const boton = e.target.closest("[data-precio-action]");
   if (!boton) return;
-  const fila = boton.closest(".stock__fila");
+  const fila = boton.closest(".fila");
   const nuevoPrecio = Number(fila.querySelector("[data-precio]").value);
-  
   if (!nuevoPrecio || nuevoPrecio <= 0) return;
-  
   const nombre = fila.querySelector("strong").textContent;
   if (!confirm(`¿Actualizar el precio de ${nombre} a ${formato.format(nuevoPrecio)}?`)) return;
 
   fila.querySelectorAll("button").forEach((b) => (b.disabled = true));
-  
   try {
-    const r = await api("/api/admin-precios", {
-      method: "POST",
-      body: JSON.stringify({ producto_id: fila.dataset.producto, precio: nuevoPrecio }),
-    });
-    
+    const r = await api("/api/admin-precios", { method: "POST", body: JSON.stringify({ producto_id: fila.dataset.producto, precio: nuevoPrecio }) });
     fila.querySelector("[data-precio-de]").textContent = formato.format(r.precio || nuevoPrecio);
     fila.querySelector("[data-precio]").value = "";
-    mensaje("#precio-message", `✅ ${nombre}: precio actualizado a ${formato.format(r.precio || nuevoPrecio)}`);
+    mensaje("#precio-message", `✅ ${nombre}: precio actualizado a ${formato.format(r.precio || nuevoPrecio)}`, true);
   } catch (err) {
     mensaje("#precio-message", `⚠️ ${err.message}`);
   } finally {
@@ -165,53 +230,102 @@ $("#precios").addEventListener("click", async (e) => {
   }
 });
 
-// Eventos de Stock
-$("#stock").addEventListener("input", (e) => {
-  const input = e.target.closest("[data-gramos]");
-  if (!input) return;
-  const fila = input.closest(".stock__fila");
-  const unidades = Math.floor((Number(input.value) || 0) / gramosPorUnidad);
-  fila.querySelector("[data-preview]").textContent = `= ${unidades} bags`;
-  fila.querySelectorAll("[data-stock-action]").forEach((b) => (b.disabled = unidades <= 0));
-});
+// ===== Cupones =====
+function valorCupon(c) {
+  return c.tipo === "porcentaje" ? `${c.valor}% OFF` : `${formato.format(c.valor)} OFF`;
+}
 
-$("#stock").addEventListener("click", async (e) => {
-  const boton = e.target.closest("[data-stock-action]");
-  if (!boton) return;
-  const fila = boton.closest(".stock__fila");
-  const gramos = Number(fila.querySelector("[data-gramos]").value) || 0;
-  const unidades = Math.floor(gramos / gramosPorUnidad);
-  const accion = boton.dataset.stockAction;
-  const nombre = fila.querySelector("strong").textContent;
-  const pregunta =
-    accion === "sumar"
-      ? `¿Sumar ${unidades} bags (${gramos} g) al stock de ${nombre}?`
-      : `¿Reemplazar el stock de ${nombre} por ${unidades} bags (${gramos} g)?`;
-  if (!confirm(pregunta)) return;
+function renderCupones(cupones) {
+  const contenedor = $("#cupones");
+  if (!cupones || !cupones.length) {
+    contenedor.innerHTML = `<div class="vacio">No hay cupones creados.</div>`;
+    return;
+  }
+  contenedor.innerHTML = cupones.map((c) => `<article class="fila${c.activo ? "" : " fila--inactivo"}">
+      <div class="fila__info">
+        <strong>${escapar(c.codigo)} <span class="cupon__badge">${escapar(valorCupon(c))}</span></strong>
+        <span class="fila__dato">${c.minimo ? `Mínimo ${formato.format(c.minimo)}` : "Sin mínimo"}${c.descripcion ? " · " + escapar(c.descripcion) : ""}</span>
+      </div>
+      <div class="fila__form">
+        <button class="${c.activo ? "sec" : ""}" data-cupon-toggle="${escapar(c.codigo)}" data-activo="${c.activo}">${c.activo ? "Desactivar" : "Activar"}</button>
+      </div>
+    </article>`).join("");
+}
 
-  fila.querySelectorAll("button").forEach((b) => (b.disabled = true));
+async function cargarCupones() {
+  mensaje("#cupon-message", "Cargando cupones…");
   try {
-    const r = await api("/api/admin-stock", {
-      method: "POST",
-      body: JSON.stringify({ producto_id: fila.dataset.producto, gramos, accion }),
-    });
-    fila.querySelector("[data-stock-de]").textContent = r.stock;
-    fila.querySelector("[data-gramos]").value = "";
-    fila.querySelector("[data-preview]").textContent = "= 0 bags";
-    mensaje("#stock-message", `✅ ${nombre}: stock actualizado a ${r.stock} bags`);
+    const { cupones } = await api("/api/admin-cupones");
+    renderCupones(cupones);
+    mensaje("#cupon-message", "");
   } catch (err) {
-    mensaje("#stock-message", `⚠️ ${err.message}`);
-    fila.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    mensaje("#cupon-message", `⚠️ ${err.message}`);
+  }
+}
+
+$("#cupon-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const cupon = {
+    codigo: $("#cupon-codigo").value,
+    tipo: $("#cupon-tipo").value,
+    valor: Number($("#cupon-valor").value),
+    minimo: Number($("#cupon-minimo").value) || 0,
+    descripcion: $("#cupon-desc").value,
+  };
+  try {
+    const r = await api("/api/admin-cupones", { method: "POST", body: JSON.stringify(cupon) });
+    mensaje("#cupon-message", `✅ Cupón ${r.cupon.codigo} guardado`, true);
+    $("#cupon-form").reset();
+    cargarCupones();
+  } catch (err) {
+    mensaje("#cupon-message", `⚠️ ${err.message}`);
   }
 });
 
-// Panel y Login
+$("#cupones").addEventListener("click", async (e) => {
+  const boton = e.target.closest("[data-cupon-toggle]");
+  if (!boton) return;
+  boton.disabled = true;
+  try {
+    await api("/api/admin-cupones", {
+      method: "PATCH",
+      body: JSON.stringify({ codigo: boton.dataset.cuponToggle, activo: boton.dataset.activo !== "true" }),
+    });
+    cargarCupones();
+  } catch (err) {
+    mensaje("#cupon-message", `⚠️ ${err.message}`);
+    boton.disabled = false;
+  }
+});
+
+// ===== Tabs de gestión =====
+const TABS = {
+  "tab-stock": { vista: "vista-stock", cargar: cargarStock, cargado: false },
+  "tab-precios": { vista: "vista-precios", cargar: cargarPrecios, cargado: false },
+  "tab-cupones": { vista: "vista-cupones", cargar: cargarCupones, cargado: false },
+};
+
+function activarTab(tabId) {
+  for (const [id, t] of Object.entries(TABS)) {
+    const activa = id === tabId;
+    $("#" + id).classList.toggle("tab-activo", activa);
+    $("#" + t.vista).hidden = !activa;
+  }
+  const t = TABS[tabId];
+  if (!t.cargado) { t.cargar(); t.cargado = true; }
+}
+
+Object.keys(TABS).forEach((id) => $("#" + id).addEventListener("click", () => activarTab(id)));
+
+// ===== Panel / login =====
 function abrirPanel() {
   $("#login").hidden = true;
   $("#panel").hidden = false;
   $("#logout").hidden = false;
   cargarPedidos();
-  cargarStock();
+  // reiniciar el estado "cargado" de las tabs y abrir Stock
+  Object.values(TABS).forEach((t) => (t.cargado = false));
+  activarTab("tab-stock");
 }
 
 function cerrarSesion() {
@@ -235,47 +349,5 @@ $("#login-form").addEventListener("submit", async (e) => {
   }
 });
 
-$("#pedidos").addEventListener("click", async (e) => {
-  const boton = e.target.closest("[data-action]");
-  if (!boton) return;
-  const accion = boton.dataset.action;
-  if (accion === "rechazar" && !confirm("¿Rechazar este pedido pendiente?")) return;
-  if (accion === "aprobar" && !confirm("¿Confirmar el cobro? Esto descuenta stock y actualiza puntos.")) return;
-  boton.disabled = true;
-  try {
-    await api("/api/admin-pedidos", {
-      method: "POST",
-      body: JSON.stringify({ accion, id: boton.dataset.id }),
-    });
-    await cargarPedidos();
-  } catch (err) {
-    mensaje("#panel-message", `⚠️ ${err.message}`);
-    boton.disabled = false;
-  }
-});
-
-$("#reload").addEventListener("click", cargarPedidos);
 $("#logout").addEventListener("click", cerrarSesion);
 if (token()) abrirPanel();
-
-// ===== Lógica del Toggle (Stock / Precios) =====
-
-$("#tab-stock").addEventListener("click", () => {
-  // Mostramos Stock, ocultamos Precios
-  $("#vista-stock").hidden = false;
-  $("#vista-precios").hidden = true;
-  
-  // Cambiamos el estilo del botón
-  $("#tab-stock").classList.add("tab-activo");
-  $("#tab-precios").classList.remove("tab-activo");
-});
-
-$("#tab-precios").addEventListener("click", () => {
-  // Mostramos Precios, ocultamos Stock
-  $("#vista-stock").hidden = true;
-  $("#vista-precios").hidden = false;
-  
-  // Cambiamos el estilo del botón
-  $("#tab-precios").classList.add("tab-activo");
-  $("#tab-stock").classList.remove("tab-activo");
-});

@@ -19,7 +19,7 @@
 
     <section class="login" id="login">
       <h2>Acceso privado</h2>
-      <p>Ingresá la clave de administración configurada en Cloudeflare.</p>
+      <p>Ingresá la clave de administración configurada en Cloudflare.</p>
       <form id="login-form">
         <input id="token" type="password" autocomplete="current-password" placeholder="Clave de administración" required>
         <button>Entrar</button>
@@ -27,52 +27,69 @@
       <p class="mensaje" id="login-message"></p>
     </section>
 
-    <!-- EL PANEL EMPIEZA ACÁ -->
     <section id="panel" hidden>
       <div class="panel__layout">
-        
+
         <!-- COLUMNA IZQUIERDA: Pedidos -->
         <div class="columna-pedidos">
-          <h2 class="admin__subtitulo">Pedidos por WhatsApp</h2>
-          <div class="panel__bar">
-            <p>Los pedidos se crean pendientes. Al aprobar, se descuenta el stock y se aplican los puntos.</p>
-            <button id="reload">Actualizar</button>
+          <div class="col__head">
+            <h2 class="admin__subtitulo">Pedidos</h2>
+            <button id="reload" class="btn-sec">Actualizar</button>
           </div>
+          <div class="filtros" id="filtros">
+            <button data-filtro="todos" class="filtro-activo">Todos</button>
+            <button data-filtro="mercadopago">Mercado Pago</button>
+            <button data-filtro="whatsapp">WhatsApp</button>
+          </div>
+          <p class="panel__hint">Los de WhatsApp se crean pendientes: al aprobar se descuenta el stock y se suman los puntos. Los de Mercado Pago se aprueban solos al cobrar.</p>
           <p class="mensaje" id="panel-message"></p>
           <div class="pedidos" id="pedidos"></div>
         </div>
 
-        <!-- COLUMNA DERECHA: Inventario (Stock + Precios) -->
-        <div class="columna-inventario">
-          
-          <!-- Botones del Toggle -->
+        <!-- COLUMNA DERECHA: Gestión (Stock / Precios / Cupones) -->
+        <div class="columna-gestion">
           <div class="panel__tabs">
-            <button id="tab-stock" class="tab-activo">Gestión de Stock</button>
-            <button id="tab-precios">Gestión de Precios</button>
+            <button id="tab-stock" class="tab-activo">Stock</button>
+            <button id="tab-precios">Precios</button>
+            <button id="tab-cupones">Cupones</button>
           </div>
 
-          <!-- VISTA 1: Stock (Visible por defecto) -->
+          <!-- VISTA: Stock -->
           <div id="vista-stock">
-            <div class="panel__bar">
-              <p>Cargá los gramos de café en grano y calculamos cuántas drip bags salen (<strong id="stock-gpu">12</strong> g por unidad). "Sumar" agrega al stock; "Fijar" lo reemplaza.</p>
-            </div>
+            <p class="panel__hint">Cargá los gramos de café en grano y calculamos cuántas drip bags salen (<strong id="stock-gpu">12</strong> g por unidad). "Sumar" agrega al stock; "Fijar" lo reemplaza.</p>
             <p class="mensaje" id="stock-message"></p>
-            <div class="stock" id="stock"></div>
-          </div>
-          
-          <!-- VISTA 2: Precios (Oculto por defecto con "hidden") -->
-          <div id="vista-precios" hidden>
-            <div class="panel__bar">
-              <p>Actualizá el precio de venta (ARS) de tus productos.</p>
-            </div>
-            <p class="mensaje" id="precio-message"></p>
-            <div class="stock" id="precios"></div>
+            <div class="lista" id="stock"></div>
           </div>
 
+          <!-- VISTA: Precios -->
+          <div id="vista-precios" hidden>
+            <p class="panel__hint">Actualizá el precio de venta (ARS) de cada presentación.</p>
+            <p class="mensaje" id="precio-message"></p>
+            <div class="lista" id="precios"></div>
+          </div>
+
+          <!-- VISTA: Cupones -->
+          <div id="vista-cupones" hidden>
+            <p class="panel__hint">Creá cupones ocultos para compartir con clientes. Se usan una vez por email.</p>
+            <form class="cupon-form" id="cupon-form">
+              <input id="cupon-codigo" placeholder="CÓDIGO" maxlength="40" required aria-label="Código del cupón">
+              <select id="cupon-tipo" aria-label="Tipo de descuento">
+                <option value="porcentaje">% porcentaje</option>
+                <option value="monto">$ monto fijo</option>
+              </select>
+              <input id="cupon-valor" type="number" min="1" step="1" inputmode="numeric" placeholder="Valor" required aria-label="Valor del descuento">
+              <input id="cupon-minimo" type="number" min="0" step="1" inputmode="numeric" placeholder="Mínimo de compra (opcional)" aria-label="Compra mínima">
+              <input id="cupon-desc" placeholder="Descripción (opcional)" maxlength="120" aria-label="Descripción">
+              <button type="submit">Crear / editar cupón</button>
+            </form>
+            <p class="mensaje" id="cupon-message"></p>
+            <div class="lista" id="cupones"></div>
+          </div>
         </div>
       </div>
     </section>
   </main>
+  <script src="motor.js"></script>
   <script src="admin.js"></script>
 </body>
 </html>
