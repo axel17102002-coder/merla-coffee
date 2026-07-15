@@ -88,6 +88,16 @@ async function cargarStock() {
     mensaje("#stock-message", `⚠️ ${err.message}`);
   }
 }
+async function cambiarPrecio() {
+  try {
+    const data = await api("/api/admin-stock");
+    precio = data.gramosPorUnidad || 12;
+    renderStock(data.productos);
+    mensaje("#stock-message", "");
+  } catch (err) {
+    mensaje("#stock-message", `⚠️ ${err.message}`);
+  }
+}
 
 $("#stock").addEventListener("input", (e) => {
   const input = e.target.closest("[data-gramos]");
