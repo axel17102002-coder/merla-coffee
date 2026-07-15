@@ -88,16 +88,57 @@ async function cargarStock() {
     mensaje("#stock-message", `⚠️ ${err.message}`);
   }
 }
-async function cambiarPrecio() {
-  try {
-    const data = await api("/api/admin-stock");
-    precio = data.gramosPorUnidad || 12;
-    renderStock(data.productos);
-    mensaje("#stock-message", "");
-  } catch (err) {
-    mensaje("#stock-message", `⚠️ ${err.message}`);
-  }
+// ===== Gestión de Precios =====
+
+function renderPrecios(productos) {
+  const contenedor = $("#precios");
+  contenedor.innerHTML = productos
+    .map(
+      (p) => `<article class="stock__fila${p.activo ? "" : " stock__fila--inactivo"}" data-producto="${escapar(p.id)}">
+        <div class="stock__info">
+          <strong>${escapar(p.nombre)}</strong>
+          <span class="stock__actual">Precio actual: <b data-precio-de="${escapar(p.id)}">${formato.format(p.precio || 0)}</b></span>
+        </div>
+        <div class="stock__form">
+          <input type="number" min="0" step="1" inputmode="numeric" placeholder="Nuevo precio" data-precio aria-label="Nuevo precio para ${escapar(p.nombre)}">
+          <button data-precio-action="guardar">Guardar</button>
+        </div>
+      </article>`
+    )
+    .join("");
 }
+
+// Evento para guardar el nuevo precio
+$("#precios").addEventListener("click", async (e) => {
+  const boton = e.target.closest("[data-precio-action]");
+  if (!boton) return;
+  const fila = boton.closest(".stock__fila");
+  const nuevoPrecio = Number(fila.querySelector("[data-precio]").value);
+  
+  if (!nuevoPrecio || nuevoPrecio <= 0) return;
+  
+  const nombre = fila.querySelector("strong").textContent;
+  if (!confirm(`¿Actualizar el precio de ${nombre} a ${formato.format(nuevoPrecio)}?`)) return;
+
+  fila.querySelectorAll("button").forEach((b) => (b.disabled = true));
+  
+  try {
+    // Petición al backend para guardar el precio
+    const r = await api("/api/admin-precios", {
+      method: "POST",
+      body: JSON.stringify({ producto_id: fila.dataset.producto, precio: nuevoPrecio }),
+    });
+    
+    // Actualiza la vista si la API responde bien
+    fila.querySelector("[data-precio-de]").textContent = formato.format(r.precio || nuevoPrecio);
+    fila.querySelector("[data-precio]").value = "";
+    mensaje("#precio-message", `✅ ${nombre}: precio actualizado a ${formato.format(r.precio || nuevoPrecio)}`);
+  } catch (err) {
+    mensaje("#precio-message", `⚠️ ${err.message}`);
+  } finally {
+    fila.querySelectorAll("button").forEach((b) => (b.disabled = false));
+  }
+});
 
 $("#stock").addEventListener("input", (e) => {
   const input = e.target.closest("[data-gramos]");
