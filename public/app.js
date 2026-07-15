@@ -125,9 +125,10 @@ function badgeStock(p) {
 }
 
 function renderProductos() {
-  const visibles = DATOS.productos.filter(
-    (p) => filtroRegion === "todos" || p.origen === filtroRegion
-  );
+  const visibles = DATOS.productos
+    .filter((p) => filtroRegion === "todos" || p.origen === filtroRegion)
+    // Con stock primero, agotados al final (el orden original se mantiene dentro de cada grupo)
+    .sort((a, b) => (b.stock > 0) - (a.stock > 0));
   if (visibles.length === 0) {
     $("#product-grid").innerHTML = `<p class="grid__estado">No hay cafés de ${filtroRegion} ahora mismo.</p>`;
     return;
