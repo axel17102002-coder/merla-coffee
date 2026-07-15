@@ -3,6 +3,7 @@
 // demás lo sirve como archivo estático desde public/.
 
 import { adaptar } from "../functions/_adaptador.js";
+import { limpiarPedidosPendientes } from "../netlify/lib/mantenimiento.js";
 
 import { handler as tienda } from "../netlify/functions/tienda.js";
 import { handler as validarCupon } from "../netlify/functions/validar-cupon.js";
@@ -30,6 +31,17 @@ const rutas = {
   "whatsapp-pedido": adaptar(whatsappPedido),
 };
 
+// Vuelca las variables de entorno del Worker (env) a process.env para que el
+// código compartido (supabase.js, etc.) las encuentre. El adaptador hace lo
+// mismo por request; acá lo necesitamos para las tareas programadas.
+function cargarEnv(env) {
+  if (typeof globalThis.process === "undefined") globalThis.process = { env: {} };
+  if (!globalThis.process.env) globalThis.process.env = {};
+  for (const [clave, valor] of Object.entries(env)) {
+    if (typeof valor === "string") globalThis.process.env[clave] = valor;
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -39,5 +51,16 @@ export default {
       return rutas[match[1]]({ request, env });
     }
     return env.ASSETS.fetch(request);
+  },
+
+  // Tareas programadas (cron en wrangler.toml): limpian carritos abandonados.
+  async scheduled(event, env, ctx) {
+    cargarEnv(env);
+    try {
+      const borrados = await limpiarPedidosPendientes();
+      console.log(`scheduled: ${borrados} pedidos pendientes vencidos eliminados`);
+    } catch (err) {
+      console.error("scheduled:", err);
+    }
   },
 };

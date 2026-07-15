@@ -17,3 +17,8 @@ SUPABASE_URL = "https://goldreguogjsfpmkuiua.supabase.co"
 [assets]
 directory = "public"
 binding = "ASSETS"
+
+# Tarea programada: cada 6 h borra carritos abandonados (pendientes > 48 h).
+# La lógica está en el handler `scheduled` de src/worker.js.
+[triggers]
+crons = ["0 */6 * * *"]
