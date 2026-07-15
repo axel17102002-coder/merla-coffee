@@ -70,14 +70,22 @@ async function obtenerPuntos(email) {
 }
 
 // ¿Este email ya usó este cupón? (los cupones son de un solo uso por persona)
+// Si la tabla cupones_usados todavía no existe (migración pendiente) o la
+// consulta falla, NO bloqueamos la venta: devolvemos false. La restricción de
+// un-solo-uso se activa sola cuando la tabla está creada.
 async function cuponYaUsado(codigo, email) {
   const cod = String(codigo || "").trim().toUpperCase();
   const mail = String(email || "").trim().toLowerCase();
   if (!cod || !mail) return false;
-  const rows = await sb(
-    `cupones_usados?select=id&codigo=eq.${encodeURIComponent(cod)}&email=eq.${encodeURIComponent(mail)}&limit=1`
-  );
-  return rows.length > 0;
+  try {
+    const rows = await sb(
+      `cupones_usados?select=id&codigo=eq.${encodeURIComponent(cod)}&email=eq.${encodeURIComponent(mail)}&limit=1`
+    );
+    return rows.length > 0;
+  } catch (err) {
+    console.warn("cuponYaUsado (se permite el cupón):", err.message);
+    return false;
+  }
 }
 
 module.exports = { sb, sbRpc, obtenerCatalogo, obtenerCupon, obtenerPuntos, cuponYaUsado };
