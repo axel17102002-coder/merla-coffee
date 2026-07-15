@@ -1,5 +1,6 @@
-// Administración protegida de precios: actualización del precio de venta
+// Administración protegida de precios: lectura y actualización
 //
+//   GET  → { productos: [{id, nombre, precio, activo}] }
 //   POST { producto_id, precio }
 //        → { precio }
 
@@ -9,24 +10,32 @@ const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
   
-  // Validar token de administrador
   if (!esAdmin(event)) return respuestaNoAutorizado();
 
   try {
+    // NUEVO: Método GET para consultar solo los datos necesarios de precios
+    if (event.httpMethod === "GET") {
+      const productos = await sb("productos?select=id,nombre,precio,activo&order=nombre.asc");
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ productos }),
+      };
+    }
+
+    // Método POST para actualizar el precio
     if (event.httpMethod === "POST") {
-      const body = JSON.parse(event.body || "{}");
-      const { producto_id, precio } = body;
-      
-      // Validación básica de datos
-      if (!producto_id || isNaN(Number(precio)) || Number(precio) <= 0) {
+        const body = JSON.parse(event.body || "{}");
+        const { producto_id, precio } = body;
+    
+    if (!producto_id || isNaN(Number(precio)) || Number(precio) <= 0) {
         return { 
             statusCode: 400, 
             headers, 
             body: JSON.stringify({ error: "Ingresá un precio mayor a 0" }) 
         };
-      }
+    }
 
-      // Actualizamos el precio en Supabase
       await sb(`productos?id=eq.${encodeURIComponent(producto_id)}`, {
         method: "PATCH",
         body: { precio: Number(precio) },
@@ -45,7 +54,7 @@ exports.handler = async (event) => {
     return { 
         statusCode: 502, 
         headers, 
-        body: JSON.stringify({ error: "No se pudo actualizar el precio" }) 
+        body: JSON.stringify({ error: "No se pudo completar la operación de precios" }) 
     };
   }
 };

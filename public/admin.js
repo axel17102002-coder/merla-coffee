@@ -99,19 +99,38 @@ function renderPrecios(productos) {
     .join("");
 }
 
-// Única función para cargar todo
+// Única función para cargar Stock (ya no carga precios)
 async function cargarStock() {
   try {
     const data = await api("/api/admin-stock");
     gramosPorUnidad = data.gramosPorUnidad || 12;
     renderStock(data.productos);
-    renderPrecios(data.productos);
     mensaje("#stock-message", "");
-    mensaje("#precio-message", "");
   } catch (err) {
     mensaje("#stock-message", `⚠️ ${err.message}`);
+  }
+}
+
+// NUEVA función exclusiva para cargar Precios
+async function cargarPrecios() {
+  mensaje("#precio-message", "Cargando precios…");
+  try {
+    const data = await api("/api/admin-precios");
+    renderPrecios(data.productos);
+    mensaje("#precio-message", "");
+  } catch (err) {
     mensaje("#precio-message", `⚠️ ${err.message}`);
   }
+}
+
+// Modificamos abrirPanel para que llame a las tres cosas por separado
+function abrirPanel() {
+  $("#login").hidden = true;
+  $("#panel").hidden = false;
+  $("#logout").hidden = false;
+  cargarPedidos();
+  cargarStock();
+  cargarPrecios(); // <-- Llama a la nueva función
 }
 
 // ===== Eventos =====
