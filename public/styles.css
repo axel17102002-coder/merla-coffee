@@ -403,6 +403,37 @@ section[id], footer[id] { scroll-margin-top: 90px; }
   border-radius: 999px;
 }
 
+/* Banner Últimas Unidades */
+
+.card__limited {
+
+  position: absolute;
+
+  top: 46px; /* debajo del origen */
+
+  left: 12px;
+
+  z-index: 3;
+
+  background: linear-gradient(135deg, #b84d2d, #d97745);
+
+  color: #fff;
+
+  border-radius: 999px;
+
+  padding: 6px 12px;
+
+  font-size: 0.7rem;
+
+  font-weight: 800;
+
+  letter-spacing: .03em;
+
+  text-transform: uppercase;
+
+  box-shadow: 0 6px 16px rgba(184, 77, 45, .28);
+
+}
 .card__more {
   background: none;
   border: none;

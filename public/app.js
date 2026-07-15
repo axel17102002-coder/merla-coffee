@@ -119,6 +119,13 @@ function selectorPresentaciones(p) {
 }
 
 function badgeStock(p) {
+  // Productos que no vuelven a ingresar  · Sin reposición
+  if (p.id === "andino" || p.id === "silverio-nina") {
+    return `<span class="card__stock card__stock--ultima">
+        🔥 Últimas ${p.stock} unidades
+      </span>
+    `;
+  }
   if (p.stock === 0) return `<span class="card__stock card__stock--agotado">Agotado</span>`;
   if (p.stock <= 5) return `<span class="card__stock">¡Quedan ${p.stock}!</span>`;
   return "";
