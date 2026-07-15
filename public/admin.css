@@ -101,6 +101,15 @@ button { cursor: pointer; }
 .cupon-form button { border: 0; border-radius: 9px; padding: 11px; background: var(--verde); color: #fff; font-weight: 700; }
 .cupon__badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--crema); font-size: .74rem; font-weight: 700; color: var(--verde); }
 
+/* Formulario de producto */
+.cupon-form textarea { border: 1px solid var(--borde); border-radius: 9px; padding: 10px 11px; width: 100%; font-family: inherit; resize: vertical; }
+.entrega__row { display: flex; gap: 8px; }
+.entrega__row > * { flex: 1; min-width: 0; }
+.prod-preview { margin: 0; font-size: .84rem; font-weight: 700; color: var(--verde); min-height: 1.2em; }
+.prod-foto { display: flex; flex-direction: column; gap: 6px; font-size: .84rem; font-weight: 600; color: var(--gris); }
+.prod-foto input { border: 1px dashed var(--borde); border-radius: 9px; padding: 9px; background: var(--crema); width: 100%; }
+.prod-thumb { max-width: 120px; border-radius: 10px; border: 1px solid var(--borde); }
+
 button:disabled { opacity: .55; cursor: wait; }
 
 @media (max-width: 960px) {

@@ -345,11 +345,137 @@ $("#cupones").addEventListener("click", async (e) => {
   }
 });
 
+// ===== Productos =====
+function renderProductos(productos) {
+  const contenedor = $("#productos");
+  if (!productos || !productos.length) {
+    contenedor.innerHTML = `<div class="vacio">No hay productos.</div>`;
+    return;
+  }
+  contenedor.innerHTML = productos.map((p) => `<article class="fila${p.activo ? "" : " fila--inactivo"}">
+      <div class="fila__info">
+        <strong>${escapar(p.nombre)}</strong>
+        <span class="fila__dato">${p.activo ? "Publicado" : "Oculto"} · ${p.stock} bags${p.origen ? " · " + escapar(p.origen) : ""}${p.imagen ? "" : " · ⚠️ sin foto"}</span>
+      </div>
+      <div class="fila__form">
+        <button class="${p.activo ? "sec" : ""}" data-producto-toggle="${escapar(p.id)}" data-activo="${p.activo}">${p.activo ? "Ocultar" : "Publicar"}</button>
+      </div>
+    </article>`).join("");
+}
+
+async function cargarProductos() {
+  mensaje("#producto-message", "Cargando productos…");
+  try {
+    const { productos } = await api("/api/admin-productos");
+    renderProductos(productos);
+    mensaje("#producto-message", "");
+  } catch (err) {
+    mensaje("#producto-message", `⚠️ ${err.message}`);
+  }
+}
+
+// Vista previa del precio mientras se escribe el costo
+$("#prod-costo").addEventListener("input", () => {
+  const costo = Number($("#prod-costo").value) || 0;
+  if (costo <= 0) { $("#prod-preview").textContent = ""; return; }
+  const { precio, pack, margen } = previewPrecios(costo);
+  $("#prod-preview").textContent = `→ Unidad ${formato.format(precio)} · Pack x5 ${formato.format(pack)} (margen ${margen}%)`;
+});
+
+// La foto se lee como data URL y se sube al crear
+let fotoDataUrl = null;
+$("#prod-imagen").addEventListener("change", (e) => {
+  const archivo = e.target.files[0];
+  fotoDataUrl = null;
+  $("#prod-thumb").hidden = true;
+  if (!archivo) return;
+  if (archivo.size > 5 * 1024 * 1024) {
+    mensaje("#producto-message", "⚠️ La foto supera los 5 MB");
+    e.target.value = "";
+    return;
+  }
+  const lector = new FileReader();
+  lector.onload = () => {
+    fotoDataUrl = lector.result;
+    $("#prod-thumb").src = fotoDataUrl;
+    $("#prod-thumb").hidden = false;
+    mensaje("#producto-message", "");
+  };
+  lector.readAsDataURL(archivo);
+});
+
+$("#producto-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const boton = $("#producto-form").querySelector("button[type=submit]");
+  boton.disabled = true;
+  try {
+    // 1) Si hay foto, primero la subimos a Storage
+    let imagen = null;
+    if (fotoDataUrl) {
+      mensaje("#producto-message", "Subiendo la foto…");
+      const r = await api("/api/admin-imagen", {
+        method: "POST",
+        body: JSON.stringify({ nombre: $("#prod-nombre").value, dataUrl: fotoDataUrl }),
+      });
+      imagen = r.url;
+    }
+
+    // 2) Creamos el producto (oculto) con sus dos presentaciones
+    mensaje("#producto-message", "Creando el producto…");
+    const r = await api("/api/admin-productos", {
+      method: "POST",
+      body: JSON.stringify({
+        nombre: $("#prod-nombre").value,
+        costo_250g: Number($("#prod-costo").value),
+        stock: Number($("#prod-stock").value) || 0,
+        origen: $("#prod-origen").value,
+        region: $("#prod-region").value,
+        variedad: $("#prod-variedad").value,
+        proceso: $("#prod-proceso").value,
+        tostador: $("#prod-tostador").value,
+        sca: $("#prod-sca").value,
+        notas: $("#prod-notas").value,
+        descripcion: $("#prod-descripcion").value,
+        imagen,
+      }),
+    });
+    mensaje("#producto-message", `✅ ${r.producto.nombre} creado (oculto) · unidad ${formato.format(r.precio)} · pack ${formato.format(r.precioPack)}`, true);
+    $("#producto-form").reset();
+    $("#prod-preview").textContent = "";
+    $("#prod-thumb").hidden = true;
+    fotoDataUrl = null;
+    cargarProductos();
+  } catch (err) {
+    mensaje("#producto-message", `⚠️ ${err.message}`);
+  } finally {
+    boton.disabled = false;
+  }
+});
+
+$("#productos").addEventListener("click", async (e) => {
+  const boton = e.target.closest("[data-producto-toggle]");
+  if (!boton) return;
+  const publicar = boton.dataset.activo !== "true";
+  if (publicar && !confirm("¿Publicar este producto? Va a aparecer en la tienda.")) return;
+  boton.disabled = true;
+  try {
+    await api("/api/admin-productos", {
+      method: "PATCH",
+      body: JSON.stringify({ id: boton.dataset.productoToggle, activo: publicar }),
+    });
+    cargarProductos();
+  } catch (err) {
+    mensaje("#producto-message", `⚠️ ${err.message}`);
+    boton.disabled = false;
+  }
+});
+
 // ===== Tabs de gestión =====
 const TABS = {
   "tab-stock": { vista: "vista-stock", cargar: cargarStock, cargado: false },
   "tab-precios": { vista: "vista-precios", cargar: cargarPrecios, cargado: false },
   "tab-cupones": { vista: "vista-cupones", cargar: cargarCupones, cargado: false },
+  "tab-productos": { vista: "vista-productos", cargar: cargarProductos, cargado: false },
 };
 
 function activarTab(tabId) {

@@ -17,6 +17,8 @@ import { handler as adminPedidos } from "../netlify/functions/admin-pedidos.js";
 import { handler as adminStock } from "../netlify/functions/admin-stock.js";
 import { handler as adminCupones } from "../netlify/functions/admin-cupones.js";
 import { handler as adminMail } from "../netlify/functions/admin-mail.js";
+import { handler as adminProductos } from "../netlify/functions/admin-productos.js";
+import { handler as adminImagen } from "../netlify/functions/admin-imagen.js";
 import { handler as whatsappPedido } from "../netlify/functions/whatsapp-pedido.js";
 import { handler as adminPrecios } from "../netlify/functions/admin-precios.js"; // <-- NUEVO IMPORT
 
@@ -33,6 +35,8 @@ const rutas = {
   "admin-stock": adaptar(adminStock),
   "admin-cupones": adaptar(adminCupones),
   "admin-mail": adaptar(adminMail),
+  "admin-productos": adaptar(adminProductos),
+  "admin-imagen": adaptar(adminImagen),
   "whatsapp-pedido": adaptar(whatsappPedido),
   "admin-precios": adaptar(adminPrecios), // <-- NUEVA RUTA
 };

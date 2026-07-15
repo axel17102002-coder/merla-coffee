@@ -1,0 +1,127 @@
+// Administración protegida de productos (alta y publicación).
+// Al crear un café se generan solas sus dos presentaciones (unidad y pack x5)
+// con los precios calculados a partir del costo. Nace DESACTIVADO: se publica
+// desde el panel cuando esté listo.
+//
+//   GET                        → { productos: [...] }
+//   POST { nombre, costo_250g, ... } → crea producto + presentaciones
+//   PATCH { id, activo }       → publica / despublica
+
+const { sb } = require("../lib/supabase.js");
+const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
+const { CONFIG, precioPack, precioUnidadDesdeCosto } = require("../../public/motor.js");
+
+// "Café en Grano ☕" → "cafe-en-grano"
+function idDesdeNombre(nombre) {
+  return String(nombre || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // saca acentos
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+}
+
+const texto = (v, max = 400) => {
+  const s = String(v || "").trim();
+  return s ? s.slice(0, max) : null;
+};
+
+exports.handler = async (event) => {
+  const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
+  if (!esAdmin(event)) return respuestaNoAutorizado();
+
+  try {
+    if (event.httpMethod === "GET") {
+      const productos = await sb("productos?select=id,nombre,activo,stock,origen,imagen&order=nombre.asc");
+      return { statusCode: 200, headers, body: JSON.stringify({ productos }) };
+    }
+
+    if (event.httpMethod === "POST") {
+      const b = JSON.parse(event.body || "{}");
+      const nombre = texto(b.nombre, 60);
+      const costo = Number(b.costo_250g);
+      if (!nombre) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "Poné el nombre del café" }) };
+      }
+      if (!(costo > 0)) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "Poné el costo de los 250 g" }) };
+      }
+      const id = idDesdeNombre(nombre);
+      if (!id) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "El nombre no tiene letras ni números" }) };
+      }
+
+      const [existe] = await sb(`productos?id=eq.${encodeURIComponent(id)}&select=id`);
+      if (existe) {
+        return { statusCode: 409, headers, body: JSON.stringify({ error: `Ya existe un producto con el id "${id}"` }) };
+      }
+
+      const precio = precioUnidadDesdeCosto(costo);
+      const pack = precioPack(precio);
+
+      // El producto nace desactivado: se publica cuando esté listo
+      const fila = {
+        id,
+        nombre,
+        activo: false,
+        stock: Math.max(0, Math.round(Number(b.stock) || 0)),
+        costo_250g: costo,
+        origen: texto(b.origen, 60),
+        region: texto(b.region, 80),
+        variedad: texto(b.variedad, 80),
+        proceso: texto(b.proceso, 60),
+        sca: texto(b.sca, 10),
+        tostador: texto(b.tostador, 60),
+        notas: texto(b.notas, 200), // separadas por "; "
+        descripcion: texto(b.descripcion, 600),
+        imagen: texto(b.imagen, 400),
+      };
+      const crear = (cuerpo) =>
+        sb("productos", { method: "POST", headers: { Prefer: "return=representation" }, body: cuerpo });
+
+      let producto;
+      try {
+        [producto] = await crear(fila);
+      } catch (err) {
+        // Si la migración del costo todavía no se corrió, creamos igual: el
+        // costo se deduce del precio hasta que exista la columna.
+        console.warn("admin-productos: reintento sin costo_250g:", err.message);
+        const { costo_250g, ...sinCosto } = fila;
+        [producto] = await crear(sinCosto);
+      }
+
+      // Presentaciones: unidad + pack, con los precios ya calculados
+      await sb("presentaciones", {
+        method: "POST",
+        body: [
+          { id: `${id}-unidad`, producto_id: id, nombre: "Unidad", precio, unidades_stock: 1, activo: true },
+          { id: `${id}-pack${CONFIG.pack.unidades}`, producto_id: id, nombre: `Pack x${CONFIG.pack.unidades}`, precio: pack, unidades_stock: CONFIG.pack.unidades, activo: true },
+        ],
+      });
+
+      return { statusCode: 201, headers, body: JSON.stringify({ producto, precio, precioPack: pack }) };
+    }
+
+    if (event.httpMethod === "PATCH") {
+      const { id, activo } = JSON.parse(event.body || "{}");
+      if (!id) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "Falta el producto" }) };
+      }
+      const [producto] = await sb(`productos?id=eq.${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: { activo: Boolean(activo) },
+      });
+      if (!producto) {
+        return { statusCode: 404, headers, body: JSON.stringify({ error: "Producto inexistente" }) };
+      }
+      return { statusCode: 200, headers, body: JSON.stringify({ producto }) };
+    }
+
+    return { statusCode: 405, headers, body: JSON.stringify({ error: "Método no permitido" }) };
+  } catch (err) {
+    console.error("admin-productos:", err);
+    return { statusCode: 502, headers, body: JSON.stringify({ error: "No se pudo completar la operación" }) };
+  }
+};

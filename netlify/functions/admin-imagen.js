@@ -47,7 +47,7 @@ exports.handler = async (event) => {
     const base = String(nombre || "producto")
       .toLowerCase()
       .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
+      .replace(/[\u0300-\u036f]/g, "") // saca acentos
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
       .slice(0, 40) || "producto";
