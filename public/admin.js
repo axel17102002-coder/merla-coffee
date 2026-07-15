@@ -140,6 +140,20 @@ $("#precios").addEventListener("click", async (e) => {
   }
 });
 
+async function cargarStock() {
+  try {
+    const data = await api("/api/admin-stock");
+    gramosPorUnidad = data.gramosPorUnidad || 12;
+    renderStock(data.productos);
+    renderPrecios(data.productos); // Agregamos esta línea para pintar los precios
+    mensaje("#stock-message", "");
+    mensaje("#precio-message", "");
+  } catch (err) {
+    mensaje("#stock-message", `⚠️ ${err.message}`);
+    mensaje("#precio-message", `⚠️ ${err.message}`);
+  }
+}
+
 $("#stock").addEventListener("input", (e) => {
   const input = e.target.closest("[data-gramos]");
   if (!input) return;
