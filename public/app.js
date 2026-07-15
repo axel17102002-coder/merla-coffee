@@ -714,10 +714,13 @@ async function confirmarCompra(pagoId, mpPaymentId) {
   actualizarClub();
   cargarTienda(); // refresca stock en pantalla
 
+  // Solo prometemos el mail si el cliente dejó su dirección
+  const conEmail = emailValido(emailCliente());
+  const porMail = conEmail ? " Pronto te escribimos por mail." : "";
   mostrarToast(
-    puntos !== null && emailValido(emailCliente())
-      ? `✅ ¡Pago aprobado! Tu saldo Club Merla: ${puntos} puntos ⭐`
-      : "✅ ¡Pago aprobado! Gracias por tu compra 💚"
+    puntos !== null && conEmail
+      ? `✅ ¡Pago aprobado!${porMail} Tu saldo Club Merla: ${puntos} puntos ⭐`
+      : `✅ ¡Pago aprobado!${porMail} ¡Gracias por tu compra! 💚`
   );
 }
 

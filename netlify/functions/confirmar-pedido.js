@@ -7,7 +7,7 @@
 const { sbRpc } = require("../lib/supabase.js");
 const { obtenerPago } = require("../lib/modo.js");
 const { obtenerPagoMp } = require("../lib/mercadopago.js");
-const { avisarAdminPorRef } = require("../lib/avisos.js");
+const { avisarVentaPorRef } = require("../lib/avisos.js");
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json" };
@@ -29,7 +29,7 @@ exports.handler = async (event) => {
       }
       const r = await sbRpc("aprobar_pedido", { p_modo_id: String(pago.external_reference) });
       // Solo avisamos la primera vez (si el webhook ya lo procesó, no repetimos)
-      if (r && r.ok && !r.ya_procesado) await avisarAdminPorRef(String(pago.external_reference));
+      if (r && r.ok && !r.ya_procesado) await avisarVentaPorRef(String(pago.external_reference));
       return { statusCode: 200, headers, body: JSON.stringify(r) };
     }
 
