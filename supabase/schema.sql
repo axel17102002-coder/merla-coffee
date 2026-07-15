@@ -63,6 +63,8 @@ create table if not exists pedidos (
   total integer not null,
   puntos_ganados integer not null default 0,
   cliente_email text,
+  numero integer,                    -- número de pedido secuencial (#0001); ver secuencia abajo
+  envio jsonb,                       -- { metodo:'retiro'|'envio', nombre, direccion, ciudad, provincia, cp, telefono, notas }
   origen text not null default 'mercadopago' check (origen in ('modo', 'whatsapp', 'mercadopago')),
   estado text not null default 'pendiente'
     check (estado in ('pendiente', 'aprobado', 'rechazado')),
@@ -75,8 +77,31 @@ create index if not exists pedidos_estado_idx on pedidos (estado);
 
 -- Migración para proyectos donde la tabla pedidos ya había sido creada.
 alter table pedidos add column if not exists origen text not null default 'mercadopago';
+alter table pedidos alter column origen set default 'mercadopago';
 alter table pedidos drop constraint if exists pedidos_origen_check;
 alter table pedidos add constraint pedidos_origen_check check (origen in ('modo', 'whatsapp', 'mercadopago'));
+alter table pedidos add column if not exists numero integer;
+alter table pedidos add column if not exists envio jsonb;
+
+-- Números de pedido secuenciales (#0001). Backfill por orden de creación + secuencia.
+with ordenados as (
+  select id, row_number() over (order by creado) as n from pedidos where numero is null
+)
+update pedidos p set numero = o.n from ordenados o where p.id = o.id;
+create sequence if not exists pedidos_numero_seq owned by pedidos.numero;
+select setval('pedidos_numero_seq', coalesce((select max(numero) from pedidos), 0) + 1, false);
+alter table pedidos alter column numero set default nextval('pedidos_numero_seq');
+create unique index if not exists pedidos_numero_idx on pedidos (numero);
+
+-- Cupones ya usados: un cupón no se puede reutilizar con el mismo email.
+create table if not exists cupones_usados (
+  id uuid primary key default gen_random_uuid(),
+  codigo text not null,
+  email text not null,
+  pedido_id uuid references pedidos(id) on delete set null,
+  usado timestamptz not null default now(),
+  unique (codigo, email)
+);
 
 -- ---------- Seguridad ----------
 -- RLS activado sin políticas públicas: solo la service_role key (las funciones
@@ -85,6 +110,7 @@ alter table pedidos add constraint pedidos_origen_check check (origen in ('modo'
 alter table productos enable row level security;
 alter table presentaciones enable row level security;
 alter table cupones enable row level security;
+alter table cupones_usados enable row level security;
 alter table clientes enable row level security;
 alter table pedidos enable row level security;
 
@@ -132,6 +158,12 @@ begin
       set puntos = greatest(puntos - v_pedido.puntos_canjeados, 0) + v_pedido.puntos_ganados
       where email = v_email
       returning puntos into v_puntos;
+
+    if v_pedido.cupon is not null and v_pedido.cupon <> '' then
+      insert into cupones_usados (codigo, email, pedido_id)
+        values (upper(v_pedido.cupon), v_email, v_pedido.id)
+        on conflict (codigo, email) do nothing;
+    end if;
   end if;
 
   update pedidos set estado = 'aprobado', actualizado = now() where id = v_pedido.id;
@@ -209,6 +241,12 @@ begin
       set puntos = greatest(puntos - v_pedido.puntos_canjeados, 0) + v_pedido.puntos_ganados
       where email = v_email
       returning puntos into v_puntos;
+
+    if v_pedido.cupon is not null and v_pedido.cupon <> '' then
+      insert into cupones_usados (codigo, email, pedido_id)
+        values (upper(v_pedido.cupon), v_email, v_pedido.id)
+        on conflict (codigo, email) do nothing;
+    end if;
   end if;
 
   update pedidos set estado = 'aprobado', actualizado = now() where id = v_pedido.id;
@@ -228,6 +266,9 @@ begin
   return jsonb_build_object('ok', true);
 end;
 $$;
+
+-- Nota: la limpieza de carritos abandonados (pendientes > 48 h) la hace el cron
+-- del Worker (src/worker.js → netlify/lib/mantenimiento.js), no un RPC.
 
 -- ---------- Datos iniciales ----------
 -- Productos (mismos datos que supabase-import/productos.csv)

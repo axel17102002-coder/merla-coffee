@@ -31,6 +31,11 @@ function precioTransferencia(monto) {
   return Math.round((monto * (100 - CONFIG.transferencia.descuento)) / 100);
 }
 
+// Número de pedido legible: 7 → "#0007"
+function numeroPedido(n) {
+  return "#" + String(n || 0).padStart(4, "0");
+}
+
 // Presentaciones activas de un producto (vienen embebidas desde la base)
 function presentacionesDe(producto) {
   return (producto.presentaciones || [])
@@ -176,5 +181,5 @@ function calcularPedido(items, opciones, datos) {
 
 // Export para Node (funciones de Netlify); en el browser quedan como globales.
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { CONFIG, presentacionesDe, ahorroDe, precioTransferencia, calcularPedido };
+  module.exports = { CONFIG, presentacionesDe, ahorroDe, precioTransferencia, numeroPedido, calcularPedido };
 }

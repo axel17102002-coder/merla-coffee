@@ -69,4 +69,15 @@ async function obtenerPuntos(email) {
   return rows[0] ? rows[0].puntos : 0;
 }
 
-module.exports = { sb, sbRpc, obtenerCatalogo, obtenerCupon, obtenerPuntos };
+// ¿Este email ya usó este cupón? (los cupones son de un solo uso por persona)
+async function cuponYaUsado(codigo, email) {
+  const cod = String(codigo || "").trim().toUpperCase();
+  const mail = String(email || "").trim().toLowerCase();
+  if (!cod || !mail) return false;
+  const rows = await sb(
+    `cupones_usados?select=id&codigo=eq.${encodeURIComponent(cod)}&email=eq.${encodeURIComponent(mail)}&limit=1`
+  );
+  return rows.length > 0;
+}
+
+module.exports = { sb, sbRpc, obtenerCatalogo, obtenerCupon, obtenerPuntos, cuponYaUsado };

@@ -2,8 +2,8 @@
 // Registra un pedido manual en estado pendiente ANTES de abrir WhatsApp.
 // El stock y los puntos se mueven recién desde /admin.html al marcarlo cobrado.
 
-const { sb, obtenerCatalogo, obtenerCupon, obtenerPuntos } = require("../lib/supabase.js");
-const { calcularPedido } = require("../../public/motor.js");
+const { sb, obtenerCatalogo, obtenerCupon, obtenerPuntos, cuponYaUsado } = require("../lib/supabase.js");
+const { calcularPedido, numeroPedido: formatearNumero } = require("../../public/motor.js");
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json" };
@@ -26,6 +26,14 @@ exports.handler = async (event) => {
     ]);
     if (body.cupon && !cupon) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: "Cupón inválido" }) };
+    }
+    if (cupon) {
+      if (!emailValido) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "Para usar un cupón ingresá tu email" }) };
+      }
+      if (await cuponYaUsado(cupon.codigo, email)) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "Ya usaste este cupón" }) };
+      }
     }
 
     const pedido = calcularPedido(
@@ -67,7 +75,7 @@ exports.handler = async (event) => {
     return {
       statusCode: 201,
       headers,
-      body: JSON.stringify({ pedidoId: fila.id, codigo: fila.id.slice(0, 8).toUpperCase() }),
+      body: JSON.stringify({ pedidoId: fila.id, numero: fila.numero, codigo: formatearNumero(fila.numero) }),
     };
   } catch (err) {
     console.error("whatsapp-pedido:", err);

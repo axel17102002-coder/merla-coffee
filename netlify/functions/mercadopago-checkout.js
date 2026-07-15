@@ -7,7 +7,7 @@
 // navegador. El pedido queda `pendiente` y se aprueba cuando MP confirma el
 // pago (webhook o confirmar-pedido), descontando stock y acreditando puntos.
 
-const { sb, obtenerCatalogo, obtenerCupon, obtenerPuntos } = require("../lib/supabase.js");
+const { sb, obtenerCatalogo, obtenerCupon, obtenerPuntos, cuponYaUsado } = require("../lib/supabase.js");
 const { ambienteMp, crearPreferencia } = require("../lib/mercadopago.js");
 const { CONFIG, calcularPedido } = require("../../public/motor.js");
 
@@ -47,6 +47,13 @@ exports.handler = async (event) => {
       cupon = await obtenerCupon(body.cupon);
       if (!cupon) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: "Cupón inválido" }) };
+      }
+      // Los cupones son de un solo uso por email
+      if (!emailValido) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "Para usar un cupón ingresá tu email" }) };
+      }
+      if (await cuponYaUsado(cupon.codigo, email)) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "Ya usaste este cupón" }) };
       }
     }
 
@@ -130,6 +137,9 @@ exports.handler = async (event) => {
         external_reference: externalId,
         metadata: { pedido_id: fila.id },
         statement_descriptor: "MERLA COFFEE",
+        // Solo pagos instantáneos: se excluye el efectivo (Rapipago/Pago Fácil),
+        // que tarda días en acreditar y no encaja con la limpieza de pendientes.
+        payment_methods: { excluded_payment_types: [{ id: "ticket" }] },
         ...(sitio
           ? {
               back_urls: {
@@ -157,6 +167,7 @@ exports.handler = async (event) => {
       headers,
       body: JSON.stringify({
         init_point: preferencia.init_point,
+        numero: fila.numero,
         total: pedido.total,
         puntosGanados: emailValido ? pedido.puntosGanados : 0,
         ambiente: await ambienteMp(),

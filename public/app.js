@@ -392,7 +392,7 @@ async function aplicarCupon(codigo) {
     const res = await fetch("/api/validar-cupon", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ codigo }),
+      body: JSON.stringify({ codigo, email: emailCliente() || null }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -484,7 +484,7 @@ async function checkoutWhatsApp() {
   }
 
   let msg = "¡Hola Merla Coffee! Quiero hacer este pedido:\n\n";
-  msg += `Pedido #${pedido.codigo}\n\n`;
+  msg += `Pedido ${pedido.codigo}\n\n`;
   calc.lineas.forEach((l) => {
     msg += `• ${l.qty}x ${l.nombre} - ${l.presentacionNombre} (${formatear(l.precioUnitario)} c/u)\n`;
   });
@@ -507,7 +507,7 @@ async function checkoutWhatsApp() {
   else window.location.href = urlWhatsApp;
   vaciarCarrito();
   cerrarCarrito();
-  mostrarToast(`✅ Pedido #${pedido.codigo} registrado como pendiente`);
+  mostrarToast(`✅ Pedido ${pedido.codigo} registrado como pendiente`);
 }
 
 // ===== Checkout con Mercado Pago (Checkout Pro) =====

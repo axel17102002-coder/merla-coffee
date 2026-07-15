@@ -3,7 +3,7 @@
 // Devuelve el cupón (para que el carrito muestre el descuento); el cobro
 // igualmente lo re-valida todo en modo-checkout.
 
-const { obtenerCupon } = require("../lib/supabase.js");
+const { obtenerCupon, cuponYaUsado } = require("../lib/supabase.js");
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json" };
@@ -11,10 +11,16 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers, body: JSON.stringify({ error: "Método no permitido" }) };
   }
   try {
-    const { codigo } = JSON.parse(event.body || "{}");
+    const { codigo, email } = JSON.parse(event.body || "{}");
     const cupon = await obtenerCupon(codigo);
     if (!cupon) {
       return { statusCode: 404, headers, body: JSON.stringify({ error: "Cupón inválido" }) };
+    }
+    // Si ya tenemos el email, avisamos temprano que el cupón es de un solo uso.
+    // (El bloqueo real igual ocurre al crear el pago; acá es solo para la UI.)
+    const mail = String(email || "").trim().toLowerCase();
+    if (mail && (await cuponYaUsado(cupon.codigo, mail))) {
+      return { statusCode: 409, headers, body: JSON.stringify({ error: "Ya usaste este cupón" }) };
     }
     return {
       statusCode: 200,
