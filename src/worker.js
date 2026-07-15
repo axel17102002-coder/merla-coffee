@@ -4,7 +4,6 @@
 
 import { adaptar } from "../functions/_adaptador.js";
 import { limpiarPedidosPendientes } from "../netlify/lib/mantenimiento.js";
-import { handler as adminPrecios } from "../netlify/functions/admin-precios.js";
 
 import { handler as tienda } from "../netlify/functions/tienda.js";
 import { handler as validarCupon } from "../netlify/functions/validar-cupon.js";
@@ -30,12 +29,8 @@ const rutas = {
   "admin-pedidos": adaptar(adminPedidos),
   "admin-stock": adaptar(adminStock),
   "whatsapp-pedido": adaptar(whatsappPedido),
-  "admin-precios": adaptar(adminPrecios),
 };
 
-// Vuelca las variables de entorno del Worker (env) a process.env para que el
-// código compartido (supabase.js, etc.) las encuentre. El adaptador hace lo
-// mismo por request; acá lo necesitamos para las tareas programadas.
 function cargarEnv(env) {
   if (typeof globalThis.process === "undefined") globalThis.process = { env: {} };
   if (!globalThis.process.env) globalThis.process.env = {};
@@ -49,13 +44,11 @@ export default {
     const url = new URL(request.url);
     const match = url.pathname.match(/^\/api\/([a-z0-9-]+)\/?$/);
     if (match && rutas[match[1]]) {
-      // El adaptador espera un "context" estilo Pages: { request, env }
       return rutas[match[1]]({ request, env });
     }
     return env.ASSETS.fetch(request);
   },
 
-  // Tareas programadas (cron en wrangler.toml): limpian carritos abandonados.
   async scheduled(event, env, ctx) {
     cargarEnv(env);
     try {
