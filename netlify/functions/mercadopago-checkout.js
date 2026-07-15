@@ -74,6 +74,7 @@ exports.handler = async (event) => {
       body: {
         external_intention_id: externalId,
         modo_id: externalId,
+        origen: "mercadopago",
         items: pedido.lineas.map((l) => ({
           producto_id: l.producto_id,
           presentacion_id: l.presentacion_id,

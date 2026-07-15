@@ -63,7 +63,7 @@ create table if not exists pedidos (
   total integer not null,
   puntos_ganados integer not null default 0,
   cliente_email text,
-  origen text not null default 'modo' check (origen in ('modo', 'whatsapp')),
+  origen text not null default 'mercadopago' check (origen in ('modo', 'whatsapp', 'mercadopago')),
   estado text not null default 'pendiente'
     check (estado in ('pendiente', 'aprobado', 'rechazado')),
   creado timestamptz not null default now(),
@@ -74,9 +74,9 @@ create index if not exists pedidos_modo_id_idx on pedidos (modo_id);
 create index if not exists pedidos_estado_idx on pedidos (estado);
 
 -- Migración para proyectos donde la tabla pedidos ya había sido creada.
-alter table pedidos add column if not exists origen text not null default 'modo';
+alter table pedidos add column if not exists origen text not null default 'mercadopago';
 alter table pedidos drop constraint if exists pedidos_origen_check;
-alter table pedidos add constraint pedidos_origen_check check (origen in ('modo', 'whatsapp'));
+alter table pedidos add constraint pedidos_origen_check check (origen in ('modo', 'whatsapp', 'mercadopago'));
 
 -- ---------- Seguridad ----------
 -- RLS activado sin políticas públicas: solo la service_role key (las funciones

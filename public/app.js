@@ -731,7 +731,7 @@ function cerrarCarrito() {
   setTimeout(() => {
     $("#cart").hidden = true;
     $("#overlay").hidden = true;
-  }, 300);
+  }, 350);
 }
 
 // ===== UI: modal de producto =====
@@ -784,7 +784,7 @@ function mostrarToast(texto) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
     toast.classList.remove("visible");
-    setTimeout(() => (toast.hidden = true), 300);
+    setTimeout(() => (toast.hidden = true), 350);
   }, 2800);
 }
 

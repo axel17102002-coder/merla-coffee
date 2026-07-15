@@ -20,7 +20,7 @@ const CONFIG = {
   },
   fidelidad: {
     puntosPorCien: 1, // 1 punto por cada $100 pagando con MODO
-    canjePuntos: 300, // puntos necesarios para canjear
+    canjePuntos: 350, // puntos necesarios para canjear
     canjeDescuento: 1500, // $ de descuento al canjear
   },
 };

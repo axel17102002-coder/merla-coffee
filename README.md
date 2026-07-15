@@ -63,7 +63,7 @@ Todo desde Supabase → **Table Editor**:
 
 ## Club Merla
 
-1 punto por cada $100 al confirmar un pago (MODO o WhatsApp; el cliente deja su email al comprar, sin registro). Con 300 puntos canjea $1.500 desde el carrito. La config está en `motor.js` (`CONFIG.fidelidad`).
+1 punto por cada $100 al confirmar un pago (MODO o WhatsApp; el cliente deja su email al comprar, sin registro). Con 350 puntos canjea $1.500 desde el carrito. La config está en `motor.js` (`CONFIG.fidelidad`).
 
 ## Reglas de precios (en `motor.js`)
 
