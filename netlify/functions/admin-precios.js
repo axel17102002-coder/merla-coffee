@@ -15,7 +15,7 @@ exports.handler = async (event) => {
   try {
     if (event.httpMethod === "GET") {
       // ACÁ APUNTAMOS A LA TABLA PRESENTACIONES
-      const productos = await sb("presentaciones?select=id,nombre,precio,activo&order=nombre.asc");
+      const productos = await sb("presentaciones?select=id,producto_id,precio,activo&order=id.asc");
       return {
         statusCode: 200,
         headers,
