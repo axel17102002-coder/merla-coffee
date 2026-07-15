@@ -330,7 +330,12 @@ $("#precios").addEventListener("click", async (e) => {
     fila.querySelector("[data-precio]").value = r.precio;
     mensaje("#precio-message", `✅ ${nombre}: unidad ${formato.format(r.precio)} · pack ${formato.format(r.precioPack)}`, true);
   } catch (err) {
-    mensaje("#precio-message", `⚠️ ${err.message}`);
+    // El error se muestra JUNTO A LA FILA: el mensaje de arriba queda fuera de
+    // la vista cuando se está trabajando sobre un producto del final de la lista.
+    const prev = fila.querySelector("[data-preview]");
+    prev.className = "fila__preview fila__preview--ojo";
+    prev.textContent = `⚠️ ${err.message}`;
+    mensaje("#precio-message", `⚠️ ${nombre}: ${err.message}`);
   } finally {
     fila.querySelectorAll("button").forEach((b) => (b.disabled = false));
   }
