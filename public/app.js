@@ -121,7 +121,7 @@ function selectorPresentaciones(p) {
 function badgeStock(p) {
   // Productos que no vuelven a ingresar  · Sin reposición
   if (p.id === "andino" || p.id === "silverio-nina") {
-    return `<span class="card__stock card__stock--ultima">
+    return `<span class="card__stock--ultima">
         🔥 Últimas ${p.stock} unidades
       </span>
     `;

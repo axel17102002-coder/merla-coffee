@@ -405,7 +405,7 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 
 /* Banner Últimas Unidades */
 
-.card__limited {
+.card__stock--ultima {
 
   position: absolute;
 
