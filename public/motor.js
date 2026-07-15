@@ -18,6 +18,19 @@ const CONFIG = {
   drip: {
     gramosPorUnidad: 12, // gramos de café por drip bag (confirmado con el packaging)
   },
+  pack: {
+    unidades: 5, // drip bags que trae el pack
+    descuento: 10, // % OFF del pack respecto de comprar las unidades sueltas
+  },
+  // Estructura de costos: lo único que se carga por café es el costo de la
+  // bolsa de café en grano; el resto sale de acá. Actualizar si cambian los
+  // insumos (bolsa, filtro, etiqueta) o el margen objetivo.
+  costos: {
+    gramosBolsa: 250, // los proveedores cotizan la bolsa de 250 g
+    fijoUnidad: 462.62, // $ de insumos por drip bag (sin el café)
+    fijoPack: 828.65, // $ de insumos del pack x5 (sin el café) — solo para ver el margen
+    margenUnidad: 40, // % de margen sobre el precio de venta de la unidad
+  },
   fidelidad: {
     puntosPorCien: 1, // 1 punto por cada $100 pagando con MODO
     canjePuntos: 350, // puntos necesarios para canjear
@@ -34,6 +47,48 @@ function precioTransferencia(monto) {
 // Número de pedido legible: 7 → "#0007"
 function numeroPedido(n) {
   return "#" + String(n || 0).padStart(4, "0");
+}
+
+// Precio del pack a partir del precio de la unidad (el pack tiene su % OFF).
+// Es la única fuente de verdad: el admin solo carga el costo del café.
+function precioPack(precioUnidad) {
+  return Math.round((precioUnidad * CONFIG.pack.unidades * (100 - CONFIG.pack.descuento)) / 100);
+}
+
+// ===== Cadena de precios desde el costo del café =====
+// costo de la bolsa (250 g) → costo por drip bag → precio de venta.
+
+// Lo que cuesta el café que entra en una drip bag
+function costoCafePorUnidad(costoBolsa) {
+  return (Number(costoBolsa) || 0) / CONFIG.costos.gramosBolsa * CONFIG.drip.gramosPorUnidad;
+}
+
+// Costo total de una drip bag (café + insumos)
+function costoUnidad(costoBolsa) {
+  return costoCafePorUnidad(costoBolsa) + CONFIG.costos.fijoUnidad;
+}
+
+// Costo total de un pack x5 (café de 5 bags + insumos del pack)
+function costoPack(costoBolsa) {
+  return costoCafePorUnidad(costoBolsa) * CONFIG.pack.unidades + CONFIG.costos.fijoPack;
+}
+
+// Precio de venta de la unidad, aplicando el margen objetivo
+function precioUnidadDesdeCosto(costoBolsa) {
+  return Math.round(costoUnidad(costoBolsa) / (1 - CONFIG.costos.margenUnidad / 100));
+}
+
+// Operación inversa: qué costo de bolsa explica un precio de venta dado
+// (se usa para completar el costo de los cafés que ya tenían precio cargado)
+function costoBolsaDesdePrecio(precioUnidad) {
+  const costo = Number(precioUnidad) * (1 - CONFIG.costos.margenUnidad / 100) - CONFIG.costos.fijoUnidad;
+  return Math.max(0, Math.round((costo / CONFIG.drip.gramosPorUnidad) * CONFIG.costos.gramosBolsa));
+}
+
+// % de margen real que queda en el pack con el precio calculado
+function margenPack(costoBolsa, precioDelPack) {
+  if (!precioDelPack) return 0;
+  return Math.round((1 - costoPack(costoBolsa) / precioDelPack) * 100);
 }
 
 // Presentaciones activas de un producto (vienen embebidas desde la base)
@@ -181,5 +236,9 @@ function calcularPedido(items, opciones, datos) {
 
 // Export para Node (funciones de Netlify); en el browser quedan como globales.
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { CONFIG, presentacionesDe, ahorroDe, precioTransferencia, numeroPedido, calcularPedido };
+  module.exports = {
+    CONFIG, presentacionesDe, ahorroDe, precioTransferencia, numeroPedido, calcularPedido,
+    precioPack, costoCafePorUnidad, costoUnidad, costoPack,
+    precioUnidadDesdeCosto, costoBolsaDesdePrecio, margenPack,
+  };
 }
