@@ -677,7 +677,18 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 
 .cart__close:hover { background: var(--crema-borde); }
 
-.cart__items { flex: 1; overflow-y: auto; padding: 16px 24px; }
+/* El scroll es de todo el contenido (productos + pie), no solo de la lista:
+   con el formulario de envío el pie supera la altura de la pantalla. */
+.cart__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+}
+/* flex 1 0 auto: empuja el pie abajo si el carrito es corto, sin comprimirse si es largo */
+.cart__items { flex: 1 0 auto; padding: 16px 24px; }
 
 .cart__empty { text-align: center; color: #66705f; padding: 50px 10px; }
 .cart__empty span { font-size: 2.4rem; display: block; margin-bottom: 12px; }
@@ -724,7 +735,7 @@ section[id], footer[id] { scroll-margin-top: 90px; }
   text-decoration: underline;
 }
 
-.cart__foot { padding: 18px 24px 22px; border-top: 1px solid var(--crema-borde); background: var(--blanco); }
+.cart__foot { flex: 0 0 auto; padding: 18px 24px 22px; border-top: 1px solid var(--crema-borde); background: var(--blanco); }
 
 .cart__row { display: flex; justify-content: space-between; font-size: 0.92rem; margin-bottom: 6px; color: #4a5744; }
 
