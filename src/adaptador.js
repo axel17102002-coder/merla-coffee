@@ -1,7 +1,7 @@
-// Adaptador Cloudflare Pages ⇄ funciones estilo Netlify.
-// Permite usar EXACTAMENTE el mismo backend (netlify/functions/*) en las dos
-// plataformas: convierte el Request de Cloudflare al `event` que esperan los
-// handlers y su respuesta {statusCode, headers, body} a un Response.
+// Adaptador Cloudflare ⇄ los handlers de backend/functions/.
+// Convierte el Request de Cloudflare al `event` que esperan los handlers
+// (estilo función serverless) y su respuesta {statusCode, headers, body} a un
+// Response. Es la única pieza que conoce el formato de Cloudflare.
 
 export function adaptar(handler) {
   return async (context) => {

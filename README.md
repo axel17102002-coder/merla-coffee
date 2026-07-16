@@ -1,38 +1,42 @@
 # Merla Coffee — Sitio web
 
-Tienda de café de especialidad en drip bags: carrito, packs, cupones ocultos, puntos Club Merla, **stock automático** y pago online con MODO. Los datos viven en **Supabase**; el sitio y las funciones corren en **Netlify**.
+Tienda de café de especialidad en drip bags: carrito, packs, cupones ocultos, puntos Club Merla, **stock automático**, retiro/envío y pago online con **Mercado Pago**. Los datos viven en **Supabase**; el sitio y el backend corren en **Cloudflare Workers**.
 
 ## Arquitectura
 
 ```
-Navegador ──> Funciones Netlify ──> Supabase (productos, stock, cupones, clientes, pedidos)
-                    │
-                    └──> API de MODO (pagos)  ──webhook──> descuenta stock + acredita puntos
+Navegador ──> Cloudflare Worker ──> Supabase (productos, stock, cupones, clientes, pedidos)
+              (src/worker.js)   │
+                                ├──> API de Mercado Pago ──webhook──> descuenta stock + puntos
+                                └──> Brevo (mails de aviso y confirmación)
 ```
 
-- El navegador **nunca** toca Supabase directo: todo pasa por las funciones.
+- El navegador **nunca** toca Supabase directo: todo pasa por el Worker.
 - Los precios/descuentos se calculan con `motor.js` tanto en la web (para mostrar) como en el servidor (para cobrar): no se puede pagar un monto adulterado.
-- El stock se descuenta **solo cuando se confirma el pago**: MODO lo hace por webhook y WhatsApp desde la interfaz de administración privada.
+- El stock se descuenta **solo cuando se confirma el pago**: Mercado Pago lo hace por webhook; los de WhatsApp, al aprobarlos en `/admin`.
 
 ## Archivos
 
-- `public/` — la web (HTML, CSS, JS, imágenes)
-- `src/worker.js` + `functions/_adaptador.js` — entrada de Cloudflare (reusa el backend de `netlify/functions/`)
-- `wrangler.toml` — configuración de Cloudflare
+```
+public/            La web que ve el cliente
+  index.html         tienda · admin.html  panel privado
+  app.js             lógica de la tienda · admin.js  lógica del panel
+  motor.js           REGLAS compartidas (precios, costos, packs, puntos)
+  styles.css · admin.css · img/
 
-- `index.html` / `styles.css` / `app.js` — la web
-- `motor.js` — reglas de precios compartidas (descuentos, mínimos, puntos)
-- `netlify/lib/` — clientes de Supabase, Mercado Pago, MODO y Brevo (mails)
-- `netlify/functions/` — el backend (compartido por ambos hostings)
-  - `tienda.js` — catálogo con stock (lo que carga la web)
-  - `validar-cupon.js` — valida códigos sin exponer la lista
-  - `puntos.js` — saldo Club Merla por email
-  - `modo-checkout.js` — crea el pago + registra el pedido
-  - `modo-webhook.js` — MODO avisa el resultado → aprueba el pedido
-  - `confirmar-pedido.js` — respaldo del webhook desde el navegador
-  - `whatsapp-pedido.js` — registra el pedido manual como pendiente
-  - `admin-pedidos.js` — lista y aprueba/rechaza pedidos de WhatsApp
-- `supabase/schema.sql` — tablas, seguridad y datos iniciales
+src/
+  worker.js          entrada de Cloudflare: rutea /api/* y sirve public/
+  adaptador.js       convierte Request de Cloudflare ⇄ el `event` de los handlers
+
+backend/           El servidor (nunca lo ve el navegador)
+  functions/         un archivo por endpoint (= /api/<nombre>)
+  lib/               clientes: supabase, mercadopago, brevo, modo, admin…
+
+supabase/          SQL: schema.sql (todo desde cero) + migraciones
+wrangler.toml      configuración de Cloudflare (assets, cron, vars)
+```
+
+`motor.js` vive en `public/` porque lo usan **los dos lados**: el navegador (para mostrar) y el backend (para cobrar). Es la única fuente de verdad de los precios.
 
 ## Puesta en marcha (una sola vez)
 
@@ -44,31 +48,31 @@ Navegador ──> Funciones Netlify ──> Supabase (productos, stock, cupones,
 
 1. Entrá a [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages** → **Create** → **Import a repository** y elegí `merla-coffee`.
 2. Build command: `echo listo` (no hay build). Deploy command: `npx wrangler deploy` (el default). Toda la configuración real está en `wrangler.toml`.
-3. En el proyecto → **Settings → Variables and Secrets** cargá: `SUPABASE_URL`, `SUPABASE_SECRET_KEY` (o `SUPABASE_SERVICE_ROLE_KEY`) y `ADMIN_TOKEN`. Después **Retry deployment**.
-4. Cada push a `main` publica solo. La URL queda tipo `https://merla-coffee.<tu-cuenta>.workers.dev` (el webhook de MODO la usa automáticamente).
+3. En el proyecto → **Settings → Variables and Secrets** cargá como **Secret**: `SUPABASE_SECRET_KEY`, `ADMIN_TOKEN`, `MP_ACCESS_TOKEN` y `BREVO_API_KEY`. Después **Retry deployment**.
+4. Cada push a `main` publica solo. La URL queda tipo `https://merla-coffee.<tu-cuenta>.workers.dev` (el webhook de Mercado Pago la detecta automáticamente).
 
-La web llama al backend por `/api/<funcion>`: en Cloudflare lo rutea `src/worker.js` y en Netlify un redirect de `netlify.toml` — el mismo código sirve en las dos plataformas (Netlify queda como plan B).
+La web llama al backend por `/api/<funcion>` y `src/worker.js` lo rutea al archivo correspondiente de `backend/functions/`.
 
-## Administración diaria (sin tocar código)
+## Administración diaria (desde `/admin`)
 
-Todo desde Supabase → **Table Editor**:
+Entrá a `https://<tu-sitio>/admin` con tu `ADMIN_TOKEN`. Todo se hace desde ahí:
 
-- **Stock**: tabla `productos`, columna `stock`. Se descuenta al aprobar pagos por MODO o WhatsApp. `stock = 0` muestra "Agotado".
-- **Precios**: tabla `presentaciones` (unidad y pack por separado).
-- **Cupones**: tabla `cupones`. Crear fila = cupón nuevo; `activo = false` lo apaga. **No se muestran en la web**: pasalos por Instagram/WhatsApp.
-- **Clientes y puntos**: tabla `clientes`. Podés regalar puntos editando el número.
-- **Pedidos MODO**: se aprueban automáticamente al confirmarse el pago.
-- **Pedidos WhatsApp**: entrá a `/admin.html`, ingresá `ADMIN_TOKEN` y usá **Marcar cobrado**; eso descuenta stock y actualiza puntos. **Rechazar** no toca el stock.
-- **Pausar un café**: `productos.activo = false` (desaparece de la web sin borrar nada).
+- **Pedidos**: todos los canales, con número (#0001), filtros (Todos / Mercado Pago / WhatsApp), 🗑 para borrar y ✉️ para (re)enviar la confirmación. Los de WhatsApp se aprueban con **Marcar cobrado** (descuenta stock y suma puntos); **Rechazar** no toca el stock.
+- **Stock**: cargás los gramos de café en grano y calcula las drip bags (12 g c/u). "Sumar" agrega; "Fijar" reemplaza.
+- **Precios**: cargás el costo de la bolsa de 250 g y calcula la unidad y el pack. El precio se puede redondear a mano (botón ≈) y muestra el margen real.
+- **Cupones**: crear/editar y activar/desactivar. **No se muestran en la web**: pasalos por Instagram/WhatsApp. Se usan una vez por email.
+- **Productos**: alta con foto (se sube a Supabase Storage). Nacen **ocultos**: se publican con un botón cuando hay stock.
+
+Los carritos abandonados (pendientes > 48 h) los borra solo un cron cada 6 h (`wrangler.toml` → `[triggers]`).
 
 ## Club Merla
 
-1 punto por cada $100 al confirmar un pago (MODO o WhatsApp; el cliente deja su email al comprar, sin registro). Con 350 puntos canjea $1.500 desde el carrito. La config está en `motor.js` (`CONFIG.fidelidad`).
+1 punto por cada $100 al confirmar un pago (Mercado Pago o WhatsApp; el cliente deja su email al comprar, sin registro). Con 350 puntos canjea $1.500 desde el carrito. La config está en `motor.js` (`CONFIG.fidelidad`).
 
 ## Reglas de precios (en `motor.js`)
 
 - 5% OFF llevando 5+ unidades sueltas (los packs no cuentan: ya tienen su descuento).
-- El % de ahorro del pack se calcula solo comparando el precio del pack vs. las unidades.
+- El pack x5 sale del precio unitario con 10% OFF (`CONFIG.pack`); el precio unitario sale del costo de los 250 g con 40% de margen (`CONFIG.costos`), y se puede fijar a mano desde el panel.
 - Canje de puntos: requiere pedido de al menos 2× el descuento.
 
 ## Pago online (Mercado Pago / MODO)
@@ -99,8 +103,8 @@ Docs: https://merchants.modo.com.ar/docs
 
 Avisos automáticos y confirmaciones al cliente. Se usa **Brevo** (plan gratis: 300 mails/día) porque permite enviar desde una casilla de Gmail verificada, sin dominio propio.
 
-- **Automático**: cuando entra un pedido de WhatsApp o se cobra uno de Mercado Pago, llega un aviso a `MAIL_ADMIN`.
-- **Manual**: en `/admin`, el botón ✉️ de cada pedido le manda la confirmación al cliente.
+- **Automático**: al cobrarse una venta por Mercado Pago salen dos mails: el aviso a `MAIL_ADMIN` y la confirmación al cliente. Un pedido nuevo de WhatsApp solo avisa al admin (todavía no se cobró).
+- **Manual**: en `/admin`, el botón ✉️ de cada pedido (re)envía la confirmación al cliente.
 
 Configuración (una sola vez):
 
@@ -112,5 +116,4 @@ Sin `BREVO_API_KEY` no se rompe nada: los mails simplemente no se envían y qued
 
 ## Notas
 
-- `supabase-import/` fueron los CSV para la carga inicial; el `schema.sql` ya incluye esos datos, así que la carpeta se puede borrar.
 - El número de WhatsApp está en `WHATSAPP` al inicio de `app.js`.

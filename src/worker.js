@@ -1,26 +1,26 @@
 // Worker principal de Merla Coffee para Cloudflare (Workers + assets estáticos).
-// Rutea /api/<funcion> al backend compartido (netlify/functions/*) y todo lo
+// Rutea /api/<funcion> al backend (backend/functions/*) y todo lo
 // demás lo sirve como archivo estático desde public/.
 
-import { adaptar } from "../functions/_adaptador.js";
-import { limpiarPedidosPendientes } from "../netlify/lib/mantenimiento.js";
+import { adaptar } from "./adaptador.js";
+import { limpiarPedidosPendientes } from "../backend/lib/mantenimiento.js";
 
-import { handler as tienda } from "../netlify/functions/tienda.js";
-import { handler as validarCupon } from "../netlify/functions/validar-cupon.js";
-import { handler as puntos } from "../netlify/functions/puntos.js";
-import { handler as modoCheckout } from "../netlify/functions/modo-checkout.js";
-import { handler as modoWebhook } from "../netlify/functions/modo-webhook.js";
-import { handler as mercadopagoCheckout } from "../netlify/functions/mercadopago-checkout.js";
-import { handler as mercadopagoWebhook } from "../netlify/functions/mercadopago-webhook.js";
-import { handler as confirmarPedido } from "../netlify/functions/confirmar-pedido.js";
-import { handler as adminPedidos } from "../netlify/functions/admin-pedidos.js";
-import { handler as adminStock } from "../netlify/functions/admin-stock.js";
-import { handler as adminCupones } from "../netlify/functions/admin-cupones.js";
-import { handler as adminMail } from "../netlify/functions/admin-mail.js";
-import { handler as adminProductos } from "../netlify/functions/admin-productos.js";
-import { handler as adminImagen } from "../netlify/functions/admin-imagen.js";
-import { handler as whatsappPedido } from "../netlify/functions/whatsapp-pedido.js";
-import { handler as adminPrecios } from "../netlify/functions/admin-precios.js"; // <-- NUEVO IMPORT
+import { handler as tienda } from "../backend/functions/tienda.js";
+import { handler as validarCupon } from "../backend/functions/validar-cupon.js";
+import { handler as puntos } from "../backend/functions/puntos.js";
+import { handler as modoCheckout } from "../backend/functions/modo-checkout.js";
+import { handler as modoWebhook } from "../backend/functions/modo-webhook.js";
+import { handler as mercadopagoCheckout } from "../backend/functions/mercadopago-checkout.js";
+import { handler as mercadopagoWebhook } from "../backend/functions/mercadopago-webhook.js";
+import { handler as confirmarPedido } from "../backend/functions/confirmar-pedido.js";
+import { handler as adminPedidos } from "../backend/functions/admin-pedidos.js";
+import { handler as adminStock } from "../backend/functions/admin-stock.js";
+import { handler as adminCupones } from "../backend/functions/admin-cupones.js";
+import { handler as adminMail } from "../backend/functions/admin-mail.js";
+import { handler as adminProductos } from "../backend/functions/admin-productos.js";
+import { handler as adminImagen } from "../backend/functions/admin-imagen.js";
+import { handler as whatsappPedido } from "../backend/functions/whatsapp-pedido.js";
+import { handler as adminPrecios } from "../backend/functions/admin-precios.js";
 
 const rutas = {
   "tienda": adaptar(tienda),
@@ -38,7 +38,7 @@ const rutas = {
   "admin-productos": adaptar(adminProductos),
   "admin-imagen": adaptar(adminImagen),
   "whatsapp-pedido": adaptar(whatsappPedido),
-  "admin-precios": adaptar(adminPrecios), // <-- NUEVA RUTA
+  "admin-precios": adaptar(adminPrecios),
 };
 
 function cargarEnv(env) {
