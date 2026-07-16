@@ -1,7 +1,11 @@
 // ===== Motor de precios de Merla Coffee =====
-// Reglas de negocio puras, compartidas entre el navegador (app.js) y las
-// funciones de Netlify. Los DATOS (productos, stock, precios, cupones) ahora
-// viven en Supabase; este motor solo calcula.
+// Reglas de negocio puras, compartidas entre el navegador (app.js, admin.js) y
+// el backend. Los DATOS (productos, stock, precios, cupones) viven en Supabase;
+// este motor solo calcula.
+//
+// OJO: este archivo se descarga al navegador. Acá van FÓRMULAS, nunca números
+// sensibles (costos, márgenes): esos viajan en `cfg` desde la base y solo los
+// recibe el panel de administración.
 
 const CONFIG = {
   // Pasarelas de pago habilitadas. MODO queda implementado pero apagado:
@@ -22,15 +26,9 @@ const CONFIG = {
     unidades: 5, // drip bags que trae el pack
     descuento: 10, // % OFF del pack respecto de comprar las unidades sueltas
   },
-  // Estructura de costos: lo único que se carga por café es el costo de la
-  // bolsa de café en grano; el resto sale de acá. Actualizar si cambian los
-  // insumos (bolsa, filtro, etiqueta) o el margen objetivo.
-  costos: {
-    gramosBolsa: 250, // los proveedores cotizan la bolsa de 250 g
-    fijoUnidad: 462.62, // $ de insumos por drip bag (sin el café)
-    fijoPack: 828.65, // $ de insumos del pack x5 (sin el café) — solo para ver el margen
-    margenUnidad: 40, // % de margen sobre el precio de venta de la unidad
-  },
+  // OJO: los costos y el margen NO van acá. Este archivo se descarga al
+  // navegador: cualquiera vería la estructura de costos. Viven en la base
+  // (tablas `insumos` y `configuracion`) y los lee solo el panel de admin.
   fidelidad: {
     puntosPorCien: 1, // 1 punto por cada $100 pagando con MODO
     canjePuntos: 350, // puntos necesarios para canjear
@@ -49,53 +47,64 @@ function numeroPedido(n) {
   return "#" + String(n || 0).padStart(4, "0");
 }
 
-// Precio del pack a partir del precio de la unidad (el pack tiene su % OFF).
-// Es la única fuente de verdad: el admin solo carga el costo del café.
-function precioPack(precioUnidad) {
-  return Math.round((precioUnidad * CONFIG.pack.unidades * (100 - CONFIG.pack.descuento)) / 100);
+// ===== Cadena de precios desde el costo del café =====
+// costo del kilo → costo del café por drip bag → + insumos → precio de venta.
+//
+// Todas reciben `cfg`, que trae los números sensibles desde la base:
+//   { fijoUnidad, fijoPack, margenUnidad, gramosPorBag, packUnidades, packDescuento }
+// Nunca se hardcodean acá: este archivo lo descarga el navegador.
+
+const GRAMOS_KILO = 1000;
+
+// Precio del pack a partir del precio de la unidad (el pack tiene su % OFF)
+function precioPack(precioUnidad, cfg) {
+  const unidades = (cfg && cfg.packUnidades) || CONFIG.pack.unidades;
+  const off = cfg && cfg.packDescuento != null ? cfg.packDescuento : CONFIG.pack.descuento;
+  return Math.round((precioUnidad * unidades * (100 - off)) / 100);
 }
 
-// ===== Cadena de precios desde el costo del café =====
-// costo de la bolsa (250 g) → costo por drip bag → precio de venta.
-
 // Lo que cuesta el café que entra en una drip bag
-function costoCafePorUnidad(costoBolsa) {
-  return (Number(costoBolsa) || 0) / CONFIG.costos.gramosBolsa * CONFIG.drip.gramosPorUnidad;
+function costoCafePorUnidad(costoKilo, cfg) {
+  const gramos = (cfg && cfg.gramosPorBag) || CONFIG.drip.gramosPorUnidad;
+  return ((Number(costoKilo) || 0) / GRAMOS_KILO) * gramos;
 }
 
 // Costo total de una drip bag (café + insumos)
-function costoUnidad(costoBolsa) {
-  return costoCafePorUnidad(costoBolsa) + CONFIG.costos.fijoUnidad;
+function costoUnidad(costoKilo, cfg) {
+  return costoCafePorUnidad(costoKilo, cfg) + ((cfg && cfg.fijoUnidad) || 0);
 }
 
-// Costo total de un pack x5 (café de 5 bags + insumos del pack)
-function costoPack(costoBolsa) {
-  return costoCafePorUnidad(costoBolsa) * CONFIG.pack.unidades + CONFIG.costos.fijoPack;
+// Costo total de un pack (el café de todas sus bags + los insumos del pack)
+function costoPack(costoKilo, cfg) {
+  const unidades = (cfg && cfg.packUnidades) || CONFIG.pack.unidades;
+  return costoCafePorUnidad(costoKilo, cfg) * unidades + ((cfg && cfg.fijoPack) || 0);
 }
 
 // Precio de venta de la unidad, aplicando el margen objetivo
-function precioUnidadDesdeCosto(costoBolsa) {
-  return Math.round(costoUnidad(costoBolsa) / (1 - CONFIG.costos.margenUnidad / 100));
+function precioUnidadDesdeCosto(costoKilo, cfg) {
+  const margen = (cfg && cfg.margenUnidad) || 0;
+  return Math.round(costoUnidad(costoKilo, cfg) / (1 - margen / 100));
 }
 
-// Operación inversa: qué costo de bolsa explica un precio de venta dado
-// (se usa para completar el costo de los cafés que ya tenían precio cargado)
-function costoBolsaDesdePrecio(precioUnidad) {
-  const costo = Number(precioUnidad) * (1 - CONFIG.costos.margenUnidad / 100) - CONFIG.costos.fijoUnidad;
-  return Math.max(0, Math.round((costo / CONFIG.drip.gramosPorUnidad) * CONFIG.costos.gramosBolsa));
+// Operación inversa: qué costo del kilo explica un precio de venta dado
+function costoKiloDesdePrecio(precioUnidad, cfg) {
+  const margen = (cfg && cfg.margenUnidad) || 0;
+  const gramos = (cfg && cfg.gramosPorBag) || CONFIG.drip.gramosPorUnidad;
+  const cafe = Number(precioUnidad) * (1 - margen / 100) - ((cfg && cfg.fijoUnidad) || 0);
+  return Math.max(0, Math.round((cafe / gramos) * GRAMOS_KILO));
 }
 
 // % de margen real que queda en el pack con el precio calculado
-function margenPack(costoBolsa, precioDelPack) {
+function margenPack(costoKilo, precioDelPack, cfg) {
   if (!precioDelPack) return 0;
-  return Math.round((1 - costoPack(costoBolsa) / precioDelPack) * 100);
+  return Math.round((1 - costoPack(costoKilo, cfg) / precioDelPack) * 100);
 }
 
 // % de margen real de la unidad con el precio que se fijó a mano (1 decimal).
 // Sirve para ver el costo de "redondear" un precio feo ($2.202 → $2.200).
-function margenUnidadReal(costoBolsa, precioUnidad) {
+function margenUnidadReal(costoKilo, precioUnidad, cfg) {
   if (!precioUnidad) return 0;
-  return Math.round((1 - costoUnidad(costoBolsa) / precioUnidad) * 1000) / 10;
+  return Math.round((1 - costoUnidad(costoKilo, cfg) / precioUnidad) * 1000) / 10;
 }
 
 // Redondea a un múltiplo lindo (por defecto, de a $50): 2202 → 2200
@@ -252,7 +261,7 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     CONFIG, presentacionesDe, ahorroDe, precioTransferencia, numeroPedido, calcularPedido,
     precioPack, costoCafePorUnidad, costoUnidad, costoPack,
-    precioUnidadDesdeCosto, costoBolsaDesdePrecio, margenPack,
+    precioUnidadDesdeCosto, costoKiloDesdePrecio, margenPack,
     margenUnidadReal, redondearPrecio,
   };
 }

@@ -18,7 +18,18 @@ exports.handler = async () => {
       body: JSON.stringify({
         productos,
         // pagoAmbiente le avisa al frontend si el cobro online es de prueba
-        config: { ...CONFIG, pagoAmbiente: CONFIG.pagos.mercadopago ? await ambienteMp() : process.env.MODO_ENV || "test" },
+        // Lista explícita: NO mandamos todo CONFIG para no filtrar nada
+        // sensible sin querer (los costos y márgenes viven en la base y son
+        // solo del panel).
+        config: {
+          pagos: CONFIG.pagos,
+          descuentoCantidad: CONFIG.descuentoCantidad,
+          descuentoPorcentaje: CONFIG.descuentoPorcentaje,
+          transferencia: CONFIG.transferencia,
+          pack: CONFIG.pack,
+          fidelidad: CONFIG.fidelidad,
+          pagoAmbiente: CONFIG.pagos.mercadopago ? await ambienteMp() : process.env.MODO_ENV || "test",
+        },
       }),
     };
   } catch (err) {

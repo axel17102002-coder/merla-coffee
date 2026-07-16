@@ -197,14 +197,21 @@ $("#stock").addEventListener("click", async (e) => {
   }
 });
 
-// ===== Precios (desde el costo del café, con precio ajustable a mano) =====
+// ===== Precios (desde el costo del kilo, con precio ajustable a mano) =====
+// `cfgPrecios` trae los insumos y el margen desde la base: no están en el
+// código porque este archivo lo descarga cualquiera.
 let cfgPrecios = null;
 
 // Vista previa de la cadena de precios. Si se fija un precio a mano, se usa ese.
 function previewPrecios(costo, precioAMano) {
-  const precio = precioAMano > 0 ? Math.round(precioAMano) : precioUnidadDesdeCosto(costo);
-  const pack = precioPack(precio);
-  return { precio, pack, margen: margenPack(costo, pack), margenU: margenUnidadReal(costo, precio) };
+  const precio = precioAMano > 0 ? Math.round(precioAMano) : precioUnidadDesdeCosto(costo, cfgPrecios);
+  const pack = precioPack(precio, cfgPrecios);
+  return {
+    precio,
+    pack,
+    margen: margenPack(costo, pack, cfgPrecios),
+    margenU: margenUnidadReal(costo, precio, cfgPrecios),
+  };
 }
 
 function renderPrecios(productos) {
@@ -221,10 +228,10 @@ function renderPrecios(productos) {
         </span>
       </div>
       <div class="fila__form fila__form--precio">
-        <label class="mini">Costo 250 g
-          <input type="number" min="0" step="1" inputmode="numeric" placeholder="17000"
-                 value="${p.costo_250g != null ? Math.round(p.costo_250g) : ""}"
-                 data-costo aria-label="Costo de 250 g de ${escapar(p.nombre || p.id)}">
+        <label class="mini">Costo por kilo
+          <input type="number" min="0" step="1" inputmode="numeric" placeholder="68000"
+                 value="${p.costo_kg != null ? Math.round(p.costo_kg) : ""}"
+                 data-costo aria-label="Costo del kilo de ${escapar(p.nombre || p.id)}">
         </label>
         <label class="mini">Precio unidad
           <span class="mini__campo">
@@ -248,8 +255,8 @@ function refrescarPreview(fila) {
   if (costo <= 0) { prev.textContent = ""; prev.className = "fila__preview"; return; }
 
   const { precio, pack, margen, margenU } = previewPrecios(costo, aMano);
-  const objetivo = cfgPrecios ? cfgPrecios.costos.margenUnidad : 40;
-  const sugerido = precioUnidadDesdeCosto(costo);
+  const objetivo = cfgPrecios ? cfgPrecios.margenUnidad : 40;
+  const sugerido = precioUnidadDesdeCosto(costo, cfgPrecios);
   const bajo = margenU < objetivo - 1;
 
   prev.className = "fila__preview" + (bajo ? " fila__preview--ojo" : "");
@@ -261,7 +268,7 @@ async function cargarPrecios() {
   mensaje("#precio-message", "Cargando precios…");
   try {
     const data = await api("/api/admin-precios");
-    cfgPrecios = data.config;
+    cfgPrecios = data.cfg;
     renderPrecios(data.productos);
     mensaje("#precio-message", "");
   } catch (err) {
@@ -277,7 +284,7 @@ $("#precios").addEventListener("input", (e) => {
     const costo = Number(e.target.value) || 0;
     const campoPrecio = fila.querySelector("[data-precio]");
     if (costo > 0 && !campoPrecio.dataset.tocado) {
-      campoPrecio.value = precioUnidadDesdeCosto(costo);
+      campoPrecio.value = precioUnidadDesdeCosto(costo, cfgPrecios);
     }
   }
   // Si tocan el precio a mano, dejamos de pisarlo
@@ -291,7 +298,7 @@ $("#precios").addEventListener("click", (e) => {
   if (!boton) return;
   const fila = boton.closest(".fila--precio");
   const campo = fila.querySelector("[data-precio]");
-  const actual = Number(campo.value) || Number(precioUnidadDesdeCosto(Number(fila.querySelector("[data-costo]").value) || 0));
+  const actual = Number(campo.value) || Number(precioUnidadDesdeCosto(Number(fila.querySelector("[data-costo]").value) || 0, cfgPrecios));
   if (!actual) return;
   campo.value = redondearPrecio(actual, 50);
   campo.dataset.tocado = "1";
@@ -304,21 +311,21 @@ $("#precios").addEventListener("click", async (e) => {
   const fila = boton.closest(".fila");
   const costo = Number(fila.querySelector("[data-costo]").value);
   if (!costo || costo <= 0) {
-    mensaje("#precio-message", "⚠️ Cargá el costo de los 250 g");
+    mensaje("#precio-message", "⚠️ Cargá el costo del kilo");
     return;
   }
   const aMano = Number(fila.querySelector("[data-precio]").value) || 0;
   const nombre = fila.querySelector("strong").textContent;
   const { precio, pack, margen, margenU } = previewPrecios(costo, aMano);
-  const sugerido = precioUnidadDesdeCosto(costo);
+  const sugerido = precioUnidadDesdeCosto(costo, cfgPrecios);
   const nota = precio !== sugerido ? `\n(el calculado era ${formato.format(sugerido)})` : "";
-  if (!confirm(`${nombre}\n\nCosto 250 g: ${formato.format(costo)}\n→ Unidad: ${formato.format(precio)} · margen ${margenU}%${nota}\n→ Pack x5: ${formato.format(pack)} · margen ${margen}%\n\n¿Guardar estos precios?`)) return;
+  if (!confirm(`${nombre}\n\nCosto por kilo: ${formato.format(costo)}\n→ Unidad: ${formato.format(precio)} · margen ${margenU}%${nota}\n→ Pack x5: ${formato.format(pack)} · margen ${margen}%\n\n¿Guardar estos precios?`)) return;
 
   fila.querySelectorAll("button").forEach((b) => (b.disabled = true));
   try {
     const r = await api("/api/admin-precios", {
       method: "POST",
-      body: JSON.stringify({ producto_id: fila.dataset.producto, costo_250g: costo, precio: aMano || undefined }),
+      body: JSON.stringify({ producto_id: fila.dataset.producto, costo_kg: costo, precio: aMano || undefined }),
     });
     fila.querySelector("[data-precio-de]").textContent = formato.format(r.precio);
     const elPack = fila.querySelector("[data-pack-de]");
@@ -430,6 +437,8 @@ function renderProductos(productos) {
 async function cargarProductos() {
   mensaje("#producto-message", "Cargando productos…");
   try {
+    // La vista previa de precios necesita la config (insumos + margen)
+    if (!cfgPrecios) { try { cfgPrecios = (await api("/api/admin-config")).cfg; } catch {} }
     const { productos } = await api("/api/admin-productos");
     renderProductos(productos);
     mensaje("#producto-message", "");
@@ -490,7 +499,7 @@ $("#producto-form").addEventListener("submit", async (e) => {
       method: "POST",
       body: JSON.stringify({
         nombre: $("#prod-nombre").value,
-        costo_250g: Number($("#prod-costo").value),
+        costo_kg: Number($("#prod-costo").value),
         stock: Number($("#prod-stock").value) || 0,
         origen: $("#prod-origen").value,
         region: $("#prod-region").value,
@@ -535,11 +544,130 @@ $("#productos").addEventListener("click", async (e) => {
 });
 
 // ===== Tabs de gestión =====
+// ===== Costos (insumos + margen) — información privada =====
+function renderInsumos(insumos) {
+  const contenedor = $("#insumos");
+  const porU = insumos.filter((i) => i.aplica === "unidad");
+  const porP = insumos.filter((i) => i.aplica === "pack");
+  const totU = porU.reduce((t, i) => t + Number(i.costo), 0);
+  const totP = porP.reduce((t, i) => t + Number(i.costo), 0);
+  $("#cfg-total-unidad").textContent = `· ${formato.format(totU)}/bag + ${formato.format(totP)}/pack`;
+
+  const fila = (i) => `<article class="fila" data-insumo="${escapar(i.id)}">
+      <div class="fila__info">
+        <strong>${escapar(i.nombre)}</strong>
+        <span class="fila__dato">${i.aplica === "unidad" ? "por cada drip bag" : "una vez por pack"}</span>
+      </div>
+      <div class="fila__form">
+        <input type="number" min="0" step="0.01" inputmode="decimal" value="${Number(i.costo)}" data-insumo-costo aria-label="Costo de ${escapar(i.nombre)}">
+        <button data-insumo-accion="guardar">Guardar</button>
+        <button class="sec" data-insumo-accion="borrar" title="Borrar insumo">🗑</button>
+      </div>
+    </article>`;
+
+  contenedor.innerHTML =
+    (insumos.length ? insumos.map(fila).join("") : `<div class="vacio">No hay insumos cargados.</div>`);
+}
+
+async function cargarConfig() {
+  mensaje("#config-message", "Cargando…");
+  try {
+    const data = await api("/api/admin-config");
+    $("#cfg-margen").value = data.cfg.margenUnidad;
+    $("#cfg-gramos").value = data.cfg.gramosPorBag;
+    renderInsumos(data.insumos || []);
+    mensaje("#config-message", data.desdeLaBase ? "" : "⚠️ Falta correr la migración: se usan los valores por defecto.");
+  } catch (err) {
+    mensaje("#config-message", `⚠️ ${err.message}`);
+  }
+}
+
+// Guardar margen / gramos
+$("#vista-config").addEventListener("click", async (e) => {
+  const boton = e.target.closest("[data-cfg-guardar]");
+  if (!boton) return;
+  const clave = boton.dataset.cfgGuardar;
+  const valor = Number(clave === "margen_unidad" ? $("#cfg-margen").value : $("#cfg-gramos").value);
+  boton.disabled = true;
+  try {
+    await api("/api/admin-config", { method: "PATCH", body: JSON.stringify({ clave, valor }) });
+    mensaje("#config-message", "✅ Guardado. Acordate de recalcular los precios para aplicarlo.", true);
+    cfgPrecios = null; // forzar recarga de la config en la tab Precios
+    TABS["tab-precios"].cargado = false;
+  } catch (err) {
+    mensaje("#config-message", `⚠️ ${err.message}`);
+  } finally {
+    boton.disabled = false;
+  }
+});
+
+// Agregar insumo
+$("#insumo-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    await api("/api/admin-config", {
+      method: "POST",
+      body: JSON.stringify({
+        nombre: $("#insumo-nombre").value,
+        costo: Number($("#insumo-costo").value),
+        aplica: $("#insumo-aplica").value,
+      }),
+    });
+    $("#insumo-form").reset();
+    mensaje("#config-message", "✅ Insumo agregado. Recalculá los precios para aplicarlo.", true);
+    cargarConfig();
+  } catch (err) {
+    mensaje("#config-message", `⚠️ ${err.message}`);
+  }
+});
+
+// Editar / borrar insumo
+$("#insumos").addEventListener("click", async (e) => {
+  const boton = e.target.closest("[data-insumo-accion]");
+  if (!boton) return;
+  const fila = boton.closest("[data-insumo]");
+  const id = fila.dataset.insumo;
+  boton.disabled = true;
+  try {
+    if (boton.dataset.insumoAccion === "borrar") {
+      if (!confirm("¿Borrar este insumo?")) { boton.disabled = false; return; }
+      await api(`/api/admin-config?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    } else {
+      const costo = Number(fila.querySelector("[data-insumo-costo]").value);
+      await api("/api/admin-config", { method: "PATCH", body: JSON.stringify({ id, costo }) });
+    }
+    mensaje("#config-message", "✅ Guardado. Recalculá los precios para aplicarlo.", true);
+    cargarConfig();
+  } catch (err) {
+    mensaje("#config-message", `⚠️ ${err.message}`);
+    boton.disabled = false;
+  }
+});
+
+// Recalcular todos los precios
+$("#recalcular").addEventListener("click", async () => {
+  if (!confirm("¿Reaplicar el margen a TODOS los cafés? Pisa los precios redondeados a mano.")) return;
+  const boton = $("#recalcular");
+  boton.disabled = true;
+  mensaje("#config-message", "Recalculando…");
+  try {
+    const r = await api("/api/admin-config", { method: "POST", body: JSON.stringify({ accion: "recalcular" }) });
+    mensaje("#config-message", `✅ ${r.cambios.length} cafés actualizados.`, true);
+    TABS["tab-precios"].cargado = false;
+  } catch (err) {
+    mensaje("#config-message", `⚠️ ${err.message}`);
+  } finally {
+    boton.disabled = false;
+  }
+});
+
+// ===== Tabs de gestión =====
 const TABS = {
   "tab-stock": { vista: "vista-stock", cargar: cargarStock, cargado: false },
   "tab-precios": { vista: "vista-precios", cargar: cargarPrecios, cargado: false },
   "tab-cupones": { vista: "vista-cupones", cargar: cargarCupones, cargado: false },
   "tab-productos": { vista: "vista-productos", cargar: cargarProductos, cargado: false },
+  "tab-config": { vista: "vista-config", cargar: cargarConfig, cargado: false },
 };
 
 function activarTab(tabId) {

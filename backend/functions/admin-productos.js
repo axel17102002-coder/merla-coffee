@@ -4,12 +4,13 @@
 // desde el panel cuando esté listo.
 //
 //   GET                        → { productos: [...] }
-//   POST { nombre, costo_250g, ... } → crea producto + presentaciones
+//   POST { nombre, costo_kg, ... } → crea producto + presentaciones
 //   PATCH { id, activo }       → publica / despublica
 
 const { sb } = require("../lib/supabase.js");
 const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
-const { CONFIG, precioPack, precioUnidadDesdeCosto } = require("../../public/motor.js");
+const { obtenerCostos } = require("../lib/costos.js");
+const { precioPack, precioUnidadDesdeCosto } = require("../../public/motor.js");
 
 // "Café en Grano ☕" → "cafe-en-grano"
 function idDesdeNombre(nombre) {
@@ -40,12 +41,12 @@ exports.handler = async (event) => {
     if (event.httpMethod === "POST") {
       const b = JSON.parse(event.body || "{}");
       const nombre = texto(b.nombre, 60);
-      const costo = Number(b.costo_250g);
+      const costo = Number(b.costo_kg);
       if (!nombre) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: "Poné el nombre del café" }) };
       }
       if (!(costo > 0)) {
-        return { statusCode: 400, headers, body: JSON.stringify({ error: "Poné el costo de los 250 g" }) };
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "Poné el costo del kilo de café" }) };
       }
       const id = idDesdeNombre(nombre);
       if (!id) {
@@ -57,8 +58,9 @@ exports.handler = async (event) => {
         return { statusCode: 409, headers, body: JSON.stringify({ error: `Ya existe un producto con el id "${id}"` }) };
       }
 
-      const precio = precioUnidadDesdeCosto(costo);
-      const pack = precioPack(precio);
+      const { cfg } = await obtenerCostos();
+      const precio = precioUnidadDesdeCosto(costo, cfg);
+      const pack = precioPack(precio, cfg);
 
       // El producto nace desactivado: se publica cuando esté listo
       const fila = {
@@ -66,7 +68,7 @@ exports.handler = async (event) => {
         nombre,
         activo: false,
         stock: Math.max(0, Math.round(Number(b.stock) || 0)),
-        costo_250g: costo,
+        costo_kg: costo,
         origen: texto(b.origen, 60),
         region: texto(b.region, 80),
         variedad: texto(b.variedad, 80),
@@ -86,8 +88,8 @@ exports.handler = async (event) => {
       } catch (err) {
         // Si la migración del costo todavía no se corrió, creamos igual: el
         // costo se deduce del precio hasta que exista la columna.
-        console.warn("admin-productos: reintento sin costo_250g:", err.message);
-        const { costo_250g, ...sinCosto } = fila;
+        console.warn("admin-productos: reintento sin costo_kg:", err.message);
+        const { costo_kg, ...sinCosto } = fila;
         [producto] = await crear(sinCosto);
       }
 
@@ -96,7 +98,7 @@ exports.handler = async (event) => {
         method: "POST",
         body: [
           { id: `${id}-unidad`, producto_id: id, nombre: "Unidad", precio, unidades_stock: 1, activo: true },
-          { id: `${id}-pack${CONFIG.pack.unidades}`, producto_id: id, nombre: `Pack x${CONFIG.pack.unidades}`, precio: pack, unidades_stock: CONFIG.pack.unidades, activo: true },
+          { id: `${id}-pack${cfg.packUnidades}`, producto_id: id, nombre: `Pack x${cfg.packUnidades}`, precio: pack, unidades_stock: cfg.packUnidades, activo: true },
         ],
       });
 

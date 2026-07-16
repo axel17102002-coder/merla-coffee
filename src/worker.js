@@ -19,6 +19,7 @@ import { handler as adminCupones } from "../backend/functions/admin-cupones.js";
 import { handler as adminMail } from "../backend/functions/admin-mail.js";
 import { handler as adminProductos } from "../backend/functions/admin-productos.js";
 import { handler as adminImagen } from "../backend/functions/admin-imagen.js";
+import { handler as adminConfig } from "../backend/functions/admin-config.js";
 import { handler as whatsappPedido } from "../backend/functions/whatsapp-pedido.js";
 import { handler as adminPrecios } from "../backend/functions/admin-precios.js";
 
@@ -37,6 +38,7 @@ const rutas = {
   "admin-mail": adaptar(adminMail),
   "admin-productos": adaptar(adminProductos),
   "admin-imagen": adaptar(adminImagen),
+  "admin-config": adaptar(adminConfig),
   "whatsapp-pedido": adaptar(whatsappPedido),
   "admin-precios": adaptar(adminPrecios),
 };

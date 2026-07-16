@@ -112,6 +112,13 @@ button { cursor: pointer; }
 .fila__preview { margin: 0; font-size: .82rem; color: var(--verde); font-weight: 600; min-height: 1.1em; }
 .fila__preview--ojo { color: var(--rojo); }
 
+/* Tab Costos */
+.cfg-bloque { margin-bottom: 22px; }
+.cfg-titulo { font-family: "Baloo 2", sans-serif; color: var(--verde); font-size: 1.05rem; margin: 0 0 8px; }
+.cfg-total { font-family: Figtree, sans-serif; font-size: .82rem; font-weight: 600; color: var(--gris); }
+.btn-recalcular { width: 100%; border: 0; border-radius: 12px; padding: 13px; background: var(--verde); color: #fff; font-weight: 800; font-size: .95rem; margin-top: 6px; }
+.btn-recalcular:hover:not(:disabled) { background: var(--verde-claro); }
+
 /* Formulario de producto */
 .cupon-form textarea { border: 1px solid var(--borde); border-radius: 9px; padding: 10px 11px; width: 100%; font-family: inherit; resize: vertical; }
 .entrega__row { display: flex; gap: 8px; }

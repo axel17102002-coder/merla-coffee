@@ -1,34 +1,37 @@
-// Administración protegida de precios, a partir del COSTO del café.
-// Se carga un solo número por café (la bolsa de 250 g) y de ahí sale todo:
-// costo por drip bag → precio de la unidad (margen objetivo) → precio del pack
-// (5 unidades con 10% OFF). Las reglas viven en motor.js (CONFIG.costos/pack).
+// Administración protegida de precios, a partir del COSTO DEL KILO de café.
+// Los insumos y el margen viven en la base (ver lib/costos.js) y se editan
+// desde la tab Configuración: acá solo se aplican.
 //
-//   GET                              → { productos: [...], config }
-//   POST { producto_id, costo_250g } → { costo_250g, precio, precioPack, margenPack }
+//   GET                                     → { productos: [...], cfg }
+//   POST { producto_id, costo_kg, precio? } → guarda; `precio` es opcional
+//        (si no viene, se calcula con el margen objetivo)
 
 const { sb } = require("../lib/supabase.js");
 const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
+const { obtenerCostos } = require("../lib/costos.js");
 const {
-  CONFIG, precioPack, precioUnidadDesdeCosto, costoBolsaDesdePrecio,
+  precioPack, precioUnidadDesdeCosto, costoKiloDesdePrecio,
   costoUnidad, costoPack, margenPack, margenUnidadReal,
 } = require("../../public/motor.js");
+
+// Lee productos tolerando que la migración a costo_kg no se haya corrido
+async function traerProductos() {
+  try {
+    return await sb("productos?select=id,nombre,activo,costo_kg&order=nombre.asc");
+  } catch (err) {
+    console.warn("admin-precios: sin columna costo_kg todavía:", err.message);
+    return await sb("productos?select=id,nombre,activo&order=nombre.asc");
+  }
+}
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
   if (!esAdmin(event)) return respuestaNoAutorizado();
 
   try {
+    const { cfg } = await obtenerCostos();
+
     if (event.httpMethod === "GET") {
-      // Si la migración del costo todavía no se corrió, seguimos andando: el
-      // costo se deduce del precio actual (la vuelta es exacta).
-      const traerProductos = async () => {
-        try {
-          return await sb("productos?select=id,nombre,activo,costo_250g&order=nombre.asc");
-        } catch (err) {
-          console.warn("admin-precios: sin columna costo_250g todavía:", err.message);
-          return await sb("productos?select=id,nombre,activo&order=nombre.asc");
-        }
-      };
       const [productos, presentaciones] = await Promise.all([
         traerProductos(),
         sb("presentaciones?select=producto_id,precio,unidades_stock"),
@@ -36,56 +39,51 @@ exports.handler = async (event) => {
 
       const lista = productos.map((p) => {
         const unidad = presentaciones.find((x) => x.producto_id === p.id && x.unidades_stock === 1);
-        const pack = presentaciones.find((x) => x.producto_id === p.id && x.unidades_stock === CONFIG.pack.unidades);
-        // Si el costo todavía no se cargó, lo deducimos del precio actual para
-        // que la pantalla muestre algo coherente desde el arranque.
-        const costo = p.costo_250g != null
-          ? Number(p.costo_250g)
-          : (unidad ? costoBolsaDesdePrecio(unidad.precio) : null);
+        const pack = presentaciones.find((x) => x.producto_id === p.id && x.unidades_stock === cfg.packUnidades);
+        // Si el costo todavía no está cargado, lo deducimos del precio actual
+        const costo = p.costo_kg != null
+          ? Number(p.costo_kg)
+          : (unidad ? costoKiloDesdePrecio(unidad.precio, cfg) : null);
         return {
           id: p.id,
           nombre: p.nombre,
           activo: p.activo,
-          costo_250g: costo,
-          costoUnidad: costo != null ? Math.round(costoUnidad(costo)) : null,
-          costoPack: costo != null ? Math.round(costoPack(costo)) : null,
+          costo_kg: costo,
+          costoUnidad: costo != null ? Math.round(costoUnidad(costo, cfg)) : null,
+          costoPack: costo != null ? Math.round(costoPack(costo, cfg)) : null,
           precio: unidad ? unidad.precio : null,
           precioPack: pack ? pack.precio : null,
-          // Sugerido = el que sale del costo; el real puede estar redondeado a mano
-          precioSugerido: costo != null ? precioUnidadDesdeCosto(costo) : null,
-          margenUnidad: costo != null && unidad ? margenUnidadReal(costo, unidad.precio) : null,
-          margenPack: costo != null && pack ? margenPack(costo, pack.precio) : null,
+          precioSugerido: costo != null ? precioUnidadDesdeCosto(costo, cfg) : null,
+          margenUnidad: costo != null && unidad ? margenUnidadReal(costo, unidad.precio, cfg) : null,
+          margenPack: costo != null && pack ? margenPack(costo, pack.precio, cfg) : null,
           tienePack: Boolean(pack),
         };
       });
 
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({ productos: lista, config: { pack: CONFIG.pack, costos: CONFIG.costos, drip: CONFIG.drip } }),
-      };
+      return { statusCode: 200, headers, body: JSON.stringify({ productos: lista, cfg }) };
     }
 
     if (event.httpMethod === "POST") {
       const body = JSON.parse(event.body || "{}");
       const { producto_id } = body;
-      const costo = Number(body.costo_250g);
+      const costo = Number(body.costo_kg);
       if (!producto_id || !(costo > 0)) {
-        return { statusCode: 400, headers, body: JSON.stringify({ error: "Ingresá el costo de los 250 g (mayor a 0)" }) };
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "Ingresá el costo del kilo (mayor a 0)" }) };
       }
 
       // El precio se puede fijar a mano (para redondearlo); si no viene, se
       // calcula desde el costo con el margen objetivo.
       const aMano = Number(body.precio);
-      const precio = aMano > 0 ? Math.round(aMano) : precioUnidadDesdeCosto(costo);
-      if (precio < Math.round(costoUnidad(costo))) {
+      const precio = aMano > 0 ? Math.round(aMano) : precioUnidadDesdeCosto(costo, cfg);
+      const piso = Math.round(costoUnidad(costo, cfg));
+      if (precio < piso) {
         return {
           statusCode: 400,
           headers,
-          body: JSON.stringify({ error: `Ese precio (${precio}) es menor al costo (${Math.round(costoUnidad(costo))}): perderías plata` }),
+          body: JSON.stringify({ error: `Ese precio (${precio}) es menor al costo (${piso}): perderías plata` }),
         };
       }
-      const pack = precioPack(precio);
+      const pack = precioPack(precio, cfg);
       const filtro = `producto_id=eq.${encodeURIComponent(producto_id)}`;
 
       const actualizadas = await sb(`presentaciones?${filtro}&unidades_stock=eq.1`, {
@@ -98,34 +96,32 @@ exports.handler = async (event) => {
       }
 
       // El pack se deriva del precio unitario (si el producto tiene pack)
-      await sb(`presentaciones?${filtro}&unidades_stock=eq.${CONFIG.pack.unidades}`, {
+      await sb(`presentaciones?${filtro}&unidades_stock=eq.${cfg.packUnidades}`, {
         method: "PATCH",
         body: { precio: pack },
       });
 
-      // Guardamos el costo (fuente de verdad para recalcular). Si la columna
-      // todavía no existe, los precios ya quedaron bien igual: el costo se
-      // deduce del precio hasta que se corra la migración.
+      // Guardamos el costo: es la fuente de verdad para recalcular después
       try {
         await sb(`productos?id=eq.${encodeURIComponent(producto_id)}`, {
           method: "PATCH",
-          body: { costo_250g: costo },
+          body: { costo_kg: costo },
         });
       } catch (err) {
-        console.warn("admin-precios: no se pudo guardar costo_250g:", err.message);
+        console.warn("admin-precios: no se pudo guardar costo_kg:", err.message);
       }
 
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
-          costo_250g: costo,
-          costoUnidad: Math.round(costoUnidad(costo)),
-          costoPack: Math.round(costoPack(costo)),
+          costo_kg: costo,
+          costoUnidad: piso,
+          costoPack: Math.round(costoPack(costo, cfg)),
           precio,
           precioPack: pack,
-          margenUnidad: margenUnidadReal(costo, precio),
-          margenPack: margenPack(costo, pack),
+          margenUnidad: margenUnidadReal(costo, precio, cfg),
+          margenPack: margenPack(costo, pack, cfg),
         }),
       };
     }
