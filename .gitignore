@@ -1,10 +1,12 @@
+# Secretos: nunca se suben
+.env
+.dev.vars
+
+# Cachés locales de herramientas (se regeneran solas)
+.wrangler
+node_modules
+
+# Basura del sistema y del editor
+.DS_Store
 /.DS_Store
 /.claude
-# Local Netlify folder
-.netlify
-.env
-.netlify
-node_modules
-.DS_Store
-.dev.vars
-.wrangler
