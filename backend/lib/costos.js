@@ -18,7 +18,6 @@ const RESPALDO = {
   gramosPorBag: 12,
   packUnidades: 5,
   packDescuento: 10,
-  preciosAuto: 1, // 1 = al cambiar costos, cada café recupera su margen solo
 };
 
 const CLAVES = {
@@ -26,7 +25,6 @@ const CLAVES = {
   gramos_por_bag: "gramosPorBag",
   pack_unidades: "packUnidades",
   pack_descuento: "packDescuento",
-  precios_auto: "preciosAuto",
 };
 
 // Trae los insumos tolerando el esquema viejo (columna `aplica` en vez de

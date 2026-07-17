@@ -294,20 +294,49 @@ function margenesActuales() {
   return mapa;
 }
 
-// Con "precios automáticos" prendido, cada café recupera su margen previo:
+// Propuesta de precios pendiente de aceptar. Guarda los márgenes que tenía
+// cada café ANTES del primer cambio de costos, así aunque toques varios
+// insumos seguidos la propuesta siempre apunta a recuperar esos márgenes.
+let propuestaPendiente = null;
+
+// Qué precio necesitaría cada café para recuperar su margen previo:
 // precio nuevo = costo nuevo ÷ (1 − margen), redondeado a $50.
-async function actualizarPreciosAutomaticos(margenes) {
+function calcularPropuesta(margenes) {
   const cfg = cfgLocal();
-  let cambios = 0;
+  const items = [];
   for (const p of preciosCache) {
     const margen = margenes[p.id];
     if (p.costo_kg == null || !p.precio || margen == null || margen < 5 || margen > 90) continue;
     const nuevo = redondearPrecio(costoUnidad(Number(p.costo_kg), cfg) / (1 - margen / 100), 50);
-    if (!(nuevo > 0) || nuevo === p.precio) continue;
+    if (nuevo > 0 && nuevo !== p.precio) items.push({ id: p.id, nombre: p.nombre, antes: p.precio, despues: nuevo });
+  }
+  return items;
+}
+
+// Después de cualquier cambio de costos (insumo, gramos): refresca la vista y
+// arma la propuesta de precios. NUNCA se aplica sola: se acepta con un botón.
+function aplicarCambioDeCostos(margenes) {
+  const base = propuestaPendiente ? propuestaPendiente.margenes : margenes;
+  const items = calcularPropuesta(base);
+  propuestaPendiente = items.length ? { margenes: base, items } : null;
+  renderPrecios();
+  actualizarTotalesInsumos();
+  toast(items.length
+    ? "Todos los costos fueron recalculados. Revisá los precios sugeridos."
+    : "Todos los costos fueron recalculados.");
+}
+
+async function aplicarPropuesta(boton) {
+  if (!propuestaPendiente) return;
+  boton.disabled = true;
+  const items = calcularPropuesta(propuestaPendiente.margenes);
+  let cambios = 0;
+  for (const it of items) {
+    const p = preciosCache.find((x) => x.id === it.id);
     try {
       const r = await api("/api/admin-precios", {
         method: "POST",
-        body: JSON.stringify({ producto_id: p.id, costo_kg: Number(p.costo_kg), precio: nuevo }),
+        body: JSON.stringify({ producto_id: p.id, costo_kg: Number(p.costo_kg), precio: it.despues }),
       });
       Object.assign(p, { costo_kg: r.costo_kg, precio: r.precio, precioPack: r.precioPack });
       cambios++;
@@ -315,19 +344,9 @@ async function actualizarPreciosAutomaticos(margenes) {
       toast(`⚠️ ${p.nombre}: ${err.message}`);
     }
   }
-  return cambios;
-}
-
-// Después de cualquier cambio de costos (insumo, gramos): refresca la vista y,
-// si los precios automáticos están prendidos, también los precios guardados.
-async function aplicarCambioDeCostos(margenes) {
-  let cambios = 0;
-  if (Number(cfgPrecios.preciosAuto)) cambios = await actualizarPreciosAutomaticos(margenes);
+  propuestaPendiente = null;
   renderPrecios();
-  actualizarTotalesInsumos();
-  toast(cambios > 0
-    ? `Costos recalculados · ${cambios} precio${cambios > 1 ? "s" : ""} actualizado${cambios > 1 ? "s" : ""}.`
-    : "Todos los costos fueron recalculados.");
+  if (cambios) toast(`${cambios} precio${cambios > 1 ? "s" : ""} actualizado${cambios > 1 ? "s" : ""}.`);
 }
 
 function editorProducto(p) {
@@ -411,7 +430,19 @@ function renderPrecios() {
     return;
   }
   const estado = estadoEditorAbierto();
-  c.innerHTML = `<div class="px-productos__head">
+  const banner = !propuestaPendiente ? "" : `<div class="px-banner">
+      <div class="px-banner__info">
+        <strong>Los costos cambiaron.</strong>
+        <span>Para que cada café mantenga su margen, los precios quedarían así:</span>
+        <ul>${propuestaPendiente.items.map((i) =>
+          `<li>${escapar(i.nombre)}: ${formato.format(i.antes)} → <b>${formato.format(i.despues)}</b></li>`).join("")}</ul>
+      </div>
+      <div class="px-banner__acciones">
+        <button type="button" class="px-btn-sec" data-propuesta="descartar">Mantener como están</button>
+        <button type="button" class="px-btn" data-propuesta="aplicar">Actualizar precios</button>
+      </div>
+    </div>`;
+  c.innerHTML = banner + `<div class="px-productos__head">
       <span>Café</span><span>Costo</span><span>Unidad</span><span>Pack x${cfg.packUnidades}</span><span>Margen</span><span></span>
     </div>` + preciosCache.map((p) => filaProducto(p, cfg)).join("");
 
@@ -496,6 +527,12 @@ async function guardarPrecio(fila, boton) {
       body: JSON.stringify({ producto_id: p.id, costo_kg: costoKg, precio, precio_pack: pack || undefined }),
     });
     Object.assign(p, { costo_kg: r.costo_kg, precio: r.precio, precioPack: r.precioPack });
+    // Si había una propuesta pendiente, este café ya eligió su precio a mano
+    if (propuestaPendiente) {
+      delete propuestaPendiente.margenes[p.id];
+      const items = calcularPropuesta(propuestaPendiente.margenes);
+      propuestaPendiente = items.length ? { margenes: propuestaPendiente.margenes, items } : null;
+    }
     precioAbierto = null;
     renderPrecios();
     toast(`${p.nombre}: precio actualizado.`);
@@ -508,6 +545,17 @@ async function guardarPrecio(fila, boton) {
 
 $("#precios").addEventListener("click", async (e) => {
   const fila = e.target.closest(".px-prod");
+
+  const propuesta = e.target.closest("[data-propuesta]");
+  if (propuesta) {
+    if (propuesta.dataset.propuesta === "aplicar") {
+      await aplicarPropuesta(propuesta);
+    } else {
+      propuestaPendiente = null;
+      renderPrecios();
+    }
+    return;
+  }
 
   const modo = e.target.closest("[data-modo-costo]");
   if (modo && fila && !modo.classList.contains("px-chip--activo")) {
@@ -601,7 +649,6 @@ async function cargarPrecios() {
     renderInsumos();
     $("#cfg-gramos").value = cfgPrecios.gramosPorBag;
     $("#cfg-pack-desc").value = cfgPrecios.packDescuento;
-    $("#cfg-precios-auto").checked = Boolean(Number(cfgPrecios.preciosAuto));
     mensaje("#precio-message", dataConfig.desdeLaBase ? "" : "⚠️ Falta correr supabase/migracion-insumos.sql: mientras tanto se usan los valores anteriores y los insumos no se pueden editar.");
   } catch (err) {
     mensaje("#precio-message", `⚠️ ${err.message}`);
@@ -661,7 +708,7 @@ async function guardarInsumo(fila) {
     const idx = insumosCache.findIndex((x) => x.id === id);
     if (idx >= 0) insumosCache[idx] = { ...insumosCache[idx], ...insumo };
     ponerEstado(fila, "✓ Guardado", true);
-    await aplicarCambioDeCostos(margenes);
+    aplicarCambioDeCostos(margenes);
   } catch (err) {
     ponerEstado(fila, `⚠️ ${err.message}`);
   }
@@ -679,7 +726,7 @@ $("#insumos").addEventListener("click", async (e) => {
     await api(`/api/admin-config?id=${encodeURIComponent(fila.dataset.insumo)}`, { method: "DELETE" });
     insumosCache = insumosCache.filter((x) => x.id !== fila.dataset.insumo);
     renderInsumos();
-    await aplicarCambioDeCostos(margenes);
+    aplicarCambioDeCostos(margenes);
   } catch (err) {
     ponerEstado(fila, `⚠️ ${err.message}`);
     boton.disabled = false;
@@ -729,7 +776,7 @@ $("#insumo-form").addEventListener("submit", async (e) => {
     $("#insumo-cant-pack").value = 1;
     $("#insumo-form").hidden = true;
     renderInsumos();
-    await aplicarCambioDeCostos(margenes);
+    aplicarCambioDeCostos(margenes);
   } catch (err) {
     toast(`⚠️ ${err.message}`);
   } finally {
@@ -750,22 +797,18 @@ document.querySelectorAll(".px-config [data-clave]").forEach((input) => {
 
 async function guardarConfigGlobal(input, fila) {
   const clave = input.dataset.clave;
-  const valor = input.type === "checkbox" ? (input.checked ? 1 : 0) : Number(input.value);
-  if (input.type !== "checkbox" && (input.value === "" || !Number.isFinite(valor) || valor < 0)) {
+  const valor = Number(input.value);
+  if (input.value === "" || !Number.isFinite(valor) || valor < 0) {
     ponerEstado(fila, "⚠️ Valor inválido");
     return;
   }
   try {
     const margenes = margenesActuales(); // antes del cambio, para mantenerlos
     await api("/api/admin-config", { method: "PATCH", body: JSON.stringify({ clave, valor }) });
-    if (clave === "precios_auto") {
-      cfgPrecios.preciosAuto = valor;
-      ponerEstado(fila, "✓ Guardado", true);
-      toast(valor ? "Precios automáticos activados." : "Precios automáticos desactivados: los precios solo cambian si los editás.");
-    } else if (clave === "gramos_por_bag") {
+    if (clave === "gramos_por_bag") {
       cfgPrecios.gramosPorBag = valor;
       ponerEstado(fila, "✓ Guardado", true);
-      await aplicarCambioDeCostos(margenes);
+      aplicarCambioDeCostos(margenes);
     } else if (clave === "pack_descuento") {
       cfgPrecios.packDescuento = valor;
       // los packs guardados se re-derivan del precio de unidad (que no cambia)
