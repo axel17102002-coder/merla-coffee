@@ -555,6 +555,7 @@ function datosEntrega() {
 
 // Valida los datos de envío; devuelve un mensaje de error o null si está OK
 function validarEntrega() {
+  if (!emailValido(emailCliente())) return "Ingresá tu email para hacer el pedido";
   if (metodoEntrega() === "retiro") return null;
   const e = datosEntrega();
   if (!e.nombre) return "Ingresá tu nombre para el envío";

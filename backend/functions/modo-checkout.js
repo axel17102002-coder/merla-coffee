@@ -30,6 +30,9 @@ exports.handler = async (event) => {
     // Email (necesario solo para puntos)
     const email = String(body.email || "").trim().toLowerCase();
     const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if (!emailValido) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: "Ingresá tu email para hacer el pedido" }) };
+    }
     if (body.canjePuntos && !emailValido) {
       return {
         statusCode: 400,
