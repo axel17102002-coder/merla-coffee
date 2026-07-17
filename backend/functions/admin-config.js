@@ -62,20 +62,21 @@ exports.handler = async (event) => {
 
       const nombre = String(body.nombre || "").trim().slice(0, 60);
       const costo = Number(body.costo);
-      const aplica = String(body.aplica || "");
+      const cantU = Number(body.cant_unidad);
+      const cantP = Number(body.cant_pack);
       if (!nombre) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: "Poné el nombre del insumo" }) };
       }
       if (!(costo >= 0)) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: "El costo no puede ser negativo" }) };
       }
-      if (!["unidad", "pack"].includes(aplica)) {
-        return { statusCode: 400, headers, body: JSON.stringify({ error: "Indicá si aplica por unidad o por pack" }) };
+      if (!(cantU >= 0) || !(cantP >= 0) || (cantU === 0 && cantP === 0)) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "Indicá cuántas veces entra en la unidad y/o en el pack" }) };
       }
       const [insumo] = await sb("insumos", {
         method: "POST",
         headers: { Prefer: "return=representation" },
-        body: { nombre, costo, aplica },
+        body: { nombre, costo, cant_unidad: cantU, cant_pack: cantP },
       });
       return { statusCode: 201, headers, body: JSON.stringify({ insumo }) };
     }
@@ -109,12 +110,14 @@ exports.handler = async (event) => {
       }
       const cambios = {};
       if (body.nombre !== undefined) cambios.nombre = String(body.nombre).trim().slice(0, 60);
-      if (body.costo !== undefined) {
-        const c = Number(body.costo);
-        if (!(c >= 0)) {
-          return { statusCode: 400, headers, body: JSON.stringify({ error: "El costo no puede ser negativo" }) };
+      for (const campo of ["costo", "cant_unidad", "cant_pack"]) {
+        if (body[campo] !== undefined) {
+          const v = Number(body[campo]);
+          if (!(v >= 0)) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: `${campo} no puede ser negativo` }) };
+          }
+          cambios[campo] = v;
         }
-        cambios.costo = c;
       }
       const [insumo] = await sb(`insumos?id=eq.${encodeURIComponent(body.id)}`, {
         method: "PATCH",

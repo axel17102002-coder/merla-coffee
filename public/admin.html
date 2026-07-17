@@ -160,14 +160,17 @@
               <p class="panel__hint">Todo lo que cuesta armar el producto además del café: filtro, sachet, etiqueta, la bolsa del pack…</p>
               <div class="lista" id="insumos"></div>
               <form class="cupon-form" id="insumo-form">
+                <input id="insumo-nombre" placeholder="Nombre (ej. Doypack)" maxlength="60" required aria-label="Nombre del insumo">
                 <div class="entrega__row">
-                  <input id="insumo-nombre" placeholder="Nombre (ej. Filtro)" maxlength="60" required aria-label="Nombre del insumo">
-                  <input id="insumo-costo" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Costo $" required aria-label="Costo del insumo">
+                  <input id="insumo-lote-precio" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Precio del lote $ (ej. 29421)" aria-label="Precio del lote">
+                  <input id="insumo-lote-cant" type="number" min="1" step="1" inputmode="numeric" placeholder="Unidades del lote (ej. 250)" aria-label="Cantidad del lote">
                 </div>
-                <select id="insumo-aplica" aria-label="Dónde aplica">
-                  <option value="unidad">Por cada drip bag</option>
-                  <option value="pack">Una vez por pack x5</option>
-                </select>
+                <div class="entrega__row">
+                  <input id="insumo-costo" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Costo por pieza $" required aria-label="Costo por pieza">
+                  <input id="insumo-cant-unidad" type="number" min="0" step="1" inputmode="numeric" value="1" placeholder="× por unidad" aria-label="Cantidad por unidad">
+                  <input id="insumo-cant-pack" type="number" min="0" step="1" inputmode="numeric" value="1" placeholder="× por pack" aria-label="Cantidad por pack">
+                </div>
+                <p class="panel__hint" style="margin:0">Si cargás el lote (precio y unidades), el costo por pieza se calcula solo. "× por unidad / pack" = cuántas piezas lleva cada una (la bolsita filtrante: 1 y 5; el doypack: 1 y 1).</p>
                 <button type="submit">Agregar insumo</button>
               </form>
             </div>

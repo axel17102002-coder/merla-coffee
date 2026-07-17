@@ -11,12 +11,15 @@
 -- ============================================================
 
 -- ---------- Insumos: lo que cuesta armar una drip bag / un pack ----------
--- `aplica`: 'unidad' = por cada drip bag · 'pack' = una vez por pack x5
+-- `costo` es el precio de UNA pieza del insumo; `cant_unidad` y `cant_pack`
+-- dicen cuántas piezas entran en la unidad y en el pack (ej: la drip bag
+-- filtrante entra 1 vez en la unidad y 5 en el pack; el doypack, 1 y 1).
 create table if not exists insumos (
   id uuid primary key default gen_random_uuid(),
   nombre text not null,
   costo numeric not null check (costo >= 0),
-  aplica text not null check (aplica in ('unidad', 'pack')),
+  cant_unidad numeric not null default 0 check (cant_unidad >= 0),
+  cant_pack numeric not null default 0 check (cant_pack >= 0),
   creado timestamptz not null default now()
 );
 alter table insumos enable row level security;
@@ -37,16 +40,36 @@ insert into configuracion (clave, valor, descripcion) values
   ('pack_descuento', 10, '% OFF del pack respecto de las unidades sueltas')
 on conflict (clave) do nothing;
 
--- Insumos iniciales: se cargan SIN desglosar para que las cuentas den igual
--- que antes (462,62 por bag y 828,65 por pack). Desde el panel se pueden
--- separar en filtro, sachet, etiqueta, etc. sin que cambie ningún precio.
-insert into insumos (nombre, costo, aplica)
-select 'Insumos por drip bag (sin desglosar)', 462.62, 'unidad'
-where not exists (select 1 from insumos where aplica = 'unidad');
+-- Insumos iniciales: solo si la tabla está vacía (instalación desde cero).
+-- Son los totales sin desglosar; desde el panel se separan en filtro, doypack,
+-- stickers, etc. sin que cambie ningún precio.
+insert into insumos (nombre, costo, cant_unidad, cant_pack)
+select 'Insumos por drip bag (sin desglosar)', 462.62, 1, 0
+where not exists (select 1 from insumos);
 
-insert into insumos (nombre, costo, aplica)
-select 'Insumos del pack (sin desglosar)', 828.65, 'pack'
-where not exists (select 1 from insumos where aplica = 'pack');
+insert into insumos (nombre, costo, cant_unidad, cant_pack)
+select 'Insumos del pack (sin desglosar)', 828.65, 0, 1
+where not exists (select 1 from insumos where cant_pack > 0);
+
+-- ---------- Cantidades por presentación ----------
+-- La planilla real muestra que el pack NO es "5 unidades completas": lleva
+-- 5 drip bags pero UN solo doypack/sobre/stickers. Cada insumo dice cuántas
+-- veces entra en la unidad y cuántas en el pack.
+alter table insumos add column if not exists cant_unidad numeric not null default 0;
+alter table insumos add column if not exists cant_pack numeric not null default 0;
+
+-- Backfill desde el modelo viejo (aplica: 'unidad' | 'pack'), si existe
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+             where table_name = 'insumos' and column_name = 'aplica') then
+    update insumos set cant_unidad = 1, cant_pack = 0
+      where aplica = 'unidad' and cant_unidad = 0 and cant_pack = 0;
+    update insumos set cant_unidad = 0, cant_pack = 1
+      where aplica = 'pack' and cant_unidad = 0 and cant_pack = 0;
+    alter table insumos drop column aplica;
+  end if;
+end $$;
 
 -- ---------- Costo del café: pasa de la bolsa de 250 g al KILO ----------
 -- Es más estándar para comparar proveedores. La conversión es exacta (×4), así

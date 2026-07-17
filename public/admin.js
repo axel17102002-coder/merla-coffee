@@ -661,6 +661,151 @@ $("#recalcular").addEventListener("click", async () => {
   }
 });
 
+// ===== Costos (insumos + margen) =====
+function renderInsumos(insumos, totales) {
+  const contenedor = $("#insumos");
+  $("#cfg-total-unidad").textContent =
+    `· por bag ${formato.format(totales.unidad)} · por pack ${formato.format(totales.pack)}`;
+  if (!insumos.length) {
+    contenedor.innerHTML = `<div class="vacio">Sin insumos cargados.</div>`;
+    return;
+  }
+  contenedor.innerHTML = insumos.map((i) => `<article class="fila fila--precio" data-insumo="${escapar(i.id)}">
+      <div class="fila__info">
+        <strong>${escapar(i.nombre)}</strong>
+        <span class="fila__dato">unidad: ${formato.format(i.costo * i.cant_unidad)} · pack: ${formato.format(i.costo * i.cant_pack)}</span>
+      </div>
+      <div class="fila__form fila__form--precio">
+        <label class="mini">$ por pieza
+          <input type="number" min="0" step="0.01" inputmode="decimal" value="${Number(i.costo)}" data-insumo-costo aria-label="Costo por pieza de ${escapar(i.nombre)}">
+        </label>
+        <label class="mini">× unidad
+          <input type="number" min="0" step="1" inputmode="numeric" value="${Number(i.cant_unidad)}" data-insumo-cant-unidad aria-label="Cantidad por unidad de ${escapar(i.nombre)}">
+        </label>
+        <label class="mini">× pack
+          <input type="number" min="0" step="1" inputmode="numeric" value="${Number(i.cant_pack)}" data-insumo-cant-pack aria-label="Cantidad por pack de ${escapar(i.nombre)}">
+        </label>
+        <button data-insumo-guardar>Guardar</button>
+        <button class="sec" data-insumo-borrar title="Borrar insumo">🗑</button>
+      </div>
+    </article>`).join("");
+}
+
+async function cargarConfig() {
+  mensaje("#config-message", "Cargando…");
+  try {
+    const data = await api("/api/admin-config");
+    $("#cfg-margen").value = data.cfg.margenUnidad;
+    $("#cfg-gramos").value = data.cfg.gramosPorBag;
+    renderInsumos(data.insumos, data.totales);
+    mensaje("#config-message", data.desdeLaBase ? "" : "⚠️ Falta correr supabase/migracion-insumos.sql: mientras tanto se usan los valores anteriores y no se puede editar.");
+  } catch (err) {
+    mensaje("#config-message", `⚠️ ${err.message}`);
+  }
+}
+
+// Guardar margen / gramos por bag
+document.querySelectorAll("[data-cfg-guardar]").forEach((boton) =>
+  boton.addEventListener("click", async () => {
+    const clave = boton.dataset.cfgGuardar;
+    const valor = Number(clave === "margen_unidad" ? $("#cfg-margen").value : $("#cfg-gramos").value);
+    if (!confirm(`¿Guardar ${clave === "margen_unidad" ? `margen ${valor}%` : `${valor} g por bag`}?\n\nLos precios ya cargados no cambian solos: usá "Recalcular" si querés reaplicarlo a todos.`)) return;
+    boton.disabled = true;
+    try {
+      await api("/api/admin-config", { method: "PATCH", body: JSON.stringify({ clave, valor }) });
+      mensaje("#config-message", "✅ Guardado", true);
+      cargarConfig();
+      cfgPrecios = null; // que Precios se recargue con la config nueva
+      TABS["tab-precios"].cargado = false;
+    } catch (err) {
+      mensaje("#config-message", `⚠️ ${err.message}`);
+    } finally {
+      boton.disabled = false;
+    }
+  })
+);
+
+// Calculadora de lote: precio del lote ÷ unidades = costo por pieza
+function calcularLote() {
+  const precio = Number($("#insumo-lote-precio").value) || 0;
+  const cant = Number($("#insumo-lote-cant").value) || 0;
+  if (precio > 0 && cant > 0) {
+    $("#insumo-costo").value = Math.round((precio / cant) * 100) / 100;
+  }
+}
+$("#insumo-lote-precio").addEventListener("input", calcularLote);
+$("#insumo-lote-cant").addEventListener("input", calcularLote);
+
+// Agregar insumo
+$("#insumo-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    await api("/api/admin-config", {
+      method: "POST",
+      body: JSON.stringify({
+        nombre: $("#insumo-nombre").value,
+        costo: Number($("#insumo-costo").value),
+        cant_unidad: Number($("#insumo-cant-unidad").value) || 0,
+        cant_pack: Number($("#insumo-cant-pack").value) || 0,
+      }),
+    });
+    $("#insumo-form").reset();
+    $("#insumo-cant-unidad").value = 1;
+    $("#insumo-cant-pack").value = 1;
+    mensaje("#config-message", "✅ Insumo agregado", true);
+    cargarConfig();
+    TABS["tab-precios"].cargado = false;
+  } catch (err) {
+    mensaje("#config-message", `⚠️ ${err.message}`);
+  }
+});
+
+// Editar / borrar insumos
+$("#insumos").addEventListener("click", async (e) => {
+  const fila = e.target.closest("[data-insumo]");
+  if (!fila) return;
+  const id = fila.dataset.insumo;
+  try {
+    if (e.target.closest("[data-insumo-guardar]")) {
+      await api("/api/admin-config", {
+        method: "PATCH",
+        body: JSON.stringify({
+          id,
+          costo: Number(fila.querySelector("[data-insumo-costo]").value),
+          cant_unidad: Number(fila.querySelector("[data-insumo-cant-unidad]").value) || 0,
+          cant_pack: Number(fila.querySelector("[data-insumo-cant-pack]").value) || 0,
+        }),
+      });
+      mensaje("#config-message", "✅ Insumo actualizado", true);
+    } else if (e.target.closest("[data-insumo-borrar]")) {
+      if (!confirm("¿Borrar este insumo? El costo total baja en consecuencia.")) return;
+      await api(`/api/admin-config?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      mensaje("#config-message", "✅ Insumo borrado", true);
+    } else {
+      return;
+    }
+    cargarConfig();
+    TABS["tab-precios"].cargado = false;
+  } catch (err) {
+    mensaje("#config-message", `⚠️ ${err.message}`);
+  }
+});
+
+// Recalcular todos los precios con el margen y los insumos actuales
+$("#recalcular").addEventListener("click", async () => {
+  if (!confirm("¿Recalcular los precios de TODOS los cafés?\n\nSe reaplica el margen objetivo según el costo de cada uno. Los precios redondeados a mano se pisan.")) return;
+  $("#recalcular").disabled = true;
+  try {
+    const r = await api("/api/admin-config", { method: "POST", body: JSON.stringify({ accion: "recalcular" }) });
+    mensaje("#config-message", `✅ ${r.cambios.length} cafés recalculados`, true);
+    TABS["tab-precios"].cargado = false;
+  } catch (err) {
+    mensaje("#config-message", `⚠️ ${err.message}`);
+  } finally {
+    $("#recalcular").disabled = false;
+  }
+});
+
 // ===== Tabs de gestión =====
 const TABS = {
   "tab-stock": { vista: "vista-stock", cargar: cargarStock, cargado: false },
