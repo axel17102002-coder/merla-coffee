@@ -138,12 +138,6 @@ $("#secciones").addEventListener("click", (e) => {
   $("#seccion-pedidos").hidden = b.dataset.seccion !== "pedidos";
   $("#seccion-gestion").hidden = b.dataset.seccion !== "gestion";
 });
-// La config avanzada se carga al abrir el desplegable dentro de Precios
-document.addEventListener("DOMContentLoaded", () => {
-  const det = document.getElementById("det-costos");
-  if (det) det.addEventListener("toggle", () => { if (det.open) cargarConfig(); });
-});
-
 // ===== Stock por gramos de café =====
 let gramosPorUnidad = 12;
 
@@ -213,184 +207,467 @@ $("#stock").addEventListener("click", async (e) => {
   }
 });
 
-// ===== Precios (desde el costo del kilo, con precio ajustable a mano) =====
-// `cfgPrecios` trae los insumos y el margen desde la base: no están en el
-// código porque este archivo lo descarga cualquiera.
-let cfgPrecios = null;
-
-// Vista previa de la cadena de precios. Si se fija un precio a mano, se usa ese.
-function previewPrecios(costo, precioAMano) {
-  const precio = precioAMano > 0 ? Math.round(precioAMano) : precioUnidadDesdeCosto(costo, cfgPrecios);
-  const pack = precioPack(precio, cfgPrecios);
-  return {
-    precio,
-    pack,
-    margen: margenPack(costo, pack, cfgPrecios),
-    margenU: margenUnidadReal(costo, precio, cfgPrecios),
-  };
-}
-
+// ===== Precios: productos, insumos y configuración =====
+// Los números sensibles (insumos, costos, márgenes) viven en la base y solo
+// llegan al panel autenticado. Acá todo se guarda solo y se recalcula al
+// instante: cada café tiene su propio precio y su margen real; no existe un
+// margen objetivo global.
+let cfgPrecios = null;    // configuración global (gramos por bag, pack, insumos sumados)
+let insumosCache = [];
 let preciosCache = [];
 let precioAbierto = null; // café en edición (uno a la vez)
 
-function renderPrecios(productos) {
-  const c = $("#precios");
-  if (!productos) return;
-  preciosCache = productos;
-  c.innerHTML = productos.map((p) => {
-    const abierto = p.id === precioAbierto;
-    const editor = !abierto ? "" : `
-      <div class="pr__editor">
-        <div class="pr__modo">
-          <button type="button" class="chip-costo activo" data-modo-costo="kilo">Costo por kilo</button>
-          <button type="button" class="chip-costo" data-modo-costo="cuarto">por ¼ (250 g)</button>
-        </div>
-        <label class="pr__campo">¿Cuánto te cuesta este café?
-          <input type="number" min="0" step="1" inputmode="numeric" placeholder="68000"
-                 value="${p.costo_kg != null ? Math.round(p.costo_kg) : ""}" data-costo>
-        </label>
-        <label class="pr__campo">¿A cuánto vendés la unidad? <small>(vacío = lo calculamos con tu margen)</small>
-          <span class="mini__campo">
-            <input type="number" min="0" step="1" inputmode="numeric" placeholder="auto"
-                   value="${p.precio != null ? p.precio : ""}" data-precio>
-            <button type="button" class="mini__btn" data-redondear title="Redondear a $50">≈ redondear</button>
-          </span>
-        </label>
-        <p class="fila__preview" data-preview></p>
-        <button data-precio-action="guardar">Guardar cambios</button>
-      </div>`;
-    return `<article class="fila--precio pr${abierto ? " pr--abierto" : ""}${p.activo ? "" : " fila--inactivo"}" data-producto="${escapar(p.id)}">
-      <div class="pr__linea">
-        <strong>${escapar(p.nombre || p.id)}${p.activo ? "" : " <small>(oculto)</small>"}</strong>
-        <span class="pr__datos">${p.precio != null ? formato.format(p.precio) : "—"}
-          <small>· pack ${p.precioPack != null ? formato.format(p.precioPack) : "—"} · margen ${p.margenUnidad != null ? p.margenUnidad + "%" : "—"}</small></span>
-        <button class="pr__editar" data-editar="${escapar(p.id)}">${abierto ? "Cerrar" : "Editar"}</button>
-      </div>${editor}
-    </article>`;
-  }).join("");
-  const f = c.querySelector(".pr--abierto");
-  if (f) refrescarPreview(f);
+const MARGEN_BAJO = 25; // % debajo del cual avisamos
+const MARGEN_ALTO = 65; // % arriba del cual avisamos
+
+// cfg con los insumos vivos del panel: al editar un insumo no hace falta
+// esperar al servidor para ver los costos nuevos.
+function cfgLocal() {
+  if (!cfgPrecios) return null;
+  if (!insumosCache.length) return cfgPrecios;
+  const suma = (campo) =>
+    Math.round(insumosCache.reduce((t, i) => t + (Number(i.costo) || 0) * (Number(i[campo]) || 0), 0) * 100) / 100;
+  return { ...cfgPrecios, fijoUnidad: suma("cant_unidad"), fijoPack: suma("cant_pack") };
 }
 
-$("#precios").addEventListener("click", (e) => {
-  const m = e.target.closest("[data-modo-costo]");
-  if (m && !m.classList.contains("activo")) {
-    const fila = m.closest(".fila--precio");
-    const inp = fila.querySelector("[data-costo]");
-    const v = Number(inp.value) || 0;
-    if (v) inp.value = m.dataset.modoCosto === "cuarto" ? Math.round(v / 4) : Math.round(v * 4);
-    fila.querySelectorAll("[data-modo-costo]").forEach((x) => x.classList.toggle("activo", x === m));
-    refrescarPreview(fila);
-    return;
-  }
-  const b = e.target.closest("[data-editar]");
-  if (!b) return;
-  precioAbierto = precioAbierto === b.dataset.editar ? null : b.dataset.editar;
-  renderPrecios(preciosCache);
-});
+// Toast: confirma sin interrumpir (guardados, recálculos)
+let toastTimer = null;
+function toast(texto) {
+  const el = $("#px-toast");
+  el.textContent = texto;
+  el.hidden = false;
+  requestAnimationFrame(() => el.classList.add("px-toast--visible"));
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    el.classList.remove("px-toast--visible");
+    toastTimer = setTimeout(() => { el.hidden = true; }, 250);
+  }, 2800);
+}
 
+// Indicador chico de estado (Guardando… / ✓ Guardado) al lado del campo
+function ponerEstado(contenedor, texto, ok = false) {
+  const el = contenedor.querySelector("[data-estado]");
+  if (!el) return;
+  el.textContent = texto;
+  el.classList.toggle("px-estado--ok", ok);
+  if (ok) setTimeout(() => { if (el.textContent === texto) el.textContent = ""; }, 2500);
+}
 
-// Muestra a cuánto queda todo y avisa si el margen se aleja del objetivo
+function badgeMargen(margen) {
+  if (margen == null) return "";
+  if (margen < MARGEN_BAJO) return ` <span class="px-badge px-badge--bajo">⚠️ Margen bajo</span>`;
+  if (margen > MARGEN_ALTO) return ` <span class="px-badge px-badge--alto">💰 Margen alto</span>`;
+  return "";
+}
+
 // El costo puede estar tipeado por kilo o por cuarto: siempre lo pasamos a kilo
 function costoKgDe(fila) {
   const v = Number(fila.querySelector("[data-costo]").value) || 0;
-  const cuarto = fila.querySelector('[data-modo-costo="cuarto"]')?.classList.contains("activo");
+  const cuarto = fila.querySelector('[data-modo-costo="cuarto"]')?.classList.contains("px-chip--activo");
   return cuarto ? v * 4 : v;
 }
 
-function refrescarPreview(fila) {
-  const costo = costoKgDe(fila);
-  const aMano = Number(fila.querySelector("[data-precio]").value) || 0;
-  const prev = fila.querySelector("[data-preview]");
-  if (costo <= 0) { prev.textContent = ""; prev.className = "fila__preview"; return; }
-
-  const { precio, pack, margen, margenU } = previewPrecios(costo, aMano);
-  const objetivo = cfgPrecios ? cfgPrecios.margenUnidad : 40;
-  const sugerido = precioUnidadDesdeCosto(costo, cfgPrecios);
-  const bajo = margenU < objetivo - 1;
-
-  prev.className = "fila__preview" + (bajo ? " fila__preview--ojo" : "");
-  prev.innerHTML = `Unidad <b>${formato.format(precio)}</b> (margen ${margenU}%) · Pack x5 <b>${formato.format(pack)}</b> (margen ${margen}%)` +
-    (aMano > 0 && precio !== sugerido ? ` · sugerido ${formato.format(sugerido)}` : "");
+// Precio sugerido: el que mantiene el margen actual del café con el costo
+// tipeado. Si el café todavía no tiene precio, propone un 50% como punto de
+// partida (después cada café lleva el margen que quieras).
+function sugeridoDe(p, cfg, costoKg) {
+  const total = costoUnidad(costoKg, cfg);
+  if (!(total > 0)) return null;
+  let margen = null;
+  if (p && p.precio && p.costo_kg != null) margen = margenUnidadReal(Number(p.costo_kg), p.precio, cfg);
+  const usable = margen != null && margen >= 5 && margen <= 90;
+  const objetivo = usable ? margen : 50;
+  return {
+    precio: redondearPrecio(total / (1 - objetivo / 100), 50),
+    nota: usable ? `mantiene tu margen de ${Math.round(objetivo)}%` : "punto de partida (50%)",
+  };
 }
 
-async function cargarPrecios() {
-  mensaje("#precio-message", "Cargando precios…");
+function editorProducto(p) {
+  return `<div class="px-editor">
+      <div class="px-paso">
+        <span class="px-paso__label">Costo del café</span>
+        <div class="px-paso__control">
+          <div class="px-modo">
+            <button type="button" class="px-chip px-chip--activo" data-modo-costo="kilo">por kilo</button>
+            <button type="button" class="px-chip" data-modo-costo="cuarto">por ¼ (250 g)</button>
+          </div>
+          <input type="number" min="0" step="1" inputmode="numeric" placeholder="68000"
+                 value="${p.costo_kg != null ? Math.round(p.costo_kg) : ""}" data-costo aria-label="Costo del café por kilo">
+        </div>
+      </div>
+      <div class="px-calculo" data-calculo></div>
+      <div class="px-paso">
+        <span class="px-paso__label">Precio final (unidad)</span>
+        <div class="px-paso__control">
+          <input type="number" min="0" step="1" inputmode="numeric" placeholder="0"
+                 value="${p.precio != null ? p.precio : ""}" data-precio aria-label="Precio final de la unidad">
+          <button type="button" class="px-btn-sec" data-redondear title="Redondear a múltiplos de $50">Redondear</button>
+        </div>
+      </div>
+      <p class="px-resultado" data-resultado></p>
+      <div class="px-editor__acciones">
+        <button type="button" class="px-btn" data-precio-action>Guardar</button>
+      </div>
+    </div>`;
+}
+
+function filaProducto(p, cfg) {
+  const costoKg = p.costo_kg != null ? Number(p.costo_kg) : null;
+  const costoU = costoKg != null ? Math.round(costoUnidad(costoKg, cfg)) : null;
+  const margen = costoKg != null && p.precio ? margenUnidadReal(costoKg, p.precio, cfg) : null;
+  const abierto = p.id === precioAbierto;
+  return `<article class="px-prod${abierto ? " px-prod--abierto" : ""}${p.activo ? "" : " px-prod--inactivo"}" data-producto="${escapar(p.id)}">
+      <div class="px-prod__linea">
+        <span class="px-prod__nombre">${escapar(p.nombre || p.id)}${p.activo ? "" : ` <small>oculto</small>`}</span>
+        <span class="px-num">${costoU != null ? formato.format(costoU) : "—"}</span>
+        <span class="px-num px-num--precio">${p.precio != null ? formato.format(p.precio) : "—"}</span>
+        <span class="px-num">${p.precioPack != null ? formato.format(p.precioPack) : "—"}</span>
+        <span class="px-margen">${margen != null ? `<b>${Math.round(margen)}%</b>` : "—"}${badgeMargen(margen)}</span>
+        <button class="px-btn-sec px-editar" data-editar="${escapar(p.id)}">${abierto ? "Cerrar" : "Editar"}</button>
+      </div>
+      ${abierto ? editorProducto(p) : ""}
+    </article>`;
+}
+
+// Guarda lo tipeado en el editor abierto antes de re-renderizar (los insumos
+// pueden cambiar mientras se edita un café y no queremos pisar nada)
+function estadoEditorAbierto() {
+  const fila = $("#precios").querySelector(".px-prod--abierto");
+  if (!fila) return null;
+  return {
+    id: fila.dataset.producto,
+    costo: fila.querySelector("[data-costo]").value,
+    precio: fila.querySelector("[data-precio]").value,
+    cuarto: fila.querySelector('[data-modo-costo="cuarto"]')?.classList.contains("px-chip--activo") || false,
+  };
+}
+
+function renderPrecios() {
+  const c = $("#precios");
+  const cfg = cfgLocal();
+  if (!cfg) return;
+  if (!preciosCache.length) {
+    c.innerHTML = `<div class="vacio">No hay productos.</div>`;
+    return;
+  }
+  const estado = estadoEditorAbierto();
+  c.innerHTML = `<div class="px-productos__head">
+      <span>Café</span><span>Costo</span><span>Unidad</span><span>Pack x${cfg.packUnidades}</span><span>Margen</span><span></span>
+    </div>` + preciosCache.map((p) => filaProducto(p, cfg)).join("");
+
+  const abierta = c.querySelector(".px-prod--abierto");
+  if (!abierta) return;
+  if (estado && estado.id === abierta.dataset.producto) {
+    abierta.querySelector("[data-costo]").value = estado.costo;
+    abierta.querySelector("[data-precio]").value = estado.precio;
+    if (estado.cuarto) {
+      abierta.querySelectorAll("[data-modo-costo]").forEach((b) =>
+        b.classList.toggle("px-chip--activo", b.dataset.modoCosto === "cuarto"));
+    }
+  }
+  refrescarEditor(abierta);
+}
+
+// Desglose vivo del editor: café → insumos → costo total → sugerido → final
+function refrescarEditor(fila) {
+  const cfg = cfgLocal();
+  const p = preciosCache.find((x) => x.id === fila.dataset.producto);
+  const costoKg = costoKgDe(fila);
+  const calc = fila.querySelector("[data-calculo]");
+  const resultado = fila.querySelector("[data-resultado]");
+  if (!(costoKg > 0)) {
+    calc.innerHTML = `<p class="px-nota">Cargá el costo del café para ver el desglose.</p>`;
+    resultado.textContent = "";
+    return;
+  }
+
+  const cafe = costoCafePorUnidad(costoKg, cfg);
+  const total = costoUnidad(costoKg, cfg);
+  const sug = sugeridoDe(p, cfg, costoKg);
+  calc.innerHTML = `
+      <div class="px-calculo__fila"><span>Café por drip (${cfg.gramosPorBag} g)</span><b>${formato.format(Math.round(cafe))}</b></div>
+      <div class="px-calculo__fila"><span>+ Insumos por unidad</span><b>${formato.format(Math.round(cfg.fijoUnidad))}</b></div>
+      <div class="px-calculo__fila px-calculo__fila--total"><span>Costo total por unidad</span><b>${formato.format(Math.round(total))}</b></div>
+      ${sug ? `<div class="px-calculo__fila px-calculo__fila--sugerido"><span>Precio sugerido <small>(${sug.nota})</small></span>
+        <span><b>${formato.format(sug.precio)}</b><button type="button" class="px-usar" data-usar-sugerido="${sug.precio}">Usar</button></span></div>` : ""}`;
+
+  const precio = Number(fila.querySelector("[data-precio]").value) || 0;
+  if (!(precio > 0)) {
+    resultado.innerHTML = `<span class="px-nota">Escribí el precio final o usá el sugerido.</span>`;
+    return;
+  }
+  if (precio < total) {
+    resultado.innerHTML = `<span class="px-alerta">⚠️ Perdés plata: el precio está por debajo del costo (${formato.format(Math.round(total))}).</span>`;
+    return;
+  }
+  const margen = margenUnidadReal(costoKg, precio, cfg);
+  const pack = precioPack(precio, cfg);
+  resultado.innerHTML = `Margen real <b>${margen}%</b>${badgeMargen(margen)} · Pack x${cfg.packUnidades} <b>${formato.format(pack)}</b> <small>(${cfg.packDescuento}% OFF automático)</small>`;
+}
+
+async function guardarPrecio(fila, boton) {
+  const p = preciosCache.find((x) => x.id === fila.dataset.producto);
+  const costoKg = costoKgDe(fila);
+  const precio = Number(fila.querySelector("[data-precio]").value) || 0;
+  if (!(costoKg > 0) || !(precio > 0) || precio < costoUnidad(costoKg, cfgLocal())) {
+    refrescarEditor(fila); // el desglose ya explica qué falta o qué está mal
+    return;
+  }
+  boton.disabled = true;
   try {
-    const data = await api("/api/admin-precios");
-    cfgPrecios = data.cfg;
-    renderPrecios(data.productos);
-    mensaje("#precio-message", "");
+    const r = await api("/api/admin-precios", {
+      method: "POST",
+      body: JSON.stringify({ producto_id: p.id, costo_kg: costoKg, precio }),
+    });
+    Object.assign(p, { costo_kg: r.costo_kg, precio: r.precio, precioPack: r.precioPack });
+    precioAbierto = null;
+    renderPrecios();
+    toast(`${p.nombre}: precio actualizado.`);
+  } catch (err) {
+    const resultado = fila.querySelector("[data-resultado]");
+    if (resultado) resultado.innerHTML = `<span class="px-alerta">⚠️ ${escapar(err.message)}</span>`;
+    boton.disabled = false;
+  }
+}
+
+$("#precios").addEventListener("click", async (e) => {
+  const fila = e.target.closest(".px-prod");
+
+  const modo = e.target.closest("[data-modo-costo]");
+  if (modo && fila && !modo.classList.contains("px-chip--activo")) {
+    const inp = fila.querySelector("[data-costo]");
+    const v = Number(inp.value) || 0;
+    if (v) inp.value = modo.dataset.modoCosto === "cuarto" ? Math.round(v / 4) : Math.round(v * 4);
+    fila.querySelectorAll("[data-modo-costo]").forEach((x) => x.classList.toggle("px-chip--activo", x === modo));
+    refrescarEditor(fila);
+    return;
+  }
+
+  const usar = e.target.closest("[data-usar-sugerido]");
+  if (usar && fila) {
+    fila.querySelector("[data-precio]").value = usar.dataset.usarSugerido;
+    refrescarEditor(fila);
+    return;
+  }
+
+  const redondear = e.target.closest("[data-redondear]");
+  if (redondear && fila) {
+    const campo = fila.querySelector("[data-precio]");
+    const actual = Number(campo.value) || 0;
+    if (actual) {
+      campo.value = redondearPrecio(actual, 50);
+      refrescarEditor(fila);
+    }
+    return;
+  }
+
+  const editar = e.target.closest("[data-editar]");
+  if (editar) {
+    precioAbierto = precioAbierto === editar.dataset.editar ? null : editar.dataset.editar;
+    renderPrecios();
+    return;
+  }
+
+  const guardar = e.target.closest("[data-precio-action]");
+  if (guardar && fila) await guardarPrecio(fila, guardar);
+});
+
+$("#precios").addEventListener("input", (e) => {
+  const fila = e.target.closest(".px-prod--abierto");
+  if (fila) refrescarEditor(fila);
+});
+
+async function cargarPrecios() {
+  mensaje("#precio-message", "Cargando…");
+  try {
+    const [dataPrecios, dataConfig] = await Promise.all([
+      api("/api/admin-precios"),
+      api("/api/admin-config"),
+    ]);
+    cfgPrecios = dataConfig.cfg;
+    insumosCache = dataConfig.insumos;
+    preciosCache = dataPrecios.productos;
+    renderPrecios();
+    renderInsumos();
+    $("#cfg-gramos").value = cfgPrecios.gramosPorBag;
+    $("#cfg-pack-desc").value = cfgPrecios.packDescuento;
+    mensaje("#precio-message", dataConfig.desdeLaBase ? "" : "⚠️ Falta correr supabase/migracion-insumos.sql: mientras tanto se usan los valores anteriores y los insumos no se pueden editar.");
   } catch (err) {
     mensaje("#precio-message", `⚠️ ${err.message}`);
   }
 }
 
-$("#precios").addEventListener("input", (e) => {
-  const fila = e.target.closest(".fila--precio");
-  if (!fila) return;
-  // Al cambiar el COSTO, proponemos el precio calculado (se puede pisar a mano)
-  if (e.target.matches("[data-costo]")) {
-    const costo = Number(e.target.value) || 0;
-    const campoPrecio = fila.querySelector("[data-precio]");
-    if (costo > 0 && !campoPrecio.dataset.tocado) {
-      campoPrecio.value = precioUnidadDesdeCosto(costo, cfgPrecios);
-    }
-  }
-  // Si tocan el precio a mano, dejamos de pisarlo
-  if (e.target.matches("[data-precio]")) e.target.dataset.tocado = "1";
-  refrescarPreview(fila);
-});
+// ===== Insumos: tabla con guardado automático =====
+function actualizarTotalesInsumos() {
+  const cfg = cfgLocal();
+  $("#insumos-totales").textContent = cfg && insumosCache.length
+    ? ` (total por unidad ${formato.format(cfg.fijoUnidad)} · por pack ${formato.format(cfg.fijoPack)})`
+    : "";
+}
 
-// Botón ≈ : redondea el precio a múltiplos de $50
-$("#precios").addEventListener("click", (e) => {
-  const boton = e.target.closest("[data-redondear]");
-  if (!boton) return;
-  const fila = boton.closest(".fila--precio");
-  const campo = fila.querySelector("[data-precio]");
-  const actual = Number(campo.value) || Number(precioUnidadDesdeCosto(costoKgDe(fila), cfgPrecios));
-  if (!actual) return;
-  campo.value = redondearPrecio(actual, 50);
-  campo.dataset.tocado = "1";
-  refrescarPreview(fila);
-});
-
-$("#precios").addEventListener("click", async (e) => {
-  const boton = e.target.closest("[data-precio-action]");
-  if (!boton) return;
-  const fila = boton.closest(".fila--precio");
-  const costo = costoKgDe(fila);
-  if (!costo || costo <= 0) {
-    mensaje("#precio-message", "⚠️ Cargá el costo del kilo");
+function renderInsumos() {
+  const c = $("#insumos");
+  actualizarTotalesInsumos();
+  if (!insumosCache.length) {
+    c.innerHTML = `<div class="vacio">Sin insumos cargados.</div>`;
     return;
   }
-  const aMano = Number(fila.querySelector("[data-precio]").value) || 0;
-  const nombre = fila.querySelector("strong").textContent;
-  const { precio, pack, margen, margenU } = previewPrecios(costo, aMano);
-  const sugerido = precioUnidadDesdeCosto(costo, cfgPrecios);
-  const nota = precio !== sugerido ? `\n(el calculado era ${formato.format(sugerido)})` : "";
-  if (!confirm(`${nombre}\n\nCosto por kilo: ${formato.format(costo)}\n→ Unidad: ${formato.format(precio)} · margen ${margenU}%${nota}\n→ Pack x5: ${formato.format(pack)} · margen ${margen}%\n\n¿Guardar estos precios?`)) return;
+  c.innerHTML = `<div class="px-tabla">
+      <div class="px-tabla__fila px-tabla__head">
+        <span>Insumo</span><span>Costo por pieza</span><span>× por unidad</span><span>× por pack</span><span></span><span></span>
+      </div>
+      ${insumosCache.map((i) => `<div class="px-tabla__fila" data-insumo="${escapar(i.id)}">
+        <span class="px-tabla__nombre">${escapar(i.nombre)}</span>
+        <input type="number" min="0" step="0.01" inputmode="decimal" value="${Number(i.costo)}" data-campo="costo" aria-label="Costo por pieza de ${escapar(i.nombre)}">
+        <input type="number" min="0" step="1" inputmode="numeric" value="${Number(i.cant_unidad)}" data-campo="cant_unidad" aria-label="Cantidad por unidad de ${escapar(i.nombre)}">
+        <input type="number" min="0" step="1" inputmode="numeric" value="${Number(i.cant_pack)}" data-campo="cant_pack" aria-label="Cantidad por pack de ${escapar(i.nombre)}">
+        <span class="px-estado" data-estado></span>
+        <button type="button" class="px-borrar" data-borrar title="Borrar insumo">🗑</button>
+      </div>`).join("")}
+    </div>`;
+}
 
-  fila.querySelectorAll("button").forEach((b) => (b.disabled = true));
+// Al editar cualquier campo: se guarda solo (con una pausa corta) y todos los
+// costos de arriba se recalculan al instante.
+const insumosPendientes = new Map();
+$("#insumos").addEventListener("input", (e) => {
+  const fila = e.target.closest("[data-insumo]");
+  if (!fila || !e.target.matches("[data-campo]")) return;
+  ponerEstado(fila, "Guardando…");
+  clearTimeout(insumosPendientes.get(fila.dataset.insumo));
+  insumosPendientes.set(fila.dataset.insumo, setTimeout(() => guardarInsumo(fila), 700));
+});
+
+async function guardarInsumo(fila) {
+  const id = fila.dataset.insumo;
+  const leer = (campo) => Number(fila.querySelector(`[data-campo="${campo}"]`).value) || 0;
   try {
-    const r = await api("/api/admin-precios", {
-      method: "POST",
-      body: JSON.stringify({ producto_id: fila.dataset.producto, costo_kg: costo, precio: aMano || undefined }),
+    const { insumo } = await api("/api/admin-config", {
+      method: "PATCH",
+      body: JSON.stringify({ id, costo: leer("costo"), cant_unidad: leer("cant_unidad"), cant_pack: leer("cant_pack") }),
     });
-    precioAbierto = null;
-    cargarPrecios();
-    mensaje("#precio-message", `✅ ${nombre}: unidad ${formato.format(r.precio)} · pack ${formato.format(r.precioPack)}`, true);
+    const idx = insumosCache.findIndex((x) => x.id === id);
+    if (idx >= 0) insumosCache[idx] = { ...insumosCache[idx], ...insumo };
+    ponerEstado(fila, "✓ Guardado", true);
+    actualizarTotalesInsumos();
+    renderPrecios();
+    toast("Todos los costos fueron recalculados.");
   } catch (err) {
-    // El error se muestra JUNTO A LA FILA: el mensaje de arriba queda fuera de
-    // la vista cuando se está trabajando sobre un producto del final de la lista.
-    const prev = fila.querySelector("[data-preview]");
-    prev.className = "fila__preview fila__preview--ojo";
-    prev.textContent = `⚠️ ${err.message}`;
-    mensaje("#precio-message", `⚠️ ${nombre}: ${err.message}`);
-  } finally {
-    fila.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    ponerEstado(fila, `⚠️ ${err.message}`);
+  }
+}
+
+$("#insumos").addEventListener("click", async (e) => {
+  const boton = e.target.closest("[data-borrar]");
+  if (!boton) return;
+  const fila = boton.closest("[data-insumo]");
+  const nombre = fila.querySelector(".px-tabla__nombre").textContent;
+  if (!confirm(`¿Borrar "${nombre}"? El costo de todos los productos baja en consecuencia.`)) return;
+  boton.disabled = true;
+  try {
+    await api(`/api/admin-config?id=${encodeURIComponent(fila.dataset.insumo)}`, { method: "DELETE" });
+    insumosCache = insumosCache.filter((x) => x.id !== fila.dataset.insumo);
+    renderInsumos();
+    renderPrecios();
+    toast("Todos los costos fueron recalculados.");
+  } catch (err) {
+    ponerEstado(fila, `⚠️ ${err.message}`);
+    boton.disabled = false;
   }
 });
+
+// Alta de insumo (formulario plegado detrás de "+ Agregar insumo")
+$("#insumo-nuevo-toggle").addEventListener("click", () => {
+  const form = $("#insumo-form");
+  form.hidden = !form.hidden;
+  if (!form.hidden) $("#insumo-nombre").focus();
+});
+$("#insumo-cancelar").addEventListener("click", () => {
+  $("#insumo-form").reset();
+  $("#insumo-form").hidden = true;
+});
+
+// Calculadora de lote: precio del lote ÷ unidades = costo por pieza
+function calcularLote() {
+  const precio = Number($("#insumo-lote-precio").value) || 0;
+  const cant = Number($("#insumo-lote-cant").value) || 0;
+  if (precio > 0 && cant > 0) {
+    $("#insumo-costo").value = Math.round((precio / cant) * 100) / 100;
+  }
+}
+$("#insumo-lote-precio").addEventListener("input", calcularLote);
+$("#insumo-lote-cant").addEventListener("input", calcularLote);
+
+$("#insumo-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const boton = e.target.querySelector('button[type="submit"]');
+  boton.disabled = true;
+  try {
+    const { insumo } = await api("/api/admin-config", {
+      method: "POST",
+      body: JSON.stringify({
+        nombre: $("#insumo-nombre").value,
+        costo: Number($("#insumo-costo").value),
+        cant_unidad: Number($("#insumo-cant-unidad").value) || 0,
+        cant_pack: Number($("#insumo-cant-pack").value) || 0,
+      }),
+    });
+    insumosCache.push(insumo);
+    $("#insumo-form").reset();
+    $("#insumo-cant-unidad").value = 1;
+    $("#insumo-cant-pack").value = 1;
+    $("#insumo-form").hidden = true;
+    renderInsumos();
+    renderPrecios();
+    toast(`${insumo.nombre} agregado. Todos los costos fueron recalculados.`);
+  } catch (err) {
+    toast(`⚠️ ${err.message}`);
+  } finally {
+    boton.disabled = false;
+  }
+});
+
+// ===== Configuración global (se guarda sola) =====
+const configPendientes = new Map();
+document.querySelectorAll(".px-config [data-clave]").forEach((input) => {
+  input.addEventListener("input", () => {
+    const fila = input.closest(".px-config__fila");
+    ponerEstado(fila, "Guardando…");
+    clearTimeout(configPendientes.get(input.dataset.clave));
+    configPendientes.set(input.dataset.clave, setTimeout(() => guardarConfigGlobal(input, fila), 800));
+  });
+});
+
+async function guardarConfigGlobal(input, fila) {
+  const clave = input.dataset.clave;
+  const valor = Number(input.value);
+  if (input.value === "" || !Number.isFinite(valor) || valor < 0) {
+    ponerEstado(fila, "⚠️ Valor inválido");
+    return;
+  }
+  try {
+    await api("/api/admin-config", { method: "PATCH", body: JSON.stringify({ clave, valor }) });
+    if (clave === "gramos_por_bag") {
+      cfgPrecios.gramosPorBag = valor;
+      ponerEstado(fila, "✓ Guardado", true);
+      renderPrecios();
+      toast("Todos los costos fueron recalculados.");
+    } else if (clave === "pack_descuento") {
+      cfgPrecios.packDescuento = valor;
+      // los packs guardados se re-derivan del precio de unidad (que no cambia)
+      ponerEstado(fila, "Actualizando packs…");
+      await api("/api/admin-config", { method: "POST", body: JSON.stringify({ accion: "recalcular", modo: "packs" }) });
+      const data = await api("/api/admin-precios");
+      preciosCache = data.productos;
+      renderPrecios();
+      ponerEstado(fila, "✓ Guardado", true);
+      toast("Packs recalculados con el nuevo descuento.");
+    }
+  } catch (err) {
+    ponerEstado(fila, `⚠️ ${err.message}`);
+  }
+}
 
 // ===== Cupones =====
 function valorCupon(c) {
@@ -481,8 +758,14 @@ function renderProductos(productos) {
 async function cargarProductos() {
   mensaje("#producto-message", "Cargando productos…");
   try {
-    // La vista previa de precios necesita la config (insumos + margen)
-    if (!cfgPrecios) { try { cfgPrecios = (await api("/api/admin-config")).cfg; } catch {} }
+    // La vista previa del costo necesita la config (insumos + gramos por bag)
+    if (!cfgPrecios) {
+      try {
+        const d = await api("/api/admin-config");
+        cfgPrecios = d.cfg;
+        insumosCache = d.insumos;
+      } catch {}
+    }
     const { productos } = await api("/api/admin-productos");
     renderProductos(productos);
     mensaje("#producto-message", "");
@@ -491,12 +774,13 @@ async function cargarProductos() {
   }
 }
 
-// Vista previa del precio mientras se escribe el costo
+// Vista previa del costo mientras se escribe (el precio final se decide en Precios)
 $("#prod-costo").addEventListener("input", () => {
   const costo = Number($("#prod-costo").value) || 0;
-  if (costo <= 0) { $("#prod-preview").textContent = ""; return; }
-  const { precio, pack, margen } = previewPrecios(costo);
-  $("#prod-preview").textContent = `→ Unidad ${formato.format(precio)} · Pack x5 ${formato.format(pack)} (margen ${margen}%)`;
+  const cfg = cfgLocal();
+  if (costo <= 0 || !cfg) { $("#prod-preview").textContent = ""; return; }
+  const inicial = precioUnidadDesdeCosto(costo, cfg);
+  $("#prod-preview").textContent = `→ Costo por unidad ${formato.format(Math.round(costoUnidad(costo, cfg)))} · precio inicial ${formato.format(inicial)} (después lo ajustás en Precios)`;
 });
 
 // La foto se lee como data URL y se sube al crear
@@ -561,6 +845,7 @@ $("#producto-form").addEventListener("submit", async (e) => {
     $("#prod-preview").textContent = "";
     $("#prod-thumb").hidden = true;
     fotoDataUrl = null;
+    TABS["tab-precios"].cargado = false; // que Precios muestre el café nuevo
     cargarProductos();
   } catch (err) {
     mensaje("#producto-message", `⚠️ ${err.message}`);
@@ -584,161 +869,6 @@ $("#productos").addEventListener("click", async (e) => {
   } catch (err) {
     mensaje("#producto-message", `⚠️ ${err.message}`);
     boton.disabled = false;
-  }
-});
-
-// ===== Tabs de gestión =====
-// ===== Costos (insumos + margen) =====
-function renderInsumos(insumos, totales) {
-  const contenedor = $("#insumos");
-  $("#cfg-total-unidad").textContent =
-    `· por bag ${formato.format(totales.unidad)} · por pack ${formato.format(totales.pack)}`;
-  if (!insumos.length) {
-    contenedor.innerHTML = `<div class="vacio">Sin insumos cargados.</div>`;
-    return;
-  }
-  const filas = insumos.map((i) => `<div class="tabla__fila tabla__fila--insumo" data-insumo="${escapar(i.id)}">
-      <span class="tabla__nombre">${escapar(i.nombre)}</span>
-      <input type="number" min="0" step="0.01" inputmode="decimal" value="${Number(i.costo)}" data-insumo-costo aria-label="Costo por pieza de ${escapar(i.nombre)}">
-      <input type="number" min="0" step="1" inputmode="numeric" value="${Number(i.cant_unidad)}" data-insumo-cant-unidad aria-label="Cantidad por unidad de ${escapar(i.nombre)}">
-      <input type="number" min="0" step="1" inputmode="numeric" value="${Number(i.cant_pack)}" data-insumo-cant-pack aria-label="Cantidad por pack de ${escapar(i.nombre)}">
-      <span class="tabla__acciones">
-        <button data-insumo-guardar>Guardar</button>
-        <button class="sec" data-insumo-borrar title="Borrar insumo">🗑</button>
-      </span>
-    </div>`).join("");
-  contenedor.innerHTML = `<div class="tabla__fila tabla__fila--insumo tabla__head">
-      <span>Insumo</span><span>$ por pieza</span><span>× unidad</span><span>× pack</span><span></span>
-    </div>` + filas;
-}
-
-async function cargarConfig() {
-  mensaje("#config-message", "Cargando…");
-  try {
-    const data = await api("/api/admin-config");
-    $("#cfg-margen").value = data.cfg.margenUnidad;
-    $("#cfg-gramos").value = data.cfg.gramosPorBag;
-    renderInsumos(data.insumos, data.totales);
-    mensaje("#config-message", data.desdeLaBase ? "" : "⚠️ Falta correr supabase/migracion-insumos.sql: mientras tanto se usan los valores anteriores y no se puede editar.");
-  } catch (err) {
-    mensaje("#config-message", `⚠️ ${err.message}`);
-  }
-}
-
-// Guardar margen / gramos por bag
-document.querySelectorAll("[data-cfg-guardar]").forEach((boton) =>
-  boton.addEventListener("click", async () => {
-    const clave = boton.dataset.cfgGuardar;
-    const valor = Number(clave === "margen_unidad" ? $("#cfg-margen").value : $("#cfg-gramos").value);
-    if (!confirm(`¿Guardar ${clave === "margen_unidad" ? `margen ${valor}%` : `${valor} g por bag`}?\n\nLos precios ya cargados no cambian solos: usá "Recalcular" si querés reaplicarlo a todos.`)) return;
-    boton.disabled = true;
-    try {
-      await api("/api/admin-config", { method: "PATCH", body: JSON.stringify({ clave, valor }) });
-      mensaje("#config-message", "✅ Guardado", true);
-      cargarConfig();
-      cfgPrecios = null; // que Precios se recargue con la config nueva
-      TABS["tab-precios"].cargado = false;
-    } catch (err) {
-      mensaje("#config-message", `⚠️ ${err.message}`);
-    } finally {
-      boton.disabled = false;
-    }
-  })
-);
-
-// Calculadora de lote: precio del lote ÷ unidades = costo por pieza
-function calcularLote() {
-  const precio = Number($("#insumo-lote-precio").value) || 0;
-  const cant = Number($("#insumo-lote-cant").value) || 0;
-  if (precio > 0 && cant > 0) {
-    $("#insumo-costo").value = Math.round((precio / cant) * 100) / 100;
-  }
-}
-$("#insumo-lote-precio").addEventListener("input", calcularLote);
-$("#insumo-lote-cant").addEventListener("input", calcularLote);
-
-// Agregar insumo
-$("#insumo-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  try {
-    await api("/api/admin-config", {
-      method: "POST",
-      body: JSON.stringify({
-        nombre: $("#insumo-nombre").value,
-        costo: Number($("#insumo-costo").value),
-        cant_unidad: Number($("#insumo-cant-unidad").value) || 0,
-        cant_pack: Number($("#insumo-cant-pack").value) || 0,
-      }),
-    });
-    $("#insumo-form").reset();
-    $("#insumo-cant-unidad").value = 1;
-    $("#insumo-cant-pack").value = 1;
-    mensaje("#config-message", "✅ Insumo agregado", true);
-    cargarConfig();
-    TABS["tab-precios"].cargado = false;
-  } catch (err) {
-    mensaje("#config-message", `⚠️ ${err.message}`);
-  }
-});
-
-// Editar / borrar insumos
-$("#insumos").addEventListener("click", async (e) => {
-  const fila = e.target.closest("[data-insumo]");
-  if (!fila) return;
-  const id = fila.dataset.insumo;
-  try {
-    if (e.target.closest("[data-insumo-guardar]")) {
-      await api("/api/admin-config", {
-        method: "PATCH",
-        body: JSON.stringify({
-          id,
-          costo: Number(fila.querySelector("[data-insumo-costo]").value),
-          cant_unidad: Number(fila.querySelector("[data-insumo-cant-unidad]").value) || 0,
-          cant_pack: Number(fila.querySelector("[data-insumo-cant-pack]").value) || 0,
-        }),
-      });
-      mensaje("#config-message", "✅ Insumo actualizado", true);
-    } else if (e.target.closest("[data-insumo-borrar]")) {
-      if (!confirm("¿Borrar este insumo? El costo total baja en consecuencia.")) return;
-      await api(`/api/admin-config?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-      mensaje("#config-message", "✅ Insumo borrado", true);
-    } else {
-      return;
-    }
-    cargarConfig();
-    TABS["tab-precios"].cargado = false;
-  } catch (err) {
-    mensaje("#config-message", `⚠️ ${err.message}`);
-  }
-});
-
-$("#recalcular-packs").addEventListener("click", async () => {
-  if (!confirm("¿Recalcular los PACKS de todos los cafés?\n\nTus precios de unidad no cambian: solo se re-deriva cada pack con su % OFF.")) return;
-  const boton = $("#recalcular-packs");
-  boton.disabled = true;
-  try {
-    const r = await api("/api/admin-config", { method: "POST", body: JSON.stringify({ accion: "recalcular", modo: "packs" }) });
-    mensaje("#config-message", `✅ ${r.cambios.length} packs actualizados.`, true);
-    TABS["tab-precios"].cargado = false;
-  } catch (err) {
-    mensaje("#config-message", `⚠️ ${err.message}`);
-  } finally {
-    boton.disabled = false;
-  }
-});
-
-// Recalcular todos los precios con el margen y los insumos actuales
-$("#recalcular").addEventListener("click", async () => {
-  if (!confirm("¿Recalcular los precios de TODOS los cafés?\n\nSe reaplica el margen objetivo según el costo de cada uno. Los precios redondeados a mano se pisan.")) return;
-  $("#recalcular").disabled = true;
-  try {
-    const r = await api("/api/admin-config", { method: "POST", body: JSON.stringify({ accion: "recalcular" }) });
-    mensaje("#config-message", `✅ ${r.cambios.length} cafés recalculados`, true);
-    TABS["tab-precios"].cargado = false;
-  } catch (err) {
-    mensaje("#config-message", `⚠️ ${err.message}`);
-  } finally {
-    $("#recalcular").disabled = false;
   }
 });
 

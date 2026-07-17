@@ -70,66 +70,79 @@
 
           <!-- VISTA: Precios -->
           <div id="vista-precios" hidden>
-            <p class="panel__hint">Cargá el <strong>costo por kilo</strong> de cada café: tocá <strong>Editar</strong> en un café para cambiar su costo o su precio. El margen y los insumos están abajo, en Configuración avanzada.</p>
             <p class="mensaje" id="precio-message"></p>
-            <div class="lista" id="precios"></div>
-            <details class="cfg-avanzada" id="det-costos">
-              <summary>⚙️ Configuración avanzada (margen, insumos)</summary>
-              <div id="vista-config">
-            <p class="panel__hint">🔒 Privado: estos números <strong>no salen nunca</strong> a la web. Con ellos se calculan los precios de venta.</p>
 
-            <div class="cfg-bloque">
-              <h3 class="cfg-titulo">Margen objetivo</h3>
-              <div class="fila">
-                <div class="fila__info">
-                  <strong>Margen sobre la unidad</strong>
-                  <span class="fila__dato">Precio = costo ÷ (1 − margen). Con 40%, un costo de $1.279 da $2.131.</span>
+            <!-- Productos: cada café con su costo, sus precios y su margen real -->
+            <section class="px-seccion">
+              <header class="px-cabecera">
+                <div>
+                  <h3 class="px-titulo">Productos</h3>
+                  <p class="px-desc">El precio de cada café se decide acá. Los costos y márgenes se actualizan solos cuando cambia un insumo.</p>
                 </div>
-                <div class="fila__form">
-                  <input type="number" min="0" max="99" step="0.5" inputmode="decimal" id="cfg-margen" aria-label="Margen objetivo">
-                  <span>%</span>
-                  <button data-cfg-guardar="margen_unidad">Guardar</button>
-                </div>
-              </div>
-              <div class="fila">
-                <div class="fila__info">
-                  <strong>Gramos por drip bag</strong>
-                  <span class="fila__dato">Cuánto café lleva cada bag: define el costo del café por unidad.</span>
-                </div>
-                <div class="fila__form">
-                  <input type="number" min="1" max="100" step="0.5" inputmode="decimal" id="cfg-gramos" aria-label="Gramos por drip bag">
-                  <span>g</span>
-                  <button data-cfg-guardar="gramos_por_bag">Guardar</button>
-                </div>
-              </div>
-            </div>
+              </header>
+              <div id="precios"></div>
+            </section>
 
-            <div class="cfg-bloque">
-              <h3 class="cfg-titulo">Insumos <span class="cfg-total" id="cfg-total-unidad"></span></h3>
-              <p class="panel__hint">Todo lo que cuesta armar el producto además del café: filtro, sachet, etiqueta, la bolsa del pack…</p>
-              <div class="lista" id="insumos"></div>
-              <form class="cupon-form" id="insumo-form">
-                <input id="insumo-nombre" placeholder="Nombre (ej. Doypack)" maxlength="60" required aria-label="Nombre del insumo">
-                <div class="entrega__row">
-                  <input id="insumo-lote-precio" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Precio del lote $ (ej. 29421)" aria-label="Precio del lote">
-                  <input id="insumo-lote-cant" type="number" min="1" step="1" inputmode="numeric" placeholder="Unidades del lote (ej. 250)" aria-label="Cantidad del lote">
+            <!-- Insumos: tabla con guardado automático -->
+            <section class="px-seccion">
+              <header class="px-cabecera">
+                <div>
+                  <h3 class="px-titulo">Insumos</h3>
+                  <p class="px-desc">Todo lo que cuesta armar el producto además del café. Se guarda solo al editar<span id="insumos-totales"></span>.</p>
                 </div>
-                <div class="entrega__row">
+                <button type="button" class="px-btn-sec" id="insumo-nuevo-toggle">+ Agregar insumo</button>
+              </header>
+              <form class="px-alta" id="insumo-form" hidden>
+                <div class="px-alta__grid">
+                  <input id="insumo-nombre" placeholder="Nombre (ej. Doypack)" maxlength="60" required aria-label="Nombre del insumo">
+                  <input id="insumo-lote-precio" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Precio del lote $" aria-label="Precio del lote">
+                  <input id="insumo-lote-cant" type="number" min="1" step="1" inputmode="numeric" placeholder="Unidades del lote" aria-label="Cantidad del lote">
                   <input id="insumo-costo" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Costo por pieza $" required aria-label="Costo por pieza">
                   <input id="insumo-cant-unidad" type="number" min="0" step="1" inputmode="numeric" value="1" placeholder="× por unidad" aria-label="Cantidad por unidad">
                   <input id="insumo-cant-pack" type="number" min="0" step="1" inputmode="numeric" value="1" placeholder="× por pack" aria-label="Cantidad por pack">
                 </div>
-                <p class="panel__hint" style="margin:0">Si cargás el lote (precio y unidades), el costo por pieza se calcula solo. "× por unidad / pack" = cuántas piezas lleva cada una (la bolsita filtrante: 1 y 5; el doypack: 1 y 1).</p>
-                <button type="submit">Agregar insumo</button>
+                <p class="px-nota">Si cargás el lote (precio y unidades), el costo por pieza se calcula solo. “× por unidad / pack” = cuántas piezas lleva cada presentación (la bolsita filtrante: 1 y 5; el doypack: 1 y 1).</p>
+                <div class="px-alta__acciones">
+                  <button type="button" class="px-btn-sec" id="insumo-cancelar">Cancelar</button>
+                  <button type="submit" class="px-btn">Agregar</button>
+                </div>
               </form>
-            </div>
+              <div id="insumos"></div>
+            </section>
 
-            <p class="mensaje" id="config-message"></p>
-            <button class="btn-recalcular" id="recalcular">🔄 Recalcular todo con el margen objetivo</button>
-            <button class="btn-recalcular btn-recalcular--sec" id="recalcular-packs">📦 Recalcular solo los packs (mantiene tus precios de unidad)</button>
-            <p class="panel__hint">Reaplica el margen objetivo a cada café según su costo. Pisa los precios que hayas redondeado a mano.</p>
-          </div>
-            </details>
+            <!-- Configuración: solo valores globales -->
+            <section class="px-seccion">
+              <header class="px-cabecera">
+                <div>
+                  <h3 class="px-titulo">Configuración</h3>
+                  <p class="px-desc">Valores globales de la tienda. Se guardan solos al cambiarlos.</p>
+                </div>
+              </header>
+              <div class="px-config">
+                <div class="px-config__fila">
+                  <div class="px-config__info">
+                    <strong>Gramos por drip bag</strong>
+                    <span>Cuánto café lleva cada unidad. Afecta el costo de todos los cafés.</span>
+                  </div>
+                  <div class="px-config__control">
+                    <input id="cfg-gramos" data-clave="gramos_por_bag" type="number" min="1" max="100" step="0.5" inputmode="decimal" aria-label="Gramos por drip bag">
+                    <span class="px-unidad">g</span>
+                    <span class="px-estado" data-estado></span>
+                  </div>
+                </div>
+                <div class="px-config__fila">
+                  <div class="px-config__info">
+                    <strong>Descuento del pack</strong>
+                    <span>% OFF del pack respecto de comprar las unidades sueltas. Los packs se recalculan solos.</span>
+                  </div>
+                  <div class="px-config__control">
+                    <input id="cfg-pack-desc" data-clave="pack_descuento" type="number" min="0" max="90" step="1" inputmode="numeric" aria-label="Descuento del pack">
+                    <span class="px-unidad">%</span>
+                    <span class="px-estado" data-estado></span>
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
 
           <!-- VISTA: Cupones -->
@@ -190,6 +203,7 @@
       </div>
     </section>
   </main>
+  <div class="px-toast" id="px-toast" hidden></div>
   <script src="motor.js"></script>
   <script src="admin.js"></script>
 </body>
