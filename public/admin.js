@@ -283,6 +283,53 @@ function sugeridoDe(p, cfg, costoKg) {
   };
 }
 
+// Margen actual de cada café con la config vigente. Se toma ANTES de aplicar
+// un cambio de costos, para poder recuperar ese margen al recalcular precios.
+function margenesActuales() {
+  const cfg = cfgLocal();
+  const mapa = {};
+  for (const p of preciosCache) {
+    if (p.costo_kg != null && p.precio) mapa[p.id] = margenUnidadReal(Number(p.costo_kg), p.precio, cfg);
+  }
+  return mapa;
+}
+
+// Con "precios automáticos" prendido, cada café recupera su margen previo:
+// precio nuevo = costo nuevo ÷ (1 − margen), redondeado a $50.
+async function actualizarPreciosAutomaticos(margenes) {
+  const cfg = cfgLocal();
+  let cambios = 0;
+  for (const p of preciosCache) {
+    const margen = margenes[p.id];
+    if (p.costo_kg == null || !p.precio || margen == null || margen < 5 || margen > 90) continue;
+    const nuevo = redondearPrecio(costoUnidad(Number(p.costo_kg), cfg) / (1 - margen / 100), 50);
+    if (!(nuevo > 0) || nuevo === p.precio) continue;
+    try {
+      const r = await api("/api/admin-precios", {
+        method: "POST",
+        body: JSON.stringify({ producto_id: p.id, costo_kg: Number(p.costo_kg), precio: nuevo }),
+      });
+      Object.assign(p, { costo_kg: r.costo_kg, precio: r.precio, precioPack: r.precioPack });
+      cambios++;
+    } catch (err) {
+      toast(`⚠️ ${p.nombre}: ${err.message}`);
+    }
+  }
+  return cambios;
+}
+
+// Después de cualquier cambio de costos (insumo, gramos): refresca la vista y,
+// si los precios automáticos están prendidos, también los precios guardados.
+async function aplicarCambioDeCostos(margenes) {
+  let cambios = 0;
+  if (Number(cfgPrecios.preciosAuto)) cambios = await actualizarPreciosAutomaticos(margenes);
+  renderPrecios();
+  actualizarTotalesInsumos();
+  toast(cambios > 0
+    ? `Costos recalculados · ${cambios} precio${cambios > 1 ? "s" : ""} actualizado${cambios > 1 ? "s" : ""}.`
+    : "Todos los costos fueron recalculados.");
+}
+
 function editorProducto(p) {
   return `<div class="px-editor">
       <div class="px-paso">
@@ -305,6 +352,15 @@ function editorProducto(p) {
           <button type="button" class="px-btn-sec" data-redondear title="Redondear a múltiplos de $50">Redondear</button>
         </div>
       </div>
+      ${p.precioPack == null ? "" : `<div class="px-paso">
+        <span class="px-paso__label">Precio final (pack x${cfgLocal().packUnidades})</span>
+        <div class="px-paso__control">
+          <input type="number" min="0" step="1" inputmode="numeric" placeholder="0"
+                 value="${p.precioPack}" data-precio-pack aria-label="Precio final del pack">
+          <button type="button" class="px-btn-sec" data-redondear-pack title="Redondear a múltiplos de $50">Redondear</button>
+        </div>
+        <span class="px-nota">Al cambiar el precio de la unidad se propone solo con el ${cfgLocal().packDescuento}% OFF, redondeado; podés escribir otro.</span>
+      </div>`}
       <p class="px-resultado" data-resultado></p>
       <div class="px-editor__acciones">
         <button type="button" class="px-btn" data-precio-action>Guardar</button>
@@ -335,10 +391,13 @@ function filaProducto(p, cfg) {
 function estadoEditorAbierto() {
   const fila = $("#precios").querySelector(".px-prod--abierto");
   if (!fila) return null;
+  const pack = fila.querySelector("[data-precio-pack]");
   return {
     id: fila.dataset.producto,
     costo: fila.querySelector("[data-costo]").value,
     precio: fila.querySelector("[data-precio]").value,
+    pack: pack ? pack.value : null,
+    packTocado: pack ? pack.dataset.tocado : null,
     cuarto: fila.querySelector('[data-modo-costo="cuarto"]')?.classList.contains("px-chip--activo") || false,
   };
 }
@@ -361,6 +420,11 @@ function renderPrecios() {
   if (estado && estado.id === abierta.dataset.producto) {
     abierta.querySelector("[data-costo]").value = estado.costo;
     abierta.querySelector("[data-precio]").value = estado.precio;
+    const pack = abierta.querySelector("[data-precio-pack]");
+    if (pack && estado.pack != null) {
+      pack.value = estado.pack;
+      if (estado.packTocado) pack.dataset.tocado = estado.packTocado;
+    }
     if (estado.cuarto) {
       abierta.querySelectorAll("[data-modo-costo]").forEach((b) =>
         b.classList.toggle("px-chip--activo", b.dataset.modoCosto === "cuarto"));
@@ -402,15 +466,26 @@ function refrescarEditor(fila) {
     return;
   }
   const margen = margenUnidadReal(costoKg, precio, cfg);
-  const pack = precioPack(precio, cfg);
-  resultado.innerHTML = `Margen real <b>${margen}%</b>${badgeMargen(margen)} · Pack x${cfg.packUnidades} <b>${formato.format(pack)}</b> <small>(${cfg.packDescuento}% OFF automático)</small>`;
+  const campoPack = fila.querySelector("[data-precio-pack]");
+  const pack = campoPack ? Number(campoPack.value) || 0 : precioPack(precio, cfg);
+  if (campoPack && pack > 0 && pack < costoPack(costoKg, cfg)) {
+    resultado.innerHTML = `<span class="px-alerta">⚠️ El pack está por debajo de su costo (${formato.format(Math.round(costoPack(costoKg, cfg)))}).</span>`;
+    return;
+  }
+  const off = pack > 0 ? Math.round((1 - pack / (precio * cfg.packUnidades)) * 100) : null;
+  resultado.innerHTML = `Margen real <b>${margen}%</b>${badgeMargen(margen)}` + (pack > 0
+    ? ` · Pack x${cfg.packUnidades} <b>${formato.format(pack)}</b> <small>(margen ${margenPack(costoKg, pack, cfg)}% · ${off}% OFF vs sueltas)</small>`
+    : "");
 }
 
 async function guardarPrecio(fila, boton) {
   const p = preciosCache.find((x) => x.id === fila.dataset.producto);
   const costoKg = costoKgDe(fila);
   const precio = Number(fila.querySelector("[data-precio]").value) || 0;
-  if (!(costoKg > 0) || !(precio > 0) || precio < costoUnidad(costoKg, cfgLocal())) {
+  const campoPack = fila.querySelector("[data-precio-pack]");
+  const pack = campoPack ? Number(campoPack.value) || 0 : 0;
+  if (!(costoKg > 0) || !(precio > 0) || precio < costoUnidad(costoKg, cfgLocal()) ||
+      (pack > 0 && pack < costoPack(costoKg, cfgLocal()))) {
     refrescarEditor(fila); // el desglose ya explica qué falta o qué está mal
     return;
   }
@@ -418,7 +493,7 @@ async function guardarPrecio(fila, boton) {
   try {
     const r = await api("/api/admin-precios", {
       method: "POST",
-      body: JSON.stringify({ producto_id: p.id, costo_kg: costoKg, precio }),
+      body: JSON.stringify({ producto_id: p.id, costo_kg: costoKg, precio, precio_pack: pack || undefined }),
     });
     Object.assign(p, { costo_kg: r.costo_kg, precio: r.precio, precioPack: r.precioPack });
     precioAbierto = null;
@@ -444,9 +519,18 @@ $("#precios").addEventListener("click", async (e) => {
     return;
   }
 
+  // Si el pack no fue tocado a mano, sigue al precio de la unidad
+  const proponerPack = () => {
+    const campoPack = fila.querySelector("[data-precio-pack]");
+    if (!campoPack || campoPack.dataset.tocado) return;
+    const precio = Number(fila.querySelector("[data-precio]").value) || 0;
+    campoPack.value = precio > 0 ? precioPack(precio, cfgLocal()) : "";
+  };
+
   const usar = e.target.closest("[data-usar-sugerido]");
   if (usar && fila) {
     fila.querySelector("[data-precio]").value = usar.dataset.usarSugerido;
+    proponerPack();
     refrescarEditor(fila);
     return;
   }
@@ -457,6 +541,19 @@ $("#precios").addEventListener("click", async (e) => {
     const actual = Number(campo.value) || 0;
     if (actual) {
       campo.value = redondearPrecio(actual, 50);
+      proponerPack();
+      refrescarEditor(fila);
+    }
+    return;
+  }
+
+  const redondearPack = e.target.closest("[data-redondear-pack]");
+  if (redondearPack && fila) {
+    const campo = fila.querySelector("[data-precio-pack]");
+    const actual = Number(campo.value) || 0;
+    if (actual) {
+      campo.value = redondearPrecio(actual, 50);
+      campo.dataset.tocado = "1";
       refrescarEditor(fila);
     }
     return;
@@ -475,7 +572,19 @@ $("#precios").addEventListener("click", async (e) => {
 
 $("#precios").addEventListener("input", (e) => {
   const fila = e.target.closest(".px-prod--abierto");
-  if (fila) refrescarEditor(fila);
+  if (!fila) return;
+  // El pack sigue al precio de la unidad (con su % OFF, redondeado) hasta que
+  // se lo toque a mano; ahí deja de proponerse solo.
+  const campoPack = fila.querySelector("[data-precio-pack]");
+  if (campoPack) {
+    if (e.target === campoPack) {
+      campoPack.dataset.tocado = "1";
+    } else if (e.target.matches("[data-precio]") && !campoPack.dataset.tocado) {
+      const precio = Number(e.target.value) || 0;
+      campoPack.value = precio > 0 ? precioPack(precio, cfgLocal()) : "";
+    }
+  }
+  refrescarEditor(fila);
 });
 
 async function cargarPrecios() {
@@ -492,6 +601,7 @@ async function cargarPrecios() {
     renderInsumos();
     $("#cfg-gramos").value = cfgPrecios.gramosPorBag;
     $("#cfg-pack-desc").value = cfgPrecios.packDescuento;
+    $("#cfg-precios-auto").checked = Boolean(Number(cfgPrecios.preciosAuto));
     mensaje("#precio-message", dataConfig.desdeLaBase ? "" : "⚠️ Falta correr supabase/migracion-insumos.sql: mientras tanto se usan los valores anteriores y los insumos no se pueden editar.");
   } catch (err) {
     mensaje("#precio-message", `⚠️ ${err.message}`);
@@ -543,6 +653,7 @@ async function guardarInsumo(fila) {
   const id = fila.dataset.insumo;
   const leer = (campo) => Number(fila.querySelector(`[data-campo="${campo}"]`).value) || 0;
   try {
+    const margenes = margenesActuales(); // antes del cambio, para mantenerlos
     const { insumo } = await api("/api/admin-config", {
       method: "PATCH",
       body: JSON.stringify({ id, costo: leer("costo"), cant_unidad: leer("cant_unidad"), cant_pack: leer("cant_pack") }),
@@ -550,9 +661,7 @@ async function guardarInsumo(fila) {
     const idx = insumosCache.findIndex((x) => x.id === id);
     if (idx >= 0) insumosCache[idx] = { ...insumosCache[idx], ...insumo };
     ponerEstado(fila, "✓ Guardado", true);
-    actualizarTotalesInsumos();
-    renderPrecios();
-    toast("Todos los costos fueron recalculados.");
+    await aplicarCambioDeCostos(margenes);
   } catch (err) {
     ponerEstado(fila, `⚠️ ${err.message}`);
   }
@@ -566,11 +675,11 @@ $("#insumos").addEventListener("click", async (e) => {
   if (!confirm(`¿Borrar "${nombre}"? El costo de todos los productos baja en consecuencia.`)) return;
   boton.disabled = true;
   try {
+    const margenes = margenesActuales();
     await api(`/api/admin-config?id=${encodeURIComponent(fila.dataset.insumo)}`, { method: "DELETE" });
     insumosCache = insumosCache.filter((x) => x.id !== fila.dataset.insumo);
     renderInsumos();
-    renderPrecios();
-    toast("Todos los costos fueron recalculados.");
+    await aplicarCambioDeCostos(margenes);
   } catch (err) {
     ponerEstado(fila, `⚠️ ${err.message}`);
     boton.disabled = false;
@@ -604,6 +713,7 @@ $("#insumo-form").addEventListener("submit", async (e) => {
   const boton = e.target.querySelector('button[type="submit"]');
   boton.disabled = true;
   try {
+    const margenes = margenesActuales();
     const { insumo } = await api("/api/admin-config", {
       method: "POST",
       body: JSON.stringify({
@@ -619,8 +729,7 @@ $("#insumo-form").addEventListener("submit", async (e) => {
     $("#insumo-cant-pack").value = 1;
     $("#insumo-form").hidden = true;
     renderInsumos();
-    renderPrecios();
-    toast(`${insumo.nombre} agregado. Todos los costos fueron recalculados.`);
+    await aplicarCambioDeCostos(margenes);
   } catch (err) {
     toast(`⚠️ ${err.message}`);
   } finally {
@@ -641,18 +750,22 @@ document.querySelectorAll(".px-config [data-clave]").forEach((input) => {
 
 async function guardarConfigGlobal(input, fila) {
   const clave = input.dataset.clave;
-  const valor = Number(input.value);
-  if (input.value === "" || !Number.isFinite(valor) || valor < 0) {
+  const valor = input.type === "checkbox" ? (input.checked ? 1 : 0) : Number(input.value);
+  if (input.type !== "checkbox" && (input.value === "" || !Number.isFinite(valor) || valor < 0)) {
     ponerEstado(fila, "⚠️ Valor inválido");
     return;
   }
   try {
+    const margenes = margenesActuales(); // antes del cambio, para mantenerlos
     await api("/api/admin-config", { method: "PATCH", body: JSON.stringify({ clave, valor }) });
-    if (clave === "gramos_por_bag") {
+    if (clave === "precios_auto") {
+      cfgPrecios.preciosAuto = valor;
+      ponerEstado(fila, "✓ Guardado", true);
+      toast(valor ? "Precios automáticos activados." : "Precios automáticos desactivados: los precios solo cambian si los editás.");
+    } else if (clave === "gramos_por_bag") {
       cfgPrecios.gramosPorBag = valor;
       ponerEstado(fila, "✓ Guardado", true);
-      renderPrecios();
-      toast("Todos los costos fueron recalculados.");
+      await aplicarCambioDeCostos(margenes);
     } else if (clave === "pack_descuento") {
       cfgPrecios.packDescuento = valor;
       // los packs guardados se re-derivan del precio de unidad (que no cambia)

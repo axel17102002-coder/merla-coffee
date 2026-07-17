@@ -13,7 +13,7 @@ const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
 const { obtenerCostos } = require("../lib/costos.js");
 const { precioPack, precioUnidadDesdeCosto } = require("../../public/motor.js");
 
-const CLAVES_VALIDAS = ["margen_unidad", "gramos_por_bag", "pack_unidades", "pack_descuento"];
+const CLAVES_VALIDAS = ["margen_unidad", "gramos_por_bag", "pack_unidades", "pack_descuento", "precios_auto"];
 
 // Reaplica el margen objetivo a todos los cafés que tengan costo cargado.
 // Se usa cuando cambian los insumos o el margen: evita ir uno por uno.

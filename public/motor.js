@@ -56,11 +56,12 @@ function numeroPedido(n) {
 
 const GRAMOS_KILO = 1000;
 
-// Precio del pack a partir del precio de la unidad (el pack tiene su % OFF)
+// Precio del pack a partir del precio de la unidad (el pack tiene su % OFF).
+// Se redondea a múltiplos de $50 para que no queden números feos ($10.423).
 function precioPack(precioUnidad, cfg) {
   const unidades = (cfg && cfg.packUnidades) || CONFIG.pack.unidades;
   const off = cfg && cfg.packDescuento != null ? cfg.packDescuento : CONFIG.pack.descuento;
-  return Math.round((precioUnidad * unidades * (100 - off)) / 100);
+  return redondearPrecio(Math.round((precioUnidad * unidades * (100 - off)) / 100), 50);
 }
 
 // Lo que cuesta el café que entra en una drip bag

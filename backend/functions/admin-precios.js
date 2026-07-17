@@ -83,7 +83,18 @@ exports.handler = async (event) => {
           body: JSON.stringify({ error: `Ese precio (${precio}) es menor al costo (${piso}): perderías plata` }),
         };
       }
-      const pack = precioPack(precio, cfg);
+      // El pack también se puede fijar a mano (para redondearlo); si no viene,
+      // se deriva del precio de la unidad con el % OFF configurado.
+      const aManoPack = Number(body.precio_pack);
+      const pack = aManoPack > 0 ? Math.round(aManoPack) : precioPack(precio, cfg);
+      const pisoPack = Math.round(costoPack(costo, cfg));
+      if (aManoPack > 0 && pack < pisoPack) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ error: `Ese precio de pack (${pack}) es menor al costo (${pisoPack}): perderías plata` }),
+        };
+      }
       const filtro = `producto_id=eq.${encodeURIComponent(producto_id)}`;
 
       const actualizadas = await sb(`presentaciones?${filtro}&unidades_stock=eq.1`, {

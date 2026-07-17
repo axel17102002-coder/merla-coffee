@@ -16,7 +16,7 @@ body { margin: 0; background: var(--crema); }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
 
-.admin { width: min(1400px, calc(100% - 40px)); margin: 0 auto; padding: 40px 0 80px; }
+.admin { width: calc(100% - 48px); margin: 0 auto; padding: 40px 0 80px; }
 .admin__head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
 .admin__eyebrow { margin: 0; color: var(--verde); font-weight: 800; text-transform: uppercase; letter-spacing: .1em; font-size: .75rem; }
 .admin h1, .admin h2 { margin: 0; font-family: "Baloo 2", sans-serif; color: var(--verde); }
@@ -45,8 +45,8 @@ button { cursor: pointer; }
 .filtros button { border: 1px solid var(--borde); border-radius: 999px; padding: 7px 16px; background: var(--papel); color: var(--texto); font-weight: 600; font-size: .88rem; }
 .filtros button.filtro-activo { background: var(--verde); color: #fff; border-color: var(--verde); }
 
-/* Pedidos */
-.pedidos { display: grid; gap: 14px; }
+/* Pedidos: a pantalla completa entran varios por fila */
+.pedidos { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); align-items: start; }
 .pedido { background: var(--papel); border: 1px solid var(--borde); border-radius: 16px; padding: 20px; box-shadow: 0 5px 18px #22301f10; }
 .pedido__top { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
 .pedido__top-izq { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -128,7 +128,6 @@ button:disabled { opacity: .55; cursor: wait; }
 .secciones button { border: 1px solid var(--borde); border-radius: 12px; padding: 12px 22px; background: var(--papel); color: var(--gris); font-weight: 800; font-size: 1rem; }
 .secciones button.seccion-activa { background: var(--verde); color: #fff; border-color: var(--verde); }
 .panel__layout { grid-template-columns: 1fr; }
-.columna-pedidos, .columna-gestion { max-width: 880px; }
 .columna-gestion { position: static; }
 
 /* ===== Pestaña Precios (rediseño) ===== */
@@ -211,6 +210,7 @@ button:disabled { opacity: .55; cursor: wait; }
 .px-config__control { display: flex; align-items: center; gap: 8px; }
 .px-config__control input { width: 90px; text-align: right; border: 1px solid #e3dcc9; border-radius: 9px; padding: 9px 11px; }
 .px-config__control input:focus { outline: 2px solid #3d604733; border-color: var(--verde); }
+.px-config__control input[type="checkbox"] { width: 22px; height: 22px; padding: 0; accent-color: var(--verde); cursor: pointer; }
 .px-unidad { color: var(--gris); font-weight: 700; }
 
 /* Toast de confirmación */
