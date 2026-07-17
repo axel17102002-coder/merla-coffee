@@ -155,3 +155,20 @@ button:disabled { opacity: .55; cursor: wait; }
 .tabla__preview { grid-column: 1 / -1; }
 .tabla__preview:empty { display: none; }
 @media (max-width: 700px) { .tabla__fila { grid-template-columns: 1fr 1fr; } .tabla__head { display: none; } }
+
+/* Precios: lista simple + editor de a un café */
+.pr { display: block; }
+.pr__linea { display: flex; align-items: center; gap: 12px; }
+.pr__linea strong { flex: 1; }
+.pr__datos { text-align: right; font-weight: 700; color: var(--verde); }
+.pr__datos small { display: block; font-weight: 600; color: var(--gris); }
+.pr__editar { border: 1px solid var(--borde); background: var(--crema); color: var(--verde); border-radius: 9px; padding: 8px 14px; font-weight: 700; }
+.pr--abierto { border-color: var(--verde); }
+.pr__editor { display: grid; gap: 12px; border-top: 1px solid var(--borde); margin-top: 12px; padding-top: 14px; }
+.pr__campo { display: grid; gap: 6px; font-weight: 700; font-size: .9rem; }
+.pr__campo small { color: var(--gris); font-weight: 500; }
+.pr__campo input { width: 100%; border: 1px solid var(--borde); border-radius: 9px; padding: 10px 12px; font-size: 1rem; }
+.pr__editor > button[data-precio-action] { border: 0; border-radius: 10px; padding: 12px; background: var(--verde); color: #fff; font-weight: 800; }
+.cfg-avanzada { margin-top: 18px; background: var(--papel); border: 1px solid var(--borde); border-radius: 14px; padding: 14px 18px; }
+.cfg-avanzada summary { cursor: pointer; font-weight: 800; color: var(--verde); }
+.cfg-avanzada > div { margin-top: 14px; }

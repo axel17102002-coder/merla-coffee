@@ -129,6 +129,11 @@ $("#pedidos").addEventListener("click", async (e) => {
 });
 
 $("#reload").addEventListener("click", cargarPedidos);
+// La config avanzada se carga al abrir el desplegable dentro de Precios
+document.addEventListener("DOMContentLoaded", () => {
+  const det = document.getElementById("det-costos");
+  if (det) det.addEventListener("toggle", () => { if (det.open) cargarConfig(); });
+});
 
 // ===== Stock por gramos de café =====
 let gramosPorUnidad = 12;
@@ -214,30 +219,51 @@ function previewPrecios(costo, precioAMano) {
   };
 }
 
+let preciosCache = [];
+let precioAbierto = null; // café en edición (uno a la vez)
+
 function renderPrecios(productos) {
-  const contenedor = $("#precios");
+  const c = $("#precios");
   if (!productos) return;
-  const filas = productos.map((p) => `<div class="tabla__fila fila--precio${p.activo ? "" : " fila--inactivo"}" data-producto="${escapar(p.id)}">
-      <span class="tabla__nombre">${escapar(p.nombre || p.id)}${p.activo ? "" : " <small>(oculto)</small>"}</span>
-      <input type="number" min="0" step="1" inputmode="numeric" placeholder="68000"
-             value="${p.costo_kg != null ? Math.round(p.costo_kg) : ""}"
-             data-costo aria-label="Costo del kilo de ${escapar(p.nombre || p.id)}">
-      <span class="mini__campo">
-        <input type="number" min="0" step="1" inputmode="numeric" placeholder="auto"
-               value="${p.precio != null ? p.precio : ""}"
-               data-precio aria-label="Precio de venta de ${escapar(p.nombre || p.id)}">
-        <button type="button" class="mini__btn" data-redondear title="Redondear a $50">≈</button>
-      </span>
-      <span class="tabla__dato" data-pack-de="${escapar(p.id)}">${p.precioPack != null ? formato.format(p.precioPack) : "—"}</span>
-      <span class="tabla__dato"><b data-margenu-de="${escapar(p.id)}">${p.margenUnidad != null ? p.margenUnidad + "%" : "—"}</b> / <b data-margen-de="${escapar(p.id)}">${p.margenPack != null ? p.margenPack + "%" : "—"}</b></span>
-      <button data-precio-action="guardar">Guardar</button>
-      <span class="fila__preview tabla__preview" data-preview></span>
-      <span data-precio-de="${escapar(p.id)}" hidden>${formato.format(p.precio || 0)}</span>
-    </div>`).join("");
-  contenedor.innerHTML = `<div class="tabla__fila tabla__head">
-      <span>Café</span><span>Costo/kg</span><span>Precio unidad</span><span>Pack x5</span><span>Margen u/p</span><span></span>
-    </div>` + filas;
+  preciosCache = productos;
+  c.innerHTML = productos.map((p) => {
+    const abierto = p.id === precioAbierto;
+    const editor = !abierto ? "" : `
+      <div class="pr__editor">
+        <label class="pr__campo">¿Cuánto te cuesta el kilo de este café?
+          <input type="number" min="0" step="1" inputmode="numeric" placeholder="68000"
+                 value="${p.costo_kg != null ? Math.round(p.costo_kg) : ""}" data-costo>
+        </label>
+        <label class="pr__campo">¿A cuánto vendés la unidad? <small>(vacío = lo calculamos con tu margen)</small>
+          <span class="mini__campo">
+            <input type="number" min="0" step="1" inputmode="numeric" placeholder="auto"
+                   value="${p.precio != null ? p.precio : ""}" data-precio>
+            <button type="button" class="mini__btn" data-redondear title="Redondear a $50">≈ redondear</button>
+          </span>
+        </label>
+        <p class="fila__preview" data-preview></p>
+        <button data-precio-action="guardar">Guardar cambios</button>
+      </div>`;
+    return `<article class="fila--precio pr${abierto ? " pr--abierto" : ""}${p.activo ? "" : " fila--inactivo"}" data-producto="${escapar(p.id)}">
+      <div class="pr__linea">
+        <strong>${escapar(p.nombre || p.id)}${p.activo ? "" : " <small>(oculto)</small>"}</strong>
+        <span class="pr__datos">${p.precio != null ? formato.format(p.precio) : "—"}
+          <small>· pack ${p.precioPack != null ? formato.format(p.precioPack) : "—"} · margen ${p.margenUnidad != null ? p.margenUnidad + "%" : "—"}</small></span>
+        <button class="pr__editar" data-editar="${escapar(p.id)}">${abierto ? "Cerrar" : "Editar"}</button>
+      </div>${editor}
+    </article>`;
+  }).join("");
+  const f = c.querySelector(".pr--abierto");
+  if (f) refrescarPreview(f);
 }
+
+$("#precios").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-editar]");
+  if (!b) return;
+  precioAbierto = precioAbierto === b.dataset.editar ? null : b.dataset.editar;
+  renderPrecios(preciosCache);
+});
+
 
 // Muestra a cuánto queda todo y avisa si el margen se aleja del objetivo
 function refrescarPreview(fila) {
@@ -319,14 +345,8 @@ $("#precios").addEventListener("click", async (e) => {
       method: "POST",
       body: JSON.stringify({ producto_id: fila.dataset.producto, costo_kg: costo, precio: aMano || undefined }),
     });
-    fila.querySelector("[data-precio-de]").textContent = formato.format(r.precio);
-    const elPack = fila.querySelector("[data-pack-de]");
-    if (elPack) elPack.textContent = formato.format(r.precioPack);
-    const elMargenU = fila.querySelector("[data-margenu-de]");
-    if (elMargenU) elMargenU.textContent = `${r.margenUnidad}%`;
-    const elMargen = fila.querySelector("[data-margen-de]");
-    if (elMargen) elMargen.textContent = `${r.margenPack}%`;
-    fila.querySelector("[data-precio]").value = r.precio;
+    precioAbierto = null;
+    cargarPrecios();
     mensaje("#precio-message", `✅ ${nombre}: unidad ${formato.format(r.precio)} · pack ${formato.format(r.precioPack)}`, true);
   } catch (err) {
     // El error se muestra JUNTO A LA FILA: el mensaje de arriba queda fuera de
@@ -681,7 +701,6 @@ const TABS = {
   "tab-precios": { vista: "vista-precios", cargar: cargarPrecios, cargado: false },
   "tab-cupones": { vista: "vista-cupones", cargar: cargarCupones, cargado: false },
   "tab-productos": { vista: "vista-productos", cargar: cargarProductos, cargado: false },
-  "tab-config": { vista: "vista-config", cargar: cargarConfig, cargado: false },
 };
 
 function activarTab(tabId) {
