@@ -92,11 +92,11 @@
 
           <!-- VISTA: Productos -->
           <div id="vista-productos" hidden>
-            <p class="panel__hint">Los productos nuevos se crean <strong>ocultos</strong>: cargalos tranquilo y publicalos cuando tengas el stock. El precio sale del costo de los 250 g.</p>
+            <p class="panel__hint">Los productos nuevos se crean <strong>ocultos</strong>: cargalos tranquilo y publicalos cuando tengas el stock. El precio sale del costo por kilo.</p>
             <form class="cupon-form" id="producto-form">
               <input id="prod-nombre" placeholder="Nombre (ej. Café en Grano)" maxlength="60" required aria-label="Nombre del producto">
               <div class="entrega__row">
-                <input id="prod-costo" type="number" min="1" step="1" inputmode="numeric" placeholder="Costo 250 g" required aria-label="Costo de 250 g">
+                <input id="prod-costo" type="number" min="1" step="1" inputmode="numeric" placeholder="Costo por kilo" required aria-label="Costo por kilo">
                 <input id="prod-stock" type="number" min="0" step="1" inputmode="numeric" placeholder="Stock (bags)" aria-label="Stock inicial">
               </div>
               <p class="prod-preview" id="prod-preview"></p>
