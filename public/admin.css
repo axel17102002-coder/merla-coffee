@@ -140,3 +140,18 @@ button:disabled { opacity: .55; cursor: wait; }
   .fila { flex-direction: column; align-items: stretch; }
   .fila__form input { flex: 1; width: auto; }
 }
+
+/* Tablas alineadas (Precios e Insumos) */
+.tabla__fila { display: grid; grid-template-columns: 1.3fr 1fr 1.3fr .9fr 1fr auto; gap: 10px; align-items: center; background: var(--papel); border: 1px solid var(--borde); border-radius: 12px; padding: 10px 14px; }
+.tabla__fila--insumo { grid-template-columns: 1.4fr 1fr .7fr .7fr auto; }
+.tabla__head { background: transparent; border: 0; padding: 2px 14px; font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--gris); }
+.tabla__fila input { width: 100%; min-width: 0; border: 1px solid var(--borde); border-radius: 8px; padding: 8px 10px; }
+.tabla__nombre { font-weight: 700; }
+.tabla__nombre small { color: var(--gris); font-weight: 600; }
+.tabla__dato { font-size: .88rem; color: var(--texto); }
+.tabla__fila button { border: 0; border-radius: 8px; padding: 8px 12px; background: var(--verde); color: #fff; font-weight: 700; }
+.tabla__fila button.sec, .tabla__fila .mini__btn { background: var(--crema); color: var(--verde); border: 1px solid var(--borde); }
+.tabla__acciones { display: flex; gap: 6px; }
+.tabla__preview { grid-column: 1 / -1; }
+.tabla__preview:empty { display: none; }
+@media (max-width: 700px) { .tabla__fila { grid-template-columns: 1fr 1fr; } .tabla__head { display: none; } }

@@ -217,34 +217,26 @@ function previewPrecios(costo, precioAMano) {
 function renderPrecios(productos) {
   const contenedor = $("#precios");
   if (!productos) return;
-  contenedor.innerHTML = productos.map((p) => `<article class="fila fila--precio${p.activo ? "" : " fila--inactivo"}" data-producto="${escapar(p.id)}">
-      <div class="fila__info">
-        <strong>${escapar(p.nombre || p.id)}</strong>
-        <span class="fila__dato">
-          Unidad <b data-precio-de="${escapar(p.id)}">${formato.format(p.precio || 0)}</b>
-          ${p.tienePack ? ` · Pack <b data-pack-de="${escapar(p.id)}">${formato.format(p.precioPack || 0)}</b>` : ""}
-          ${p.margenUnidad != null ? ` · margen <b data-margenu-de="${escapar(p.id)}">${p.margenUnidad}%</b>` : ""}
-          ${p.margenPack != null ? ` / pack <b data-margen-de="${escapar(p.id)}">${p.margenPack}%</b>` : ""}
-        </span>
-      </div>
-      <div class="fila__form fila__form--precio">
-        <label class="mini">Costo por kilo
-          <input type="number" min="0" step="1" inputmode="numeric" placeholder="68000"
-                 value="${p.costo_kg != null ? Math.round(p.costo_kg) : ""}"
-                 data-costo aria-label="Costo del kilo de ${escapar(p.nombre || p.id)}">
-        </label>
-        <label class="mini">Precio unidad
-          <span class="mini__campo">
-            <input type="number" min="0" step="1" inputmode="numeric" placeholder="auto"
-                   value="${p.precio != null ? p.precio : ""}"
-                   data-precio aria-label="Precio de venta de ${escapar(p.nombre || p.id)}">
-            <button type="button" class="mini__btn" data-redondear title="Redondear a $50">≈</button>
-          </span>
-        </label>
-        <button data-precio-action="guardar">Guardar</button>
-      </div>
-      <p class="fila__preview" data-preview></p>
-    </article>`).join("");
+  const filas = productos.map((p) => `<div class="tabla__fila fila--precio${p.activo ? "" : " fila--inactivo"}" data-producto="${escapar(p.id)}">
+      <span class="tabla__nombre">${escapar(p.nombre || p.id)}${p.activo ? "" : " <small>(oculto)</small>"}</span>
+      <input type="number" min="0" step="1" inputmode="numeric" placeholder="68000"
+             value="${p.costo_kg != null ? Math.round(p.costo_kg) : ""}"
+             data-costo aria-label="Costo del kilo de ${escapar(p.nombre || p.id)}">
+      <span class="mini__campo">
+        <input type="number" min="0" step="1" inputmode="numeric" placeholder="auto"
+               value="${p.precio != null ? p.precio : ""}"
+               data-precio aria-label="Precio de venta de ${escapar(p.nombre || p.id)}">
+        <button type="button" class="mini__btn" data-redondear title="Redondear a $50">≈</button>
+      </span>
+      <span class="tabla__dato" data-pack-de="${escapar(p.id)}">${p.precioPack != null ? formato.format(p.precioPack) : "—"}</span>
+      <span class="tabla__dato"><b data-margenu-de="${escapar(p.id)}">${p.margenUnidad != null ? p.margenUnidad + "%" : "—"}</b> / <b data-margen-de="${escapar(p.id)}">${p.margenPack != null ? p.margenPack + "%" : "—"}</b></span>
+      <button data-precio-action="guardar">Guardar</button>
+      <span class="fila__preview tabla__preview" data-preview></span>
+      <span data-precio-de="${escapar(p.id)}" hidden>${formato.format(p.precio || 0)}</span>
+    </div>`).join("");
+  contenedor.innerHTML = `<div class="tabla__fila tabla__head">
+      <span>Café</span><span>Costo/kg</span><span>Precio unidad</span><span>Pack x5</span><span>Margen u/p</span><span></span>
+    </div>` + filas;
 }
 
 // Muestra a cuánto queda todo y avisa si el margen se aleja del objetivo
@@ -308,7 +300,7 @@ $("#precios").addEventListener("click", (e) => {
 $("#precios").addEventListener("click", async (e) => {
   const boton = e.target.closest("[data-precio-action]");
   if (!boton) return;
-  const fila = boton.closest(".fila");
+  const fila = boton.closest(".fila--precio");
   const costo = Number(fila.querySelector("[data-costo]").value);
   if (!costo || costo <= 0) {
     mensaje("#precio-message", "⚠️ Cargá el costo del kilo");
@@ -544,123 +536,6 @@ $("#productos").addEventListener("click", async (e) => {
 });
 
 // ===== Tabs de gestión =====
-// ===== Costos (insumos + margen) — información privada =====
-function renderInsumos(insumos) {
-  const contenedor = $("#insumos");
-  const porU = insumos.filter((i) => i.aplica === "unidad");
-  const porP = insumos.filter((i) => i.aplica === "pack");
-  const totU = porU.reduce((t, i) => t + Number(i.costo), 0);
-  const totP = porP.reduce((t, i) => t + Number(i.costo), 0);
-  $("#cfg-total-unidad").textContent = `· ${formato.format(totU)}/bag + ${formato.format(totP)}/pack`;
-
-  const fila = (i) => `<article class="fila" data-insumo="${escapar(i.id)}">
-      <div class="fila__info">
-        <strong>${escapar(i.nombre)}</strong>
-        <span class="fila__dato">${i.aplica === "unidad" ? "por cada drip bag" : "una vez por pack"}</span>
-      </div>
-      <div class="fila__form">
-        <input type="number" min="0" step="0.01" inputmode="decimal" value="${Number(i.costo)}" data-insumo-costo aria-label="Costo de ${escapar(i.nombre)}">
-        <button data-insumo-accion="guardar">Guardar</button>
-        <button class="sec" data-insumo-accion="borrar" title="Borrar insumo">🗑</button>
-      </div>
-    </article>`;
-
-  contenedor.innerHTML =
-    (insumos.length ? insumos.map(fila).join("") : `<div class="vacio">No hay insumos cargados.</div>`);
-}
-
-async function cargarConfig() {
-  mensaje("#config-message", "Cargando…");
-  try {
-    const data = await api("/api/admin-config");
-    $("#cfg-margen").value = data.cfg.margenUnidad;
-    $("#cfg-gramos").value = data.cfg.gramosPorBag;
-    renderInsumos(data.insumos || []);
-    mensaje("#config-message", data.desdeLaBase ? "" : "⚠️ Falta correr la migración: se usan los valores por defecto.");
-  } catch (err) {
-    mensaje("#config-message", `⚠️ ${err.message}`);
-  }
-}
-
-// Guardar margen / gramos
-$("#vista-config").addEventListener("click", async (e) => {
-  const boton = e.target.closest("[data-cfg-guardar]");
-  if (!boton) return;
-  const clave = boton.dataset.cfgGuardar;
-  const valor = Number(clave === "margen_unidad" ? $("#cfg-margen").value : $("#cfg-gramos").value);
-  boton.disabled = true;
-  try {
-    await api("/api/admin-config", { method: "PATCH", body: JSON.stringify({ clave, valor }) });
-    mensaje("#config-message", "✅ Guardado. Acordate de recalcular los precios para aplicarlo.", true);
-    cfgPrecios = null; // forzar recarga de la config en la tab Precios
-    TABS["tab-precios"].cargado = false;
-  } catch (err) {
-    mensaje("#config-message", `⚠️ ${err.message}`);
-  } finally {
-    boton.disabled = false;
-  }
-});
-
-// Agregar insumo
-$("#insumo-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  try {
-    await api("/api/admin-config", {
-      method: "POST",
-      body: JSON.stringify({
-        nombre: $("#insumo-nombre").value,
-        costo: Number($("#insumo-costo").value),
-        aplica: $("#insumo-aplica").value,
-      }),
-    });
-    $("#insumo-form").reset();
-    mensaje("#config-message", "✅ Insumo agregado. Recalculá los precios para aplicarlo.", true);
-    cargarConfig();
-  } catch (err) {
-    mensaje("#config-message", `⚠️ ${err.message}`);
-  }
-});
-
-// Editar / borrar insumo
-$("#insumos").addEventListener("click", async (e) => {
-  const boton = e.target.closest("[data-insumo-accion]");
-  if (!boton) return;
-  const fila = boton.closest("[data-insumo]");
-  const id = fila.dataset.insumo;
-  boton.disabled = true;
-  try {
-    if (boton.dataset.insumoAccion === "borrar") {
-      if (!confirm("¿Borrar este insumo?")) { boton.disabled = false; return; }
-      await api(`/api/admin-config?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-    } else {
-      const costo = Number(fila.querySelector("[data-insumo-costo]").value);
-      await api("/api/admin-config", { method: "PATCH", body: JSON.stringify({ id, costo }) });
-    }
-    mensaje("#config-message", "✅ Guardado. Recalculá los precios para aplicarlo.", true);
-    cargarConfig();
-  } catch (err) {
-    mensaje("#config-message", `⚠️ ${err.message}`);
-    boton.disabled = false;
-  }
-});
-
-// Recalcular todos los precios
-$("#recalcular").addEventListener("click", async () => {
-  if (!confirm("¿Reaplicar el margen a TODOS los cafés? Pisa los precios redondeados a mano.")) return;
-  const boton = $("#recalcular");
-  boton.disabled = true;
-  mensaje("#config-message", "Recalculando…");
-  try {
-    const r = await api("/api/admin-config", { method: "POST", body: JSON.stringify({ accion: "recalcular" }) });
-    mensaje("#config-message", `✅ ${r.cambios.length} cafés actualizados.`, true);
-    TABS["tab-precios"].cargado = false;
-  } catch (err) {
-    mensaje("#config-message", `⚠️ ${err.message}`);
-  } finally {
-    boton.disabled = false;
-  }
-});
-
 // ===== Costos (insumos + margen) =====
 function renderInsumos(insumos, totales) {
   const contenedor = $("#insumos");
@@ -670,25 +545,19 @@ function renderInsumos(insumos, totales) {
     contenedor.innerHTML = `<div class="vacio">Sin insumos cargados.</div>`;
     return;
   }
-  contenedor.innerHTML = insumos.map((i) => `<article class="fila fila--precio" data-insumo="${escapar(i.id)}">
-      <div class="fila__info">
-        <strong>${escapar(i.nombre)}</strong>
-        <span class="fila__dato">unidad: ${formato.format(i.costo * i.cant_unidad)} · pack: ${formato.format(i.costo * i.cant_pack)}</span>
-      </div>
-      <div class="fila__form fila__form--precio">
-        <label class="mini">$ por pieza
-          <input type="number" min="0" step="0.01" inputmode="decimal" value="${Number(i.costo)}" data-insumo-costo aria-label="Costo por pieza de ${escapar(i.nombre)}">
-        </label>
-        <label class="mini">× unidad
-          <input type="number" min="0" step="1" inputmode="numeric" value="${Number(i.cant_unidad)}" data-insumo-cant-unidad aria-label="Cantidad por unidad de ${escapar(i.nombre)}">
-        </label>
-        <label class="mini">× pack
-          <input type="number" min="0" step="1" inputmode="numeric" value="${Number(i.cant_pack)}" data-insumo-cant-pack aria-label="Cantidad por pack de ${escapar(i.nombre)}">
-        </label>
+  const filas = insumos.map((i) => `<div class="tabla__fila tabla__fila--insumo" data-insumo="${escapar(i.id)}">
+      <span class="tabla__nombre">${escapar(i.nombre)}</span>
+      <input type="number" min="0" step="0.01" inputmode="decimal" value="${Number(i.costo)}" data-insumo-costo aria-label="Costo por pieza de ${escapar(i.nombre)}">
+      <input type="number" min="0" step="1" inputmode="numeric" value="${Number(i.cant_unidad)}" data-insumo-cant-unidad aria-label="Cantidad por unidad de ${escapar(i.nombre)}">
+      <input type="number" min="0" step="1" inputmode="numeric" value="${Number(i.cant_pack)}" data-insumo-cant-pack aria-label="Cantidad por pack de ${escapar(i.nombre)}">
+      <span class="tabla__acciones">
         <button data-insumo-guardar>Guardar</button>
         <button class="sec" data-insumo-borrar title="Borrar insumo">🗑</button>
-      </div>
-    </article>`).join("");
+      </span>
+    </div>`).join("");
+  contenedor.innerHTML = `<div class="tabla__fila tabla__fila--insumo tabla__head">
+      <span>Insumo</span><span>$ por pieza</span><span>× unidad</span><span>× pack</span><span></span>
+    </div>` + filas;
 }
 
 async function cargarConfig() {
