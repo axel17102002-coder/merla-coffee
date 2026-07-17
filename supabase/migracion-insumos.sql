@@ -77,11 +77,17 @@ where not exists (select 1 from insumos where cant_pack > 0);
 -- que no cambia ningún precio.
 alter table productos add column if not exists costo_kg numeric;
 
-update productos
-  set costo_kg = round((costo_250g * 4)::numeric, 2)
-  where costo_kg is null and costo_250g is not null;
-
-alter table productos drop column if exists costo_250g;
+-- Backfill solo si la columna vieja todavía existe (si no, ya se migró)
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+             where table_name = 'productos' and column_name = 'costo_250g') then
+    update productos
+      set costo_kg = round((costo_250g * 4)::numeric, 2)
+      where costo_kg is null and costo_250g is not null;
+    alter table productos drop column costo_250g;
+  end if;
+end $$;
 
 comment on column productos.costo_kg is
   'Costo del kilo de café en grano. El precio de venta se calcula con las tablas insumos y configuracion.';
