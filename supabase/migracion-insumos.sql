@@ -24,6 +24,27 @@ create table if not exists insumos (
 );
 alter table insumos enable row level security;
 
+-- ---------- Cantidades por presentación ----------
+-- La planilla real muestra que el pack NO es "5 unidades completas": lleva
+-- 5 drip bags pero UN solo doypack/sobre/stickers. Cada insumo dice cuántas
+-- veces entra en la unidad y cuántas en el pack.
+alter table insumos add column if not exists cant_unidad numeric not null default 0;
+alter table insumos add column if not exists cant_pack numeric not null default 0;
+
+-- Backfill desde el modelo viejo (aplica: 'unidad' | 'pack'), si existe
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+             where table_name = 'insumos' and column_name = 'aplica') then
+    update insumos set cant_unidad = 1, cant_pack = 0
+      where aplica = 'unidad' and cant_unidad = 0 and cant_pack = 0;
+    update insumos set cant_unidad = 0, cant_pack = 1
+      where aplica = 'pack' and cant_unidad = 0 and cant_pack = 0;
+    alter table insumos drop column aplica;
+  end if;
+end $$;
+
+
 -- ---------- Configuración general (clave → valor) ----------
 create table if not exists configuracion (
   clave text primary key,
@@ -50,26 +71,6 @@ where not exists (select 1 from insumos);
 insert into insumos (nombre, costo, cant_unidad, cant_pack)
 select 'Insumos del pack (sin desglosar)', 828.65, 0, 1
 where not exists (select 1 from insumos where cant_pack > 0);
-
--- ---------- Cantidades por presentación ----------
--- La planilla real muestra que el pack NO es "5 unidades completas": lleva
--- 5 drip bags pero UN solo doypack/sobre/stickers. Cada insumo dice cuántas
--- veces entra en la unidad y cuántas en el pack.
-alter table insumos add column if not exists cant_unidad numeric not null default 0;
-alter table insumos add column if not exists cant_pack numeric not null default 0;
-
--- Backfill desde el modelo viejo (aplica: 'unidad' | 'pack'), si existe
-do $$
-begin
-  if exists (select 1 from information_schema.columns
-             where table_name = 'insumos' and column_name = 'aplica') then
-    update insumos set cant_unidad = 1, cant_pack = 0
-      where aplica = 'unidad' and cant_unidad = 0 and cant_pack = 0;
-    update insumos set cant_unidad = 0, cant_pack = 1
-      where aplica = 'pack' and cant_unidad = 0 and cant_pack = 0;
-    alter table insumos drop column aplica;
-  end if;
-end $$;
 
 -- ---------- Costo del café: pasa de la bolsa de 250 g al KILO ----------
 -- Es más estándar para comparar proveedores. La conversión es exacta (×4), así
