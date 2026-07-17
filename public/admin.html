@@ -52,21 +52,57 @@
           <div class="pedidos" id="pedidos"></div>
         </div>
 
-        <!-- SECCIÓN: Gestión (Stock / Precios / Cupones / Productos) -->
-        <div class="columna-gestion" id="seccion-gestion" hidden>
-          <div class="panel__tabs">
-            <button id="tab-stock" class="tab-activo">Stock</button>
-            <button id="tab-precios">Precios</button>
-            <button id="tab-cupones">Cupones</button>
-            <button id="tab-productos">Productos</button>
-          </div>
+        <!-- SECCIÓN: Gestión (Productos / Precios / Cupones ) -->
+        <!-- Pestañas unificadas -->
+        <div class="panel__tabs">
+          <!-- Eliminamos tab-stock y dejamos productos como principal -->
+          <button id="tab-productos" class="tab-activo">Productos y Stock</button>
+          <button id="tab-precios">Precios</button>
+          <button id="tab-cupones">Cupones</button>
+        </div>
 
-          <!-- VISTA: Stock -->
-          <div id="vista-stock">
-            <p class="panel__hint">Cargá los gramos de café en grano y calculamos cuántas drip bags salen (<strong id="stock-gpu">12</strong> g por unidad). "Sumar" agrega al stock; "Fijar" lo reemplaza.</p>
-            <p class="mensaje" id="stock-message"></p>
-            <div class="lista" id="stock"></div>
-          </div>
+        <!-- VISTA UNIFICADA: Productos y Stock -->
+        <div id="vista-productos">
+          <p class="panel__hint">
+            Administrá tu catálogo. Los productos nuevos se crean <strong>ocultos</strong>. 
+            Para el stock, calculamos las drip bags a <strong id="stock-gpu">12</strong> g por unidad.
+          </p>
+          
+          <!-- Formulario de alta de producto (Se mantiene igual) -->
+          <form class="cupon-form" id="producto-form">
+            <input id="prod-nombre" placeholder="Nombre (ej. Café en Grano)" maxlength="60" required aria-label="Nombre del producto">
+            <div class="entrega__row">
+              <input id="prod-costo" type="number" min="1" step="1" inputmode="numeric" placeholder="Costo por kilo" required aria-label="Costo por kilo">
+              <input id="prod-stock" type="number" min="0" step="1" inputmode="numeric" placeholder="Stock (bags)" aria-label="Stock inicial">
+            </div>
+            <p class="prod-preview" id="prod-preview"></p>
+            <div class="entrega__row">
+              <input id="prod-origen" placeholder="Origen (ej. Colombia)" maxlength="60" aria-label="Origen">
+              <input id="prod-region" placeholder="Región" maxlength="80" aria-label="Región">
+            </div>
+            <div class="entrega__row">
+              <input id="prod-variedad" placeholder="Variedad" maxlength="80" aria-label="Variedad">
+              <input id="prod-proceso" placeholder="Proceso" maxlength="60" aria-label="Proceso">
+            </div>
+            <div class="entrega__row">
+              <input id="prod-tostador" placeholder="Tostador" maxlength="60" aria-label="Tostador">
+              <input id="prod-sca" placeholder="Puntaje SCA" maxlength="10" aria-label="Puntaje SCA">
+            </div>
+            <input id="prod-notas" placeholder="Notas separadas por ; (ej. Caramelo; Cítrico)" maxlength="200" aria-label="Notas de cata">
+            <textarea id="prod-descripcion" placeholder="Descripción" maxlength="600" rows="3" aria-label="Descripción"></textarea>
+            <label class="prod-foto">
+              <span>📷 Foto del producto</span>
+              <input id="prod-imagen" type="file" accept="image/webp,image/jpeg,image/png,image/avif" aria-label="Foto del producto">
+            </label>
+            <img id="prod-thumb" class="prod-thumb" alt="" hidden>
+            <button type="submit">Crear producto (oculto)</button>
+          </form>
+          
+          <p class="mensaje" id="producto-message"></p>
+          
+          <!-- Lista única donde JS inyectará los productos y sus controles de stock -->
+          <div class="lista" id="productos-lista"></div>
+        </div>
 
           <!-- VISTA: Precios -->
           <div id="vista-precios" hidden>
@@ -161,41 +197,6 @@
             </form>
             <p class="mensaje" id="cupon-message"></p>
             <div class="lista" id="cupones"></div>
-          </div>
-
-          <!-- VISTA: Productos -->
-          <div id="vista-productos" hidden>
-            <p class="panel__hint">Los productos nuevos se crean <strong>ocultos</strong>: cargalos tranquilo y publicalos cuando tengas el stock. El precio sale del costo por kilo.</p>
-            <form class="cupon-form" id="producto-form">
-              <input id="prod-nombre" placeholder="Nombre (ej. Café en Grano)" maxlength="60" required aria-label="Nombre del producto">
-              <div class="entrega__row">
-                <input id="prod-costo" type="number" min="1" step="1" inputmode="numeric" placeholder="Costo por kilo" required aria-label="Costo por kilo">
-                <input id="prod-stock" type="number" min="0" step="1" inputmode="numeric" placeholder="Stock (bags)" aria-label="Stock inicial">
-              </div>
-              <p class="prod-preview" id="prod-preview"></p>
-              <div class="entrega__row">
-                <input id="prod-origen" placeholder="Origen (ej. Colombia)" maxlength="60" aria-label="Origen">
-                <input id="prod-region" placeholder="Región" maxlength="80" aria-label="Región">
-              </div>
-              <div class="entrega__row">
-                <input id="prod-variedad" placeholder="Variedad" maxlength="80" aria-label="Variedad">
-                <input id="prod-proceso" placeholder="Proceso" maxlength="60" aria-label="Proceso">
-              </div>
-              <div class="entrega__row">
-                <input id="prod-tostador" placeholder="Tostador" maxlength="60" aria-label="Tostador">
-                <input id="prod-sca" placeholder="Puntaje SCA" maxlength="10" aria-label="Puntaje SCA">
-              </div>
-              <input id="prod-notas" placeholder="Notas separadas por ; (ej. Caramelo; Cítrico)" maxlength="200" aria-label="Notas de cata">
-              <textarea id="prod-descripcion" placeholder="Descripción" maxlength="600" rows="3" aria-label="Descripción"></textarea>
-              <label class="prod-foto">
-                <span>📷 Foto del producto</span>
-                <input id="prod-imagen" type="file" accept="image/webp,image/jpeg,image/png,image/avif" aria-label="Foto del producto">
-              </label>
-              <img id="prod-thumb" class="prod-thumb" alt="" hidden>
-              <button type="submit">Crear producto (oculto)</button>
-            </form>
-            <p class="mensaje" id="producto-message"></p>
-            <div class="lista" id="productos"></div>
           </div>
 
 
