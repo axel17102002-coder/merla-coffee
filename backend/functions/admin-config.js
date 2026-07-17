@@ -73,11 +73,23 @@ exports.handler = async (event) => {
       if (!(cantU >= 0) || !(cantP >= 0) || (cantU === 0 && cantP === 0)) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: "Indicá cuántas veces entra en la unidad y/o en el pack" }) };
       }
-      const [insumo] = await sb("insumos", {
-        method: "POST",
-        headers: { Prefer: "return=representation" },
-        body: { nombre, costo, cant_unidad: cantU, cant_pack: cantP },
-      });
+      let insumo;
+      try {
+        [insumo] = await sb("insumos", {
+          method: "POST",
+          headers: { Prefer: "return=representation" },
+          body: { nombre, costo, cant_unidad: cantU, cant_pack: cantP },
+        });
+      } catch (err) {
+        // Esquema viejo (falta re-correr migracion-insumos.sql): se guarda con
+        // `aplica` aproximando las cantidades a 1.
+        console.warn("admin-config: alta con esquema viejo:", err.message);
+        [insumo] = await sb("insumos", {
+          method: "POST",
+          headers: { Prefer: "return=representation" },
+          body: { nombre, costo, aplica: cantU > 0 ? "unidad" : "pack" },
+        });
+      }
       return { statusCode: 201, headers, body: JSON.stringify({ insumo }) };
     }
 
