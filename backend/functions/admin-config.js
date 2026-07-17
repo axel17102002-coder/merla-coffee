@@ -17,12 +17,20 @@ const CLAVES_VALIDAS = ["margen_unidad", "gramos_por_bag", "pack_unidades", "pac
 
 // Reaplica el margen objetivo a todos los cafés que tengan costo cargado.
 // Se usa cuando cambian los insumos o el margen: evita ir uno por uno.
-async function recalcularTodos(cfg) {
+async function recalcularTodos(cfg, modo) {
   const productos = await sb("productos?select=id,nombre,costo_kg&order=nombre.asc");
+  const presentaciones = modo === "packs"
+    ? await sb("presentaciones?select=producto_id,precio&unidades_stock=eq.1")
+    : [];
   const cambios = [];
   for (const p of productos) {
     if (p.costo_kg == null) continue;
-    const precio = precioUnidadDesdeCosto(Number(p.costo_kg), cfg);
+    // modo "packs": mantiene el precio de unidad actual y solo re-deriva el pack
+    const unidadActual = presentaciones.find((x) => x.producto_id === p.id);
+    const precio = modo === "packs"
+      ? (unidadActual ? unidadActual.precio : null)
+      : precioUnidadDesdeCosto(Number(p.costo_kg), cfg);
+    if (precio == null) continue;
     const pack = precioPack(precio, cfg);
     const filtro = `producto_id=eq.${encodeURIComponent(p.id)}`;
     await sb(`presentaciones?${filtro}&unidades_stock=eq.1`, { method: "PATCH", body: { precio } });
@@ -56,7 +64,7 @@ exports.handler = async (event) => {
 
       if (body.accion === "recalcular") {
         const { cfg } = await obtenerCostos();
-        const cambios = await recalcularTodos(cfg);
+        const cambios = await recalcularTodos(cfg, body.modo);
         return { statusCode: 200, headers, body: JSON.stringify({ ok: true, cambios }) };
       }
 

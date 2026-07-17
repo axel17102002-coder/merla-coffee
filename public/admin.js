@@ -129,6 +129,15 @@ $("#pedidos").addEventListener("click", async (e) => {
 });
 
 $("#reload").addEventListener("click", cargarPedidos);
+
+// Secciones Pedidos / Gestión
+$("#secciones").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-seccion]");
+  if (!b) return;
+  $("#secciones").querySelectorAll("button").forEach((x) => x.classList.toggle("seccion-activa", x === b));
+  $("#seccion-pedidos").hidden = b.dataset.seccion !== "pedidos";
+  $("#seccion-gestion").hidden = b.dataset.seccion !== "gestion";
+});
 // La config avanzada se carga al abrir el desplegable dentro de Precios
 document.addEventListener("DOMContentLoaded", () => {
   const det = document.getElementById("det-costos");
@@ -173,7 +182,9 @@ $("#stock").addEventListener("input", (e) => {
   const fila = input.closest(".fila");
   const unidades = Math.floor((Number(input.value) || 0) / gramosPorUnidad);
   fila.querySelector("[data-preview]").textContent = `= ${unidades} bags`;
-  fila.querySelectorAll("[data-stock-action]").forEach((b) => (b.disabled = unidades <= 0));
+  const vacio = input.value.trim() === "";
+  fila.querySelector('[data-stock-action="sumar"]').disabled = unidades <= 0;
+  fila.querySelector('[data-stock-action="fijar"]').disabled = vacio;
 });
 
 $("#stock").addEventListener("click", async (e) => {
@@ -230,7 +241,11 @@ function renderPrecios(productos) {
     const abierto = p.id === precioAbierto;
     const editor = !abierto ? "" : `
       <div class="pr__editor">
-        <label class="pr__campo">¿Cuánto te cuesta el kilo de este café?
+        <div class="pr__modo">
+          <button type="button" class="chip-costo activo" data-modo-costo="kilo">Costo por kilo</button>
+          <button type="button" class="chip-costo" data-modo-costo="cuarto">por ¼ (250 g)</button>
+        </div>
+        <label class="pr__campo">¿Cuánto te cuesta este café?
           <input type="number" min="0" step="1" inputmode="numeric" placeholder="68000"
                  value="${p.costo_kg != null ? Math.round(p.costo_kg) : ""}" data-costo>
         </label>
@@ -258,6 +273,16 @@ function renderPrecios(productos) {
 }
 
 $("#precios").addEventListener("click", (e) => {
+  const m = e.target.closest("[data-modo-costo]");
+  if (m && !m.classList.contains("activo")) {
+    const fila = m.closest(".fila--precio");
+    const inp = fila.querySelector("[data-costo]");
+    const v = Number(inp.value) || 0;
+    if (v) inp.value = m.dataset.modoCosto === "cuarto" ? Math.round(v / 4) : Math.round(v * 4);
+    fila.querySelectorAll("[data-modo-costo]").forEach((x) => x.classList.toggle("activo", x === m));
+    refrescarPreview(fila);
+    return;
+  }
   const b = e.target.closest("[data-editar]");
   if (!b) return;
   precioAbierto = precioAbierto === b.dataset.editar ? null : b.dataset.editar;
@@ -266,8 +291,15 @@ $("#precios").addEventListener("click", (e) => {
 
 
 // Muestra a cuánto queda todo y avisa si el margen se aleja del objetivo
+// El costo puede estar tipeado por kilo o por cuarto: siempre lo pasamos a kilo
+function costoKgDe(fila) {
+  const v = Number(fila.querySelector("[data-costo]").value) || 0;
+  const cuarto = fila.querySelector('[data-modo-costo="cuarto"]')?.classList.contains("activo");
+  return cuarto ? v * 4 : v;
+}
+
 function refrescarPreview(fila) {
-  const costo = Number(fila.querySelector("[data-costo]").value) || 0;
+  const costo = costoKgDe(fila);
   const aMano = Number(fila.querySelector("[data-precio]").value) || 0;
   const prev = fila.querySelector("[data-preview]");
   if (costo <= 0) { prev.textContent = ""; prev.className = "fila__preview"; return; }
@@ -316,7 +348,7 @@ $("#precios").addEventListener("click", (e) => {
   if (!boton) return;
   const fila = boton.closest(".fila--precio");
   const campo = fila.querySelector("[data-precio]");
-  const actual = Number(campo.value) || Number(precioUnidadDesdeCosto(Number(fila.querySelector("[data-costo]").value) || 0, cfgPrecios));
+  const actual = Number(campo.value) || Number(precioUnidadDesdeCosto(costoKgDe(fila), cfgPrecios));
   if (!actual) return;
   campo.value = redondearPrecio(actual, 50);
   campo.dataset.tocado = "1";
@@ -327,7 +359,7 @@ $("#precios").addEventListener("click", async (e) => {
   const boton = e.target.closest("[data-precio-action]");
   if (!boton) return;
   const fila = boton.closest(".fila--precio");
-  const costo = Number(fila.querySelector("[data-costo]").value);
+  const costo = costoKgDe(fila);
   if (!costo || costo <= 0) {
     mensaje("#precio-message", "⚠️ Cargá el costo del kilo");
     return;
@@ -677,6 +709,21 @@ $("#insumos").addEventListener("click", async (e) => {
     TABS["tab-precios"].cargado = false;
   } catch (err) {
     mensaje("#config-message", `⚠️ ${err.message}`);
+  }
+});
+
+$("#recalcular-packs").addEventListener("click", async () => {
+  if (!confirm("¿Recalcular los PACKS de todos los cafés?\n\nTus precios de unidad no cambian: solo se re-deriva cada pack con su % OFF.")) return;
+  const boton = $("#recalcular-packs");
+  boton.disabled = true;
+  try {
+    const r = await api("/api/admin-config", { method: "POST", body: JSON.stringify({ accion: "recalcular", modo: "packs" }) });
+    mensaje("#config-message", `✅ ${r.cambios.length} packs actualizados.`, true);
+    TABS["tab-precios"].cargado = false;
+  } catch (err) {
+    mensaje("#config-message", `⚠️ ${err.message}`);
+  } finally {
+    boton.disabled = false;
   }
 });
 

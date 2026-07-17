@@ -30,10 +30,14 @@
     </section>
 
     <section id="panel" hidden>
+      <nav class="secciones" id="secciones">
+        <button data-seccion="pedidos" class="seccion-activa">🧾 Pedidos</button>
+        <button data-seccion="gestion">⚙️ Gestión</button>
+      </nav>
       <div class="panel__layout">
 
-        <!-- COLUMNA IZQUIERDA: Pedidos -->
-        <div class="columna-pedidos">
+        <!-- SECCIÓN: Pedidos -->
+        <div class="columna-pedidos" id="seccion-pedidos">
           <div class="col__head">
             <h2 class="admin__subtitulo">Pedidos</h2>
             <button id="reload" class="btn-sec">Actualizar</button>
@@ -48,8 +52,8 @@
           <div class="pedidos" id="pedidos"></div>
         </div>
 
-        <!-- COLUMNA DERECHA: Gestión (Stock / Precios / Cupones) -->
-        <div class="columna-gestion">
+        <!-- SECCIÓN: Gestión (Stock / Precios / Cupones / Productos) -->
+        <div class="columna-gestion" id="seccion-gestion" hidden>
           <div class="panel__tabs">
             <button id="tab-stock" class="tab-activo">Stock</button>
             <button id="tab-precios">Precios</button>
@@ -121,7 +125,8 @@
             </div>
 
             <p class="mensaje" id="config-message"></p>
-            <button class="btn-recalcular" id="recalcular">🔄 Recalcular precios de todos los cafés</button>
+            <button class="btn-recalcular" id="recalcular">🔄 Recalcular todo con el margen objetivo</button>
+            <button class="btn-recalcular btn-recalcular--sec" id="recalcular-packs">📦 Recalcular solo los packs (mantiene tus precios de unidad)</button>
             <p class="panel__hint">Reaplica el margen objetivo a cada café según su costo. Pisa los precios que hayas redondeado a mano.</p>
           </div>
             </details>

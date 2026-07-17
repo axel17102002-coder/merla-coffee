@@ -32,17 +32,17 @@ exports.handler = async (event) => {
 
       // Unidades directas, o calculadas desde gramos de café
       const gpu = Number(body.gramosPorUnidad) > 0 ? Number(body.gramosPorUnidad) : CONFIG.drip.gramosPorUnidad;
+      // "fijar" acepta 0 (dejar sin stock); "sumar" necesita algo que sumar
       let unidades;
-      if (Number(body.unidades) > 0) {
-        unidades = Math.floor(Number(body.unidades));
-      } else if (Number(body.gramos) > 0) {
-        unidades = Math.floor(Number(body.gramos) / gpu);
+      if (body.unidades !== undefined && Number.isFinite(Number(body.unidades))) {
+        unidades = Math.max(0, Math.floor(Number(body.unidades)));
+      } else if (body.gramos !== undefined && Number.isFinite(Number(body.gramos))) {
+        unidades = Math.max(0, Math.floor(Number(body.gramos) / gpu));
       } else {
-        return {
-          statusCode: 400,
-          headers,
-          body: JSON.stringify({ error: "Ingresá los gramos de café (o unidades) a cargar" }),
-        };
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "Ingresá los gramos de café (o unidades) a cargar" }) };
+      }
+      if (accion === "sumar" && unidades <= 0) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "Para sumar, ingresá una cantidad mayor a 0" }) };
       }
 
       const [producto] = await sb(`productos?id=eq.${encodeURIComponent(producto_id)}&select=id,stock`);

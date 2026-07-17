@@ -172,3 +172,17 @@ button:disabled { opacity: .55; cursor: wait; }
 .cfg-avanzada { margin-top: 18px; background: var(--papel); border: 1px solid var(--borde); border-radius: 14px; padding: 14px 18px; }
 .cfg-avanzada summary { cursor: pointer; font-weight: 800; color: var(--verde); }
 .cfg-avanzada > div { margin-top: 14px; }
+
+/* Secciones Pedidos / Gestión */
+.secciones { display: flex; gap: 8px; margin-bottom: 22px; }
+.secciones button { border: 1px solid var(--borde); border-radius: 12px; padding: 12px 22px; background: var(--papel); color: var(--gris); font-weight: 800; font-size: 1rem; }
+.secciones button.seccion-activa { background: var(--verde); color: #fff; border-color: var(--verde); }
+.panel__layout { grid-template-columns: 1fr; }
+.columna-pedidos, .columna-gestion { max-width: 880px; }
+.columna-gestion { position: static; }
+
+/* Toggle costo por kilo / cuarto */
+.pr__modo { display: flex; gap: 6px; }
+.chip-costo { border: 1px solid var(--borde); border-radius: 999px; padding: 6px 14px; background: var(--papel); color: var(--gris); font-weight: 700; font-size: .82rem; }
+.chip-costo.activo { background: var(--verde); color: #fff; border-color: var(--verde); }
+.btn-recalcular--sec { background: transparent; border: 1px solid var(--borde); color: var(--verde); margin-top: 8px; }
