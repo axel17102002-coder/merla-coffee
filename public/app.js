@@ -1,7 +1,30 @@
-// ===== Configuración =====
-// El catálogo (productos, precios, stock) y los cupones viven en Supabase y
-// llegan por las funciones de Netlify. Las reglas de precios están en motor.js.
-// Número de WhatsApp para recibir pedidos (formato internacional, sin + ni espacios)
+/**
+ * ============================================================================
+ * Merla Coffee - app.js
+ * ----------------------------------------------------------------------------
+ * Controla toda la interfaz de la tienda online.
+ *
+ * Responsabilidades:
+ *  - Cargar catálogo desde la API.
+ *  - Administrar el carrito.
+ *  - Aplicar descuentos, cupones y puntos.
+ *  - Gestionar los checkouts (WhatsApp, Mercado Pago y MODO).
+ *  - Manejar la interfaz (modales, carrito, filtros y animaciones).
+ *
+ * El cálculo de precios NO se realiza aquí.
+ * Toda la lógica comercial está centralizada en motor.js.
+ * ============================================================================
+ */
+
+// ============================================================================
+// CONFIGURACIÓN
+// ----------------------------------------------------------------------------
+// Variables globales de configuración del frontend.
+//
+// - Define el número de WhatsApp.
+// - Configura el ambiente de MODO.
+// - Carga dinámicamente el SDK de MODO cuando está habilitado.
+// ============================================================================
 const WHATSAPP = "5492216803376";
 
 // Ambiente de MODO: "test" (sandbox, no cobra de verdad) o "produccion".
@@ -20,8 +43,16 @@ if (CONFIG.pagos.modo) {
   document.head.appendChild(modoScript);
 }
 
-// ===== Estado =====
-// Carrito: { <id de presentación>: cantidad }  (ej. "volcanico-pack5": 1)
+// ============================================================================
+// ESTADO DE LA APLICACIÓN
+// ----------------------------------------------------------------------------
+// Variables que representan el estado actual del frontend.
+//
+// carrito       -> Productos agregados por el usuario.
+// DATOS         -> Catálogo descargado desde la API.
+// filtroRegion  -> Región actualmente seleccionada.
+// saldoPuntos   -> Puntos disponibles del cliente.
+// ============================================================================
 let carrito = JSON.parse(localStorage.getItem("merla-carrito") || "{}");
 // Los carritos del formato viejo (claves "producto:presentacion") se descartan
 if (Object.keys(carrito).some((k) => k.includes(":"))) {
@@ -34,14 +65,26 @@ let filtroRegion = "todos";
 let saldoPuntos = null; // saldo conocido del email actual (null = sin consultar)
 
 const $ = (sel) => document.querySelector(sel);
-
+/**
+ * Formatea un número como moneda argentina.
+ *
+ * @param {number} n
+ * @returns {string}
+ */
 const formatear = (n) =>
   n.toLocaleString("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 });
 
+/**
+ * Guarda el carrito en LocalStorage.
+ */
 function guardar() {
   localStorage.setItem("merla-carrito", JSON.stringify(carrito));
 }
 
+/**
+ * Devuelve el carrito como un arreglo de objetos.
+ * @returns {Array<{presentacion:string, qty:number}>}
+ */
 function itemsDelCarrito() {
   return Object.entries(carrito)
     .filter(([, qty]) => qty > 0)
@@ -53,7 +96,17 @@ const canjeActivo = () => localStorage.getItem("merla-canje") === "1";
 const emailCliente = () => (localStorage.getItem("merla-email") || "").trim().toLowerCase();
 const emailValido = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
-// ===== Carga del catálogo =====
+// ============================================================================
+// CARGA DE LA TIENDA
+// ----------------------------------------------------------------------------
+// Obtiene el catálogo desde Netlify/Supabase y renderiza:
+//
+// - filtros
+// - productos
+// - carrito
+//
+// Si ocurre un error se muestra un botón para reintentar.
+// ============================================================================
 async function cargarTienda() {
   $("#product-grid").innerHTML = `<p class="grid__estado">Cargando cafés… ☕</p>`;
   try {
@@ -72,6 +125,16 @@ async function cargarTienda() {
   }
 }
 
+// ============================================================================
+// PRODUCTOS
+// ----------------------------------------------------------------------------
+// Funciones relacionadas con:
+//
+// - tarjetas de productos
+// - selector de presentaciones
+// - badges de stock
+// - render del catálogo
+// ============================================================================
 function productoDe(presentacionId) {
   for (const p of DATOS.productos) {
     const pres = (p.presentaciones || []).find((x) => x.id === presentacionId);
@@ -117,7 +180,17 @@ function selectorPresentaciones(p) {
         .join("")}
     </div>`;
 }
-
+/**
+ * Devuelve el badge de stock que se mostrará sobre la tarjeta.
+ *
+ * Reglas:
+ * - Agotado.
+ * - Últimas unidades.
+ * - Sin badge.
+ *
+ * @param {Object} p
+ * @returns {string}
+ */
 function badgeStock(p) {
   // Productos que no vuelven a ingresar  · Sin reposición
   if (p.id === "andino" || p.id === "silverio-nina") {
@@ -182,8 +255,18 @@ function presSeleccionada(contenedor, productoId) {
   return opciones[0] ? opciones[0].id : null;
 }
 
-// ===== Pedido actual =====
-// Calcula con el motor, soltando cupón/canje si dejaron de ser válidos
+/**
+ * Calcula el estado actual del pedido utilizando el motor de precios.
+ *
+ * Si un cupón o un canje dejaron de ser válidos (por cambios en el carrito),
+ * los elimina automáticamente y vuelve a calcular el pedido.
+ *
+ * @returns {{
+ *   items:Array,
+ *   calc:Object|null,
+ *   error:string|null
+ * }}
+ */
 function estadoPedido() {
   const items = itemsDelCarrito();
   if (!DATOS || items.length === 0) return { items, calc: null, error: null };
@@ -205,7 +288,16 @@ function estadoPedido() {
   return calc.ok ? { items, calc, error: null } : { items, calc: null, error: calc.error };
 }
 
-// ===== Render del carrito =====
+/**
+ * Renderiza completamente el carrito.
+ *
+ * Actualiza:
+ * - listado de productos
+ * - descuentos
+ * - puntos
+ * - botones de pago
+ * - mensajes promocionales
+ */
 function renderCarrito() {
   if (!DATOS) return;
   const { items, calc, error } = estadoPedido();
@@ -308,7 +400,15 @@ function renderCarrito() {
   $("#modo-test-note").hidden = (DATOS.config.pagoAmbiente || "test") !== "test";
 }
 
-// Widget de puntos dentro del carrito
+// ============================================================================
+// CLUB MERLA
+// ----------------------------------------------------------------------------
+// Gestiona:
+//
+// - Consulta de puntos.
+// - Canje.
+// - Visualización del saldo.
+// ============================================================================
 function renderPuntosWidget() {
   const box = $("#points-box");
   const cfg = DATOS.config.fidelidad;
@@ -361,6 +461,13 @@ function intentarCambio(nuevoCarrito, mensajeOk) {
   return true;
 }
 
+/**
+ * Agrega una presentación al carrito.
+ *
+ * @param {string} productoId
+ * @param {string} presentacionId
+ * @param {boolean} abrir Si es true abre el carrito al agregar.
+ */
 function agregar(productoId, presentacionId, abrir = false) {
   const nuevo = { ...carrito, [presentacionId]: (carrito[presentacionId] || 0) + 1 };
   const info = productoDe(presentacionId);
@@ -388,7 +495,14 @@ function vaciarCarrito() {
   renderCarrito();
 }
 
-// ===== Cupones =====
+// ============================================================================
+// CUPONES
+// ----------------------------------------------------------------------------
+// Valida cupones contra la API.
+//
+// Endpoint:
+// POST /api/validar-cupon
+// ============================================================================
 async function aplicarCupon(codigo) {
   if (itemsDelCarrito().length === 0) {
     mostrarToast("Agregá productos al carrito para usar el cupón");
@@ -452,8 +566,23 @@ function quitarCanje() {
   localStorage.removeItem("merla-canje");
   renderCarrito();
 }
-
+// ============================================================================
+// CHECKOUT
+// ----------------------------------------------------------------------------
+// Métodos disponibles:
+//
+// - WhatsApp.
+// - Mercado Pago.
+// - MODO.
+//
+// Antes de iniciar cualquier pago:
+//
+// - valida el carrito
+// - valida los datos de envío
+// - registra el pedido en el servidor
+// ============================================================================
 // ===== Checkout por WhatsApp =====
+
 async function checkoutWhatsApp() {
   const { calc } = estadoPedido();
   if (!calc) return;
