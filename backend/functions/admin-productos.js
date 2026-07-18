@@ -1,14 +1,19 @@
-// Administración protegida de productos (alta y publicación).
+// Administración protegida de productos (alta, publicación y baja).
 // Dos tipos de producto:
 //  - 'cafe' (por defecto): al crearlo se generan solas sus dos presentaciones
 //    (unidad y pack x5) con los precios calculados a partir del costo del kilo.
 //  - 'simple': sin fórmula. Se carga el precio de venta a mano (tazas, cafés
 //    en bolsa de 1/4 kilo, etc.) y nace con una sola presentación "Unidad".
+//    Si la categoría es 'cafe_bolsa' (café en bolsa 1/4), acepta los mismos
+//    campos descriptivos que el café (origen, variedad, notas, etc.): es el
+//    mismo café en otra presentación, así que conviene que muestre la misma
+//    info en la tienda.
 // En ambos casos nace DESACTIVADO: se publica desde el panel cuando esté listo.
 //
 //   GET                              → { productos: [...] }
 //   POST { tipo, nombre, ... }       → crea producto + presentaciones
 //   PATCH { id, activo }             → publica / despublica
+//   DELETE ?id=<id>                  → borra el producto (y sus presentaciones)
 
 const { sb } = require("../lib/supabase.js");
 const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
@@ -87,6 +92,16 @@ exports.handler = async (event) => {
           stock,
           tipo: "simple",
           categoria,
+          // El café en bolsa es el mismo café que las drip bags en otra
+          // presentación: acepta la misma info descriptiva (queda vacía/null
+          // en tazas y otros, que no la necesitan).
+          origen: texto(b.origen, 60),
+          region: texto(b.region, 80),
+          variedad: texto(b.variedad, 80),
+          proceso: texto(b.proceso, 60),
+          sca: texto(b.sca, 10),
+          tostador: texto(b.tostador, 60),
+          notas: texto(b.notas, 200),
           descripcion: texto(b.descripcion, 600),
           imagen: texto(b.imagen, 400),
         };
@@ -177,6 +192,17 @@ exports.handler = async (event) => {
         return { statusCode: 404, headers, body: JSON.stringify({ error: "Producto inexistente" }) };
       }
       return { statusCode: 200, headers, body: JSON.stringify({ producto }) };
+    }
+
+    if (event.httpMethod === "DELETE") {
+      const id = (event.queryStringParameters || {}).id;
+      if (!id) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "Falta el producto" }) };
+      }
+      // Las presentaciones se borran solas (on delete cascade); los pedidos ya
+      // hechos no se tocan: guardan nombre/precio propios, no una referencia viva.
+      await sb(`productos?id=eq.${encodeURIComponent(id)}`, { method: "DELETE" });
+      return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };
     }
 
     return { statusCode: 405, headers, body: JSON.stringify({ error: "Método no permitido" }) };

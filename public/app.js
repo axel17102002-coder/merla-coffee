@@ -146,7 +146,9 @@ function productoDe(presentacionId) {
 // ===== Filtro por región =====
 function renderFiltros() {
   const box = $("#region-filtros");
-  const origenes = [...new Set(DATOS.productos.map((p) => p.origen).filter(Boolean))];
+  // Solo drip bags: el café en bolsa (1/4) puede tener el mismo origen, pero
+  // el filtro controla la grilla principal, que es solo de drip bags.
+  const origenes = [...new Set(DATOS.productos.filter((p) => p.tipo !== "simple").map((p) => p.origen).filter(Boolean))];
   if (origenes.length < 2) {
     box.hidden = true;
     return;

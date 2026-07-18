@@ -159,6 +159,7 @@ function filaProductoStock(p) {
         <button data-stock-action="sumar" disabled>Sumar</button>
         <button class="sec" data-stock-action="fijar" disabled>Fijar</button>
         <button class="${p.activo ? "sec" : ""}" data-producto-toggle="${escapar(p.id)}" data-activo="${p.activo}">${p.activo ? "Ocultar" : "Publicar"}</button>
+        <button class="px-borrar" data-producto-eliminar="${escapar(p.id)}" title="Eliminar producto" aria-label="Eliminar ${escapar(p.nombre)}">🗑</button>
       </div>
     </article>`;
 }
@@ -236,6 +237,25 @@ $("#productos-columnas").addEventListener("click", async (e) => {
     } catch (err) {
       mensaje("#producto-message", `⚠️ ${err.message}`);
       toggle.disabled = false;
+    }
+    return;
+  }
+
+  // Eliminar producto (y sus presentaciones)
+  const borrar = e.target.closest("[data-producto-eliminar]");
+  if (borrar) {
+    const fila = borrar.closest(".fila");
+    const nombre = fila.querySelector("strong").textContent;
+    if (!confirm(`¿Eliminar "${nombre}" definitivamente? No se puede deshacer.`)) return;
+    borrar.disabled = true;
+    try {
+      await api(`/api/admin-productos?id=${encodeURIComponent(borrar.dataset.productoEliminar)}`, { method: "DELETE" });
+      TABS["tab-precios"].cargado = false; // que Precios deje de mostrarlo
+      await cargarProductos();
+      mensaje("#producto-message", `✅ "${nombre}" eliminado.`, true);
+    } catch (err) {
+      mensaje("#producto-message", `⚠️ ${err.message}`);
+      borrar.disabled = false;
     }
     return;
   }
@@ -1059,17 +1079,24 @@ $("#cupones").addEventListener("click", async (e) => {
 let productoTipo = "cafe";
 // Categoría, solo aplica a 'simple': 'cafe_bolsa' (café en bolsa 1/4) o 'merch' (tazas y otros)
 let productoCategoria = "cafe_bolsa";
+// El café en bolsa (1/4) es el mismo café que las drip bags en otra
+// presentación, así que muestra los mismos campos descriptivos; las tazas y
+// otros productos no los necesitan.
+function actualizarCamposDescriptivos() {
+  const mostrar = productoTipo === "cafe" || (productoTipo === "simple" && productoCategoria === "cafe_bolsa");
+  $("#campos-cafe").hidden = !mostrar;
+}
 function aplicarTipoProducto(tipo) {
   productoTipo = tipo;
   const esSimple = tipo === "simple";
   $("#prod-tipo").querySelectorAll("button").forEach((x) => x.classList.toggle("px-chip--activo", x.dataset.tipo === tipo));
   $("#prod-categoria").hidden = !esSimple;
-  $("#campos-cafe").hidden = esSimple;
   $("#prod-costo").hidden = esSimple;
   $("#prod-costo").required = !esSimple;
   $("#prod-precio").hidden = !esSimple;
   $("#prod-stock").placeholder = esSimple ? "Stock (unidades)" : "Stock (bags)";
   $("#prod-preview").textContent = "";
+  actualizarCamposDescriptivos();
 }
 $("#prod-tipo").addEventListener("click", (e) => {
   const b = e.target.closest("[data-tipo]");
@@ -1080,6 +1107,12 @@ $("#prod-categoria").addEventListener("click", (e) => {
   if (!b) return;
   productoCategoria = b.dataset.categoria;
   $("#prod-categoria").querySelectorAll("button").forEach((x) => x.classList.toggle("px-chip--activo", x === b));
+  // Tazas y otros no llevan info de café: se limpia lo que haya quedado tipeado
+  if (productoCategoria !== "cafe_bolsa") {
+    ["#prod-origen", "#prod-region", "#prod-variedad", "#prod-proceso", "#prod-tostador", "#prod-sca", "#prod-notas"]
+      .forEach((sel) => { $(sel).value = ""; });
+  }
+  actualizarCamposDescriptivos();
 });
 
 // Vista previa del costo mientras se escribe (el precio final se decide en Precios)
@@ -1139,6 +1172,15 @@ $("#producto-form").addEventListener("submit", async (e) => {
           nombre: $("#prod-nombre").value,
           precio: Number($("#prod-precio").value),
           stock: Number($("#prod-stock").value) || 0,
+          // Solo se completan si la categoría es "Café en bolsa (1/4)"; en
+          // "Tazas y otros" quedan vacíos (se limpian solos al elegir esa categoría)
+          origen: $("#prod-origen").value,
+          region: $("#prod-region").value,
+          variedad: $("#prod-variedad").value,
+          proceso: $("#prod-proceso").value,
+          tostador: $("#prod-tostador").value,
+          sca: $("#prod-sca").value,
+          notas: $("#prod-notas").value,
           descripcion: $("#prod-descripcion").value,
           imagen,
         }
