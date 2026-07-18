@@ -1320,6 +1320,23 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 .entrega__form input:focus { outline: 2px solid var(--caramelo); border-color: var(--caramelo); }
 .entrega__aviso { font-size: 0.78rem; color: var(--caramelo); font-weight: 600; margin: 2px 0 0; }
 
+/* Opciones de envío (a domicilio / a sucursal, por transportista) */
+.entrega__opciones { display: grid; gap: 6px; }
+.envio-opcion {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  border: 1.5px solid var(--crema-borde); border-radius: 12px; padding: 9px 12px;
+  font-size: 0.84rem; cursor: pointer; background: var(--crema-suave);
+}
+.envio-opcion:has(input:checked) { border-color: var(--verde); background: #eef3ec; font-weight: 700; }
+.envio-opcion input { accent-color: var(--verde); }
+.envio-opcion__label { display: flex; align-items: center; gap: 7px; }
+.envio-opcion__precio { white-space: nowrap; }
+.envio-sucursal-select {
+  width: 100%; border: 1.5px solid var(--crema-borde); border-radius: 12px;
+  padding: 9px 14px; font-family: var(--fuente-texto); font-size: 0.86rem;
+  background: var(--crema-suave); color: var(--tinta); margin-top: 4px;
+}
+
 @media (max-width: 720px) {
   .club { grid-template-columns: 1fr; }
 }

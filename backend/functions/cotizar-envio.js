@@ -1,14 +1,15 @@
 // POST /api/cotizar-envio
 //   { items: [{presentacion, qty}], cp: string, ciudad: string, provincia: string }
 //
-// Cotiza en vivo el envío a domicilio con Zipnova a partir del carrito.
-// Es público (lo llama el carrito antes de pagar) y no expone nada sensible,
-// solo un precio: el monto que se cobra de verdad se vuelve a calcular en el
-// checkout (mercadopago-checkout / whatsapp-pedido), así que esto es
-// puramente informativo para mostrar el total en el carrito.
+// Lista en vivo las opciones de envío (a domicilio y a sucursal, de todos
+// los transportistas) con Zipnova a partir del carrito. Es público (lo llama
+// el carrito antes de pagar) y no expone nada sensible: el monto que se
+// cobra de verdad se vuelve a calcular en el checkout (mercadopago-checkout /
+// whatsapp-pedido), que vuelve a cotizar y busca la opción elegida — esto es
+// puramente informativo para mostrar las opciones en el carrito.
 
 const { obtenerCatalogo } = require("../lib/supabase.js");
-const { resolverEnvioCosto } = require("../lib/envio-costo.js");
+const { listarOpcionesEnvio } = require("../lib/envio-costo.js");
 const { calcularPedido } = require("../../public/motor.js");
 
 exports.handler = async (event) => {
@@ -35,14 +36,12 @@ exports.handler = async (event) => {
       return { statusCode: 400, headers, body: JSON.stringify({ error: pedido.error }) };
     }
 
-    const resultado = await resolverEnvioCosto(
-      body.items, productos, { metodo: "envio", cp, ciudad, provincia }, pedido.subtotal
-    );
+    const resultado = await listarOpcionesEnvio(body.items, productos, { cp, ciudad, provincia }, pedido.subtotal);
     if (!resultado.ok) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: resultado.error }) };
     }
 
-    return { statusCode: 200, headers, body: JSON.stringify({ costo: resultado.costo }) };
+    return { statusCode: 200, headers, body: JSON.stringify({ opciones: resultado.opciones }) };
   } catch (err) {
     console.error("cotizar-envio:", err);
     return { statusCode: 502, headers, body: JSON.stringify({ error: "No pudimos calcular el envío. Probá de nuevo." }) };

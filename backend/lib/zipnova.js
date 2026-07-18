@@ -1,5 +1,5 @@
-// Cliente mínimo de la API de Zipnova (cotización de envíos a domicilio).
-// Docs: https://docs.zipnova.com/envios/recursos-api/envios/cotizar-envios
+// Cliente mínimo de la API de Zipnova (cotización de envíos a domicilio y a
+// sucursal). Docs: https://docs.zipnova.com/envios/recursos-api/envios/cotizar-envios
 //
 // Autenticación Basic (usuario = token, contraseña = secret): es el modo
 // pensado para integrar UNA cuenta propia, sin el flujo OAuth con redirect
@@ -30,17 +30,40 @@ const PAQUETE_CM = { height: 10, width: 20, length: 25 };
 // categoría especial (no es colchón, sanitario, electro, vidrio, etc.).
 const CLASIFICACION_GENERAL = 1;
 
-// Cotiza un envío a domicilio con los datos ya calculados del pedido.
-//   cp, ciudad, provincia: destino (Zipnova exige ciudad/provincia además del CP)
-//   pesoGramos: peso total estimado del paquete
-//   valorDeclarado: valor de la mercadería (el subtotal del pedido)
-// Devuelve { ok:true, precio, servicio } o { ok:false, error } — nunca tira.
-async function cotizar({ cp, ciudad, provincia, pesoGramos, valorDeclarado }) {
-  const cred = credenciales();
-  if (!cred) {
-    return { ok: false, error: "El envío a domicilio no está disponible en este momento. Probá con retiro o escribinos por WhatsApp." };
-  }
+// Zipnova puede devolver el mismo carrier+servicio dos veces con precios
+// distintos (tarifas/condiciones que no se diferencian en estos campos), así
+// que "carrier+servicio" identifica un GRUPO, no una fila única. `clave`
+// distingue cada fila dentro de ESTA cotización (para el selector del
+// carrito); `grupo` es lo que se manda al checkout para volver a cotizar y
+// elegir, de ese mismo grupo, la opción más barata disponible en ese momento
+// (nunca cobramos de más si el pedido de nuevo trae precios distintos).
+function grupoOpcion(o) {
+  return `${o.carrier && o.carrier.id}:${o.service_type && o.service_type.code}`;
+}
 
+// Un resultado de Zipnova → la forma que usa el resto de la app. Las
+// sucursales (service_type.code === "pickup_point") traen su propia lista de
+// puntos cercanos al destino; a domicilio no tiene sucursales.
+function normalizarOpcion(o, indice) {
+  const esSucursal = o.service_type && o.service_type.code === "pickup_point";
+  return {
+    clave: `${grupoOpcion(o)}:${indice}`,
+    grupo: grupoOpcion(o),
+    tipo: esSucursal ? "sucursal" : "domicilio",
+    transportista: (o.carrier && o.carrier.name) || "Transportista",
+    precio: Math.round(o.amounts.price_incl_tax),
+    sucursales: esSucursal
+      ? (o.pickup_points || []).slice(0, 5).map((p) => ({
+          id: p.point_id,
+          descripcion: p.description || "",
+          direccion: [p.location && p.location.street, p.location && p.location.street_number]
+            .filter(Boolean).join(" "),
+        }))
+      : null,
+  };
+}
+
+async function pedirCotizacion({ cred, cp, ciudad, provincia, pesoGramos, valorDeclarado }) {
   const auth = Buffer.from(`${cred.token}:${cred.secret}`).toString("base64");
   const cuerpo = {
     account_id: Number(cred.accountId),
@@ -59,42 +82,62 @@ async function cotizar({ cp, ciudad, provincia, pesoGramos, valorDeclarado }) {
     sort_by: "price",
   };
 
-  let res;
-  try {
-    res = await fetch("https://api.zipnova.com.ar/v2/shipments/quote", {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${auth}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(cuerpo),
-    });
-  } catch (err) {
-    console.error("zipnova: error de red al cotizar:", err.message);
-    return { ok: false, error: "No pudimos calcular el envío. Probá de nuevo en unos minutos." };
-  }
-
+  const res = await fetch("https://api.zipnova.com.ar/v2/shipments/quote", {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${auth}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(cuerpo),
+  });
   const data = await res.json().catch(() => null);
   if (!res.ok || !data) {
-    console.error("zipnova: la cotización falló:", res.status, JSON.stringify(data));
-    return { ok: false, error: "No pudimos calcular el envío para ese código postal." };
+    const err = new Error("cotizacion_fallida");
+    err.status = res.status;
+    err.data = data;
+    throw err;
   }
-
-  const opciones = (data.all_results || data.results || []).filter((o) => o && o.selectable !== false && o.amounts);
-  if (!opciones.length) {
-    return { ok: false, error: "No hay opciones de envío disponibles para ese código postal." };
-  }
-
-  const mejor = opciones.reduce((min, o) =>
-    o.amounts.price_incl_tax < min.amounts.price_incl_tax ? o : min
-  );
-
-  return {
-    ok: true,
-    precio: Math.round(mejor.amounts.price_incl_tax),
-    servicio: (mejor.service_type && mejor.service_type.name) || null,
-  };
+  return (data.all_results || data.results || []).filter((o) => o && o.selectable !== false && o.amounts);
 }
 
-module.exports = { disponible, cotizar };
+// Todas las opciones de envío disponibles (a domicilio y a sucursal, de
+// todos los transportistas), ordenadas de más barata a más cara.
+// Devuelve { ok:true, opciones } o { ok:false, error } — nunca tira.
+async function cotizarOpciones({ cp, ciudad, provincia, pesoGramos, valorDeclarado }) {
+  const cred = credenciales();
+  if (!cred) {
+    return { ok: false, error: "El envío no está disponible en este momento. Probá con retiro o escribinos por WhatsApp." };
+  }
+
+  let crudas;
+  try {
+    crudas = await pedirCotizacion({ cred, cp, ciudad, provincia, pesoGramos, valorDeclarado });
+  } catch (err) {
+    console.error("zipnova: la cotización falló:", err.status, JSON.stringify(err.data || err.message));
+    return { ok: false, error: "No pudimos calcular el envío para esa dirección." };
+  }
+
+  if (!crudas.length) {
+    return { ok: false, error: "No hay opciones de envío disponibles para esa dirección." };
+  }
+
+  const opciones = crudas.map(normalizarOpcion).sort((a, b) => a.precio - b.precio);
+  return { ok: true, opciones };
+}
+
+// Vuelve a cotizar y busca, dentro del mismo grupo (carrier+servicio) que
+// eligió el cliente, la opción más barata disponible en ese momento — nunca
+// se confía en el precio que vio en el carrito. Si el grupo ya no está
+// disponible, hay que elegir de nuevo.
+async function precioDeOpcion({ grupo, cp, ciudad, provincia, pesoGramos, valorDeclarado }) {
+  const resultado = await cotizarOpciones({ cp, ciudad, provincia, pesoGramos, valorDeclarado });
+  if (!resultado.ok) return resultado;
+  const opcion = resultado.opciones.find((o) => o.grupo === grupo); // ya vienen ordenadas de más barata a más cara
+  if (!opcion) {
+    return { ok: false, error: "Esa opción de envío ya no está disponible. Volvé a elegir en el carrito." };
+  }
+  return { ok: true, opcion };
+}
+
+module.exports = { disponible, cotizarOpciones, precioDeOpcion };

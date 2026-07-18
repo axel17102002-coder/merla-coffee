@@ -225,11 +225,10 @@
         <p class="entrega__label">¿Cómo lo querés recibir?</p>
         <div class="entrega__ops">
           <label class="entrega__op"><input type="radio" name="entrega" value="retiro" checked> 🏪 Retiro en el local</label>
-          <label class="entrega__op"><input type="radio" name="entrega" value="envio"> 📦 Envío a domicilio</label>
+          <label class="entrega__op"><input type="radio" name="entrega" value="envio"> 📦 Envío</label>
         </div>
         <div class="entrega__form" id="envio-form" hidden>
           <input id="envio-nombre" placeholder="Nombre y apellido" autocomplete="name">
-          <input id="envio-direccion" placeholder="Dirección (calle y número)" autocomplete="street-address">
           <div class="entrega__row">
             <input id="envio-ciudad" placeholder="Ciudad" autocomplete="address-level2">
             <input id="envio-cp" placeholder="Código postal" autocomplete="postal-code" inputmode="numeric">
@@ -238,8 +237,10 @@
             <input id="envio-provincia" placeholder="Provincia" autocomplete="address-level1">
             <input id="envio-telefono" placeholder="Teléfono" autocomplete="tel" inputmode="tel">
           </div>
+          <p class="entrega__aviso" id="envio-costo-estado">📦 Ingresá tu código postal, ciudad y provincia para ver las opciones de envío.</p>
+          <div class="entrega__opciones" id="envio-opciones" hidden></div>
+          <input id="envio-direccion" placeholder="Dirección (calle y número)" autocomplete="street-address">
           <input id="envio-notas" placeholder="Notas (piso, depto, referencia)" autocomplete="off">
-          <p class="entrega__aviso" id="envio-costo-estado">📦 Ingresá tu código postal para calcular el costo de envío.</p>
         </div>
       </div>
       <p class="cart__error" id="cart-error" hidden></p>

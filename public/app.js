@@ -64,9 +64,13 @@ let DATOS = null; // { productos, config } — llega de /tienda
 let filtroRegion = "todos";
 let saldoPuntos = null; // saldo conocido del email actual (null = sin consultar)
 
-// Última cotización de envío a domicilio (Zipnova), atada al destino (CP,
-// ciudad, provincia) y al contenido del carrito: si cualquiera cambia, se recotiza.
-let envioQuote = { clave: "", firma: "", costo: null, cargando: false, error: null };
+// Última cotización de envío (Zipnova), atada al destino (CP, ciudad,
+// provincia) y al contenido del carrito: si cualquiera cambia, se recotiza.
+// `opciones` trae todas las alternativas (a domicilio y a sucursal, de
+// todos los transportistas); el cliente elige una en envioOpcionElegida.
+let envioQuote = { clave: "", firma: "", opciones: [], cargando: false, error: null };
+let envioOpcionElegida = null; // clave de la opción elegida (carrier+servicio)
+let envioSucursalElegida = null; // id de la sucursal, solo si la opción es tipo 'sucursal'
 
 const $ = (sel) => document.querySelector(sel);
 /**
@@ -538,7 +542,9 @@ function vaciarCarrito() {
   guardar();
   localStorage.removeItem("merla-cupon");
   localStorage.removeItem("merla-canje");
-  envioQuote = { clave: "", firma: "", costo: null, cargando: false, error: null };
+  envioQuote = { clave: "", firma: "", opciones: [], cargando: false, error: null };
+  envioOpcionElegida = null;
+  envioSucursalElegida = null;
   renderCarrito();
 }
 
@@ -692,8 +698,14 @@ async function checkoutWhatsApp() {
   msg += `\n💵 Pagando por transferencia o depósito: *${formatear(precioTransferencia(calc.total))}* (${CONFIG.transferencia.descuento}% OFF)`;
 
   const entrega = datosEntrega();
-  if (entrega.metodo === "envio") {
-    msg += `\n\n📦 *Envío a domicilio*`;
+  if (entrega.metodo === "envio" && entrega.opcionTipo === "sucursal") {
+    msg += `\n\n🏤 *Envío a sucursal (${entrega.transportista})*`;
+    msg += `\n${entrega.nombre}`;
+    if (entrega.sucursal) msg += `\n${entrega.sucursal.descripcion || entrega.sucursal.direccion}`;
+    msg += `\nTel: ${entrega.telefono}`;
+    if (entrega.notas) msg += `\nNotas: ${entrega.notas}`;
+  } else if (entrega.metodo === "envio") {
+    msg += `\n\n📦 *Envío a domicilio (${entrega.transportista})*`;
     msg += `\n${entrega.nombre} — ${entrega.direccion}`;
     msg += `\n${entrega.ciudad}${entrega.provincia ? ", " + entrega.provincia : ""}${entrega.cp ? " (CP " + entrega.cp + ")" : ""}`;
     msg += `\nTel: ${entrega.telefono}`;
@@ -717,18 +729,34 @@ function metodoEntrega() {
   return sel ? sel.value : "retiro";
 }
 
-// Devuelve el objeto de envío para el pedido, o null si es retiro
+// Opción de envío elegida por el cliente (de las que devolvió la última
+// cotización), o null si todavía no hay ninguna.
+function opcionElegida() {
+  if (!envioOpcionElegida) return null;
+  return envioQuote.opciones.find((o) => o.clave === envioOpcionElegida) || null;
+}
+
+// Devuelve el objeto de envío para el pedido, o { metodo:'retiro' }.
+// El precio NUNCA viaja acá: el servidor vuelve a cotizar y busca, dentro
+// del mismo grupo (transportista+servicio), la opción más barata disponible.
 function datosEntrega() {
   if (metodoEntrega() === "retiro") return { metodo: "retiro" };
+  const op = opcionElegida();
+  const esSucursal = op && op.tipo === "sucursal";
+  const sucursal = esSucursal ? (op.sucursales || []).find((s) => s.id === envioSucursalElegida) : null;
   return {
     metodo: "envio",
     nombre: $("#envio-nombre").value.trim(),
-    direccion: $("#envio-direccion").value.trim(),
+    direccion: esSucursal ? "" : $("#envio-direccion").value.trim(),
     ciudad: $("#envio-ciudad").value.trim(),
     provincia: $("#envio-provincia").value.trim(),
     cp: $("#envio-cp").value.trim(),
     telefono: $("#envio-telefono").value.trim(),
     notas: $("#envio-notas").value.trim(),
+    opcionGrupo: op ? op.grupo : "",
+    opcionTipo: esSucursal ? "sucursal" : "domicilio",
+    transportista: op ? op.transportista : "",
+    sucursal: sucursal ? { id: sucursal.id, descripcion: sucursal.descripcion, direccion: sucursal.direccion } : null,
   };
 }
 
@@ -738,9 +766,11 @@ function validarEntrega() {
   if (metodoEntrega() === "retiro") return null;
   const e = datosEntrega();
   if (!e.nombre) return "Ingresá tu nombre para el envío";
-  if (!e.direccion) return "Ingresá la dirección de envío";
-  if (!e.ciudad) return "Ingresá la ciudad";
+  if (!e.ciudad || !e.provincia || !e.cp) return "Ingresá tu ciudad, provincia y código postal";
   if (!e.telefono) return "Ingresá un teléfono de contacto";
+  if (!e.opcionGrupo) return "Elegí una opción de envío";
+  if (e.opcionTipo === "domicilio" && !e.direccion) return "Ingresá la dirección de envío";
+  if (e.opcionTipo === "sucursal" && !e.sucursal) return "Elegí la sucursal donde retirar el pedido";
   return null;
 }
 
@@ -772,22 +802,26 @@ function claveDestino(d) {
   return `${d.cp}|${d.ciudad.toLowerCase()}|${d.provincia.toLowerCase()}`;
 }
 
-// Costo de envío ya cotizado para el destino y el carrito actuales, o null
-// si todavía no hay una cotización válida (falta pedirla, está en curso, o
-// cambió el destino/carrito desde la última vez).
+// La cotización sigue siendo válida para el destino y el carrito actuales
+// (no cambió nada desde que se pidió).
+function cotizacionVigente(items) {
+  return envioQuote.clave === claveDestino(destinoEnvio()) && envioQuote.firma === firmaCarrito(items);
+}
+
+// Costo de la opción elegida, o null si todavía no hay una opción elegida
+// válida (falta cotizar, está en curso, cambió el destino/carrito, o no se
+// eligió ninguna opción todavía).
 function envioCostoActual(items) {
   if (metodoEntrega() !== "envio") return 0;
-  const clave = claveDestino(destinoEnvio());
-  if (envioQuote.clave === clave && envioQuote.firma === firmaCarrito(items) && envioQuote.costo != null) {
-    return envioQuote.costo;
-  }
-  return null;
+  if (!cotizacionVigente(items) || envioQuote.cargando) return null;
+  const op = opcionElegida();
+  return op ? op.precio : null;
 }
 
 // Pide una cotización nueva si hace falta (destino completo, carrito no
 // vacío, y no hay ya una cotización o una petición en curso para ese mismo
 // destino+carrito). No bloquea: solo dispara el fetch y vuelve a renderizar
-// cuando termina.
+// cuando termina. Al llegar, preselecciona la opción más barata.
 async function actualizarCotizacionEnvio(items) {
   const destino = destinoEnvio();
   if (metodoEntrega() !== "envio" || destino.cp.length < 4 || !destino.ciudad || !destino.provincia || !items.length) return;
@@ -795,7 +829,9 @@ async function actualizarCotizacionEnvio(items) {
   const firma = firmaCarrito(items);
   if (envioQuote.clave === clave && envioQuote.firma === firma) return; // ya cotizado o pedido en curso
 
-  envioQuote = { clave, firma, costo: null, cargando: true, error: null };
+  envioQuote = { clave, firma, opciones: [], cargando: true, error: null };
+  envioOpcionElegida = null;
+  envioSucursalElegida = null;
   renderCarrito();
   try {
     const res = await fetch("/api/cotizar-envio", {
@@ -805,31 +841,88 @@ async function actualizarCotizacionEnvio(items) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || "No pudimos calcular el envío");
-    envioQuote = { clave, firma, costo: data.costo, cargando: false, error: null };
+    envioQuote = { clave, firma, opciones: data.opciones || [], cargando: false, error: null };
+    const primera = envioQuote.opciones[0];
+    if (primera) {
+      envioOpcionElegida = primera.clave;
+      if (primera.tipo === "sucursal" && primera.sucursales && primera.sucursales.length) {
+        envioSucursalElegida = primera.sucursales[0].id;
+      }
+    }
   } catch (err) {
-    envioQuote = { clave, firma, costo: null, cargando: false, error: err.message };
+    envioQuote = { clave, firma, opciones: [], cargando: false, error: err.message };
   }
   renderCarrito();
 }
 
-// Actualiza el aviso dentro del formulario de envío con el estado actual
+// Actualiza el aviso y la lista de opciones dentro del formulario de envío
 function actualizarEnvioCostoEstado(items) {
   const el = $("#envio-costo-estado");
+  const cont = $("#envio-opciones");
   if (metodoEntrega() !== "envio") return;
   const destino = destinoEnvio();
-  const clave = claveDestino(destino);
+  const vigente = cotizacionVigente(items);
+
   if (!destino.cp || !destino.ciudad || !destino.provincia) {
-    el.textContent = "📦 Ingresá tu código postal, ciudad y provincia para calcular el costo de envío.";
-  } else if (envioQuote.cargando) {
-    el.textContent = "📦 Calculando el costo de envío…";
-  } else if (envioQuote.clave === clave && envioQuote.error) {
-    el.textContent = `⚠️ ${envioQuote.error}`;
-  } else if (envioQuote.clave === clave && envioQuote.costo != null) {
-    el.textContent = `📦 Envío a domicilio: ${formatear(envioQuote.costo)}`;
-  } else {
-    el.textContent = "📦 Ingresá tu código postal, ciudad y provincia para calcular el costo de envío.";
+    el.textContent = "📦 Ingresá tu código postal, ciudad y provincia para ver las opciones de envío.";
+    cont.hidden = true;
+    cont.innerHTML = "";
+    return;
   }
+  if (envioQuote.cargando) {
+    el.textContent = "📦 Buscando opciones de envío…";
+    cont.hidden = true;
+    return;
+  }
+  if (vigente && envioQuote.error) {
+    el.textContent = `⚠️ ${envioQuote.error}`;
+    cont.hidden = true;
+    cont.innerHTML = "";
+    return;
+  }
+  if (!vigente || !envioQuote.opciones.length) {
+    el.textContent = "📦 Ingresá tu código postal, ciudad y provincia para ver las opciones de envío.";
+    cont.hidden = true;
+    cont.innerHTML = "";
+    return;
+  }
+
+  el.textContent = "📦 Elegí cómo recibirlo:";
+  cont.hidden = false;
+  cont.innerHTML = envioQuote.opciones.map((o) => {
+    const marcada = o.clave === envioOpcionElegida;
+    const icono = o.tipo === "sucursal" ? "🏤" : "🚚";
+    const etiqueta = o.tipo === "sucursal" ? "A sucursal" : "A domicilio";
+    let html = `<label class="envio-opcion">
+        <span class="envio-opcion__label">
+          <input type="radio" name="envio-opcion" value="${o.clave}" ${marcada ? "checked" : ""}>
+          ${icono} ${etiqueta} — ${o.transportista}
+        </span>
+        <span class="envio-opcion__precio">${formatear(o.precio)}</span>
+      </label>`;
+    if (marcada && o.tipo === "sucursal" && o.sucursales && o.sucursales.length) {
+      html += `<select class="envio-sucursal-select" id="envio-sucursal-select">
+          ${o.sucursales.map((s) =>
+            `<option value="${s.id}" ${s.id === envioSucursalElegida ? "selected" : ""}>${s.descripcion || s.direccion}</option>`
+          ).join("")}
+        </select>`;
+    }
+    return html;
+  }).join("");
+
+  const op = opcionElegida();
+  $("#envio-direccion").hidden = Boolean(op && op.tipo === "sucursal");
 }
+$("#envio-opciones").addEventListener("change", (e) => {
+  if (e.target.name === "envio-opcion") {
+    envioOpcionElegida = e.target.value;
+    const op = opcionElegida();
+    envioSucursalElegida = op && op.sucursales && op.sucursales.length ? op.sucursales[0].id : null;
+    renderCarrito();
+  } else if (e.target.id === "envio-sucursal-select") {
+    envioSucursalElegida = e.target.value;
+  }
+});
 ["#envio-cp", "#envio-ciudad", "#envio-provincia"].forEach((sel) => {
   $(sel).addEventListener("input", () => {
     clearTimeout($(sel)._debounce);
