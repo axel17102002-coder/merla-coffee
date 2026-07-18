@@ -75,25 +75,32 @@
           <!-- Lista única donde JS inyectará los productos y sus controles de stock -->
           <div class="lista" id="productos-lista"></div>
           <form class="cupon-form" id="producto-form">
+            <div class="px-modo" id="prod-tipo">
+              <button type="button" class="px-chip px-chip--activo" data-tipo="cafe">☕ Café (por kilo)</button>
+              <button type="button" class="px-chip" data-tipo="simple">🏷️ Producto simple</button>
+            </div>
             <input id="prod-nombre" placeholder="Nombre (ej. Café en Grano)" maxlength="60" required aria-label="Nombre del producto">
             <div class="entrega__row">
               <input id="prod-costo" type="number" min="1" step="1" inputmode="numeric" placeholder="Costo por kilo" required aria-label="Costo por kilo">
+              <input id="prod-precio" type="number" min="1" step="1" inputmode="numeric" placeholder="Precio de venta" aria-label="Precio de venta" hidden>
               <input id="prod-stock" type="number" min="0" step="1" inputmode="numeric" placeholder="Stock (bags)" aria-label="Stock inicial">
             </div>
             <p class="prod-preview" id="prod-preview"></p>
-            <div class="entrega__row">
-              <input id="prod-origen" placeholder="Origen (ej. Colombia)" maxlength="60" aria-label="Origen">
-              <input id="prod-region" placeholder="Región" maxlength="80" aria-label="Región">
+            <div id="campos-cafe">
+              <div class="entrega__row">
+                <input id="prod-origen" placeholder="Origen (ej. Colombia)" maxlength="60" aria-label="Origen">
+                <input id="prod-region" placeholder="Región" maxlength="80" aria-label="Región">
+              </div>
+              <div class="entrega__row">
+                <input id="prod-variedad" placeholder="Variedad" maxlength="80" aria-label="Variedad">
+                <input id="prod-proceso" placeholder="Proceso" maxlength="60" aria-label="Proceso">
+              </div>
+              <div class="entrega__row">
+                <input id="prod-tostador" placeholder="Tostador" maxlength="60" aria-label="Tostador">
+                <input id="prod-sca" placeholder="Puntaje SCA" maxlength="10" aria-label="Puntaje SCA">
+              </div>
+              <input id="prod-notas" placeholder="Notas separadas por ; (ej. Caramelo; Cítrico)" maxlength="200" aria-label="Notas de cata">
             </div>
-            <div class="entrega__row">
-              <input id="prod-variedad" placeholder="Variedad" maxlength="80" aria-label="Variedad">
-              <input id="prod-proceso" placeholder="Proceso" maxlength="60" aria-label="Proceso">
-            </div>
-            <div class="entrega__row">
-              <input id="prod-tostador" placeholder="Tostador" maxlength="60" aria-label="Tostador">
-              <input id="prod-sca" placeholder="Puntaje SCA" maxlength="10" aria-label="Puntaje SCA">
-            </div>
-            <input id="prod-notas" placeholder="Notas separadas por ; (ej. Caramelo; Cítrico)" maxlength="200" aria-label="Notas de cata">
             <textarea id="prod-descripcion" placeholder="Descripción" maxlength="600" rows="3" aria-label="Descripción"></textarea>
             <label class="prod-foto">
               <span>📷 Foto del producto</span>

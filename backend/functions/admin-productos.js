@@ -1,11 +1,14 @@
 // Administración protegida de productos (alta y publicación).
-// Al crear un café se generan solas sus dos presentaciones (unidad y pack x5)
-// con los precios calculados a partir del costo. Nace DESACTIVADO: se publica
-// desde el panel cuando esté listo.
+// Dos tipos de producto:
+//  - 'cafe' (por defecto): al crearlo se generan solas sus dos presentaciones
+//    (unidad y pack x5) con los precios calculados a partir del costo del kilo.
+//  - 'simple': sin fórmula. Se carga el precio de venta a mano (tazas, cafés
+//    en bolsa de 1/4 kilo, etc.) y nace con una sola presentación "Unidad".
+// En ambos casos nace DESACTIVADO: se publica desde el panel cuando esté listo.
 //
-//   GET                        → { productos: [...] }
-//   POST { nombre, costo_kg, ... } → crea producto + presentaciones
-//   PATCH { id, activo }       → publica / despublica
+//   GET                              → { productos: [...] }
+//   POST { tipo, nombre, ... }       → crea producto + presentaciones
+//   PATCH { id, activo }             → publica / despublica
 
 const { sb } = require("../lib/supabase.js");
 const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
@@ -34,19 +37,22 @@ exports.handler = async (event) => {
 
   try {
     if (event.httpMethod === "GET") {
-      const productos = await sb("productos?select=id,nombre,activo,stock,origen,imagen&order=nombre.asc");
+      let productos;
+      try {
+        productos = await sb("productos?select=id,nombre,activo,stock,origen,imagen,tipo&order=nombre.asc");
+      } catch (err) {
+        console.warn("admin-productos: sin columna tipo todavía (correr migracion-productos-simples.sql):", err.message);
+        productos = await sb("productos?select=id,nombre,activo,stock,origen,imagen&order=nombre.asc");
+      }
       return { statusCode: 200, headers, body: JSON.stringify({ productos }) };
     }
 
     if (event.httpMethod === "POST") {
       const b = JSON.parse(event.body || "{}");
+      const esSimple = b.tipo === "simple";
       const nombre = texto(b.nombre, 60);
-      const costo = Number(b.costo_kg);
       if (!nombre) {
-        return { statusCode: 400, headers, body: JSON.stringify({ error: "Poné el nombre del café" }) };
-      }
-      if (!(costo > 0)) {
-        return { statusCode: 400, headers, body: JSON.stringify({ error: "Poné el costo del kilo de café" }) };
+        return { statusCode: 400, headers, body: JSON.stringify({ error: `Poné el nombre del ${esSimple ? "producto" : "café"}` }) };
       }
       const id = idDesdeNombre(nombre);
       if (!id) {
@@ -58,6 +64,46 @@ exports.handler = async (event) => {
         return { statusCode: 409, headers, body: JSON.stringify({ error: `Ya existe un producto con el id "${id}"` }) };
       }
 
+      const crear = (cuerpo) =>
+        sb("productos", { method: "POST", headers: { Prefer: "return=representation" }, body: cuerpo });
+      const stock = Math.max(0, Math.round(Number(b.stock) || 0));
+
+      // ---- Producto simple: precio fijo a mano, una sola presentación ----
+      if (esSimple) {
+        const precio = Math.round(Number(b.precio));
+        if (!(precio > 0)) {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: "Poné el precio de venta" }) };
+        }
+        const fila = {
+          id,
+          nombre,
+          activo: false,
+          stock,
+          tipo: "simple",
+          descripcion: texto(b.descripcion, 600),
+          imagen: texto(b.imagen, 400),
+        };
+        let producto;
+        try {
+          [producto] = await crear(fila);
+        } catch (err) {
+          console.warn("admin-productos: reintento sin tipo (correr migracion-productos-simples.sql):", err.message);
+          const { tipo, ...sinTipo } = fila;
+          [producto] = await crear(sinTipo);
+        }
+        await sb("presentaciones", {
+          method: "POST",
+          body: [{ id: `${id}-unidad`, producto_id: id, nombre: "Unidad", precio, unidades_stock: 1, activo: true }],
+        });
+        return { statusCode: 201, headers, body: JSON.stringify({ producto, precio }) };
+      }
+
+      // ---- Café: precio calculado desde el costo del kilo ----
+      const costo = Number(b.costo_kg);
+      if (!(costo > 0)) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "Poné el costo del kilo de café" }) };
+      }
+
       const { cfg } = await obtenerCostos();
       const precio = precioUnidadDesdeCosto(costo, cfg);
       const pack = precioPack(precio, cfg);
@@ -67,7 +113,8 @@ exports.handler = async (event) => {
         id,
         nombre,
         activo: false,
-        stock: Math.max(0, Math.round(Number(b.stock) || 0)),
+        stock,
+        tipo: "cafe",
         costo_kg: costo,
         origen: texto(b.origen, 60),
         region: texto(b.region, 80),
@@ -79,18 +126,16 @@ exports.handler = async (event) => {
         descripcion: texto(b.descripcion, 600),
         imagen: texto(b.imagen, 400),
       };
-      const crear = (cuerpo) =>
-        sb("productos", { method: "POST", headers: { Prefer: "return=representation" }, body: cuerpo });
 
       let producto;
       try {
         [producto] = await crear(fila);
       } catch (err) {
-        // Si la migración del costo todavía no se corrió, creamos igual: el
-        // costo se deduce del precio hasta que exista la columna.
-        console.warn("admin-productos: reintento sin costo_kg:", err.message);
-        const { costo_kg, ...sinCosto } = fila;
-        [producto] = await crear(sinCosto);
+        // Si la migración del costo o del tipo todavía no se corrió, creamos
+        // igual: el costo se deduce del precio hasta que exista la columna.
+        console.warn("admin-productos: reintento sin costo_kg/tipo:", err.message);
+        const { costo_kg, tipo, ...sinExtras } = fila;
+        [producto] = await crear(sinExtras);
       }
 
       // Presentaciones: unidad + pack, con los precios ya calculados

@@ -220,7 +220,7 @@ function renderProductos() {
       return `
     <article class="card reveal ${p.stock === 0 ? "card--agotado" : ""}" style="--delay:${i * 60}ms" data-card="${p.id}">
       <div class="card__img" data-modal="${p.id}">
-        <img src="${p.imagen}" alt="${p.nombre} - Drip Bag" loading="lazy">
+        <img src="${p.imagen}" alt="${p.nombre}" loading="lazy">
         <span class="card__origin">${p.origen || ""}</span>
         ${p.sca ? `<span class="card__sca">SCA ${p.sca}</span>` : ""}
         ${badgeStock(p)}
@@ -228,7 +228,7 @@ function renderProductos() {
       <div class="card__body">
         <h3>${p.nombre}</h3>
         <div class="card__notes">${p.notas.map((n) => `<span class="chip">${n}</span>`).join("")}</div>
-        <button class="card__more" data-modal="${p.id}">Ver detalle del café</button>
+        <button class="card__more" data-modal="${p.id}">Ver detalle</button>
         ${p.stock > 0 ? selectorPresentaciones(p) : ""}
         <div class="card__foot">
           <div class="card__precios">
@@ -943,7 +943,7 @@ function abrirModal(id) {
     <div class="modal__body" data-card="${p.id}">
       <button class="modal__close" aria-label="Cerrar">✕</button>
       <h3>${p.nombre}</h3>
-      <p class="modal__region">📍 ${p.region || p.origen || ""}</p>
+      ${(p.region || p.origen) ? `<p class="modal__region">📍 ${p.region || p.origen}</p>` : ""}
       <p class="modal__desc">${p.descripcion || ""}</p>
       <div class="modal__specs">
         ${p.variedad ? `<div><strong>Variedad</strong>${p.variedad}</div>` : ""}
@@ -951,7 +951,7 @@ function abrirModal(id) {
         ${p.tostador ? `<div><strong>Tostado por</strong>${p.tostador}</div>` : ""}
         ${p.sca ? `<div><strong>Puntaje SCA</strong>${p.sca}</div>` : ""}
         ${p.notas.length ? `<div><strong>Notas</strong>${p.notas.join(", ")}</div>` : ""}
-        <div><strong>Stock</strong>${p.stock > 0 ? `${p.stock} drip bags` : "Agotado"}</div>
+        <div><strong>Stock</strong>${p.stock > 0 ? `${p.stock} ${p.tipo === "simple" ? "unidades" : "drip bags"}` : "Agotado"}</div>
       </div>
       ${p.stock > 0 ? selectorPresentaciones(p) : ""}
       <div class="modal__foot">

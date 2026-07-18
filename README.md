@@ -61,7 +61,7 @@ Entrá a `https://<tu-sitio>/admin` con tu `ADMIN_TOKEN`. Todo se hace desde ah�
 - **Stock**: cargás los gramos de café en grano y calcula las drip bags (12 g c/u). "Sumar" agrega; "Fijar" reemplaza.
 - **Precios**: cargás el costo de la bolsa de 250 g y calcula la unidad y el pack. El precio se puede redondear a mano (botón ≈) y muestra el margen real.
 - **Cupones**: crear/editar y activar/desactivar. **No se muestran en la web**: pasalos por Instagram/WhatsApp. Se usan una vez por email.
-- **Productos**: alta con foto (se sube a Supabase Storage). Nacen **ocultos**: se publican con un botón cuando hay stock.
+- **Productos**: alta con foto (se sube a Supabase Storage). Nacen **ocultos**: se publican con un botón cuando hay stock. Dos tipos: **☕ Café** (precio por fórmula desde el costo del kilo, como siempre) o **🏷️ Producto simple** (tazas, cafés en bolsa de 1/4 kilo, etc.): se carga el precio de venta a mano, sin costo ni margen, y el stock es en unidades directas (sin conversión a drip bags).
 
 Los carritos abandonados (pendientes > 48 h) los borra solo un cron cada 6 h (`wrangler.toml` → `[triggers]`).
 

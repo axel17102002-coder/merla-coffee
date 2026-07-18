@@ -150,19 +150,24 @@ function renderProductos(productos) {
     contenedor.innerHTML = `<div class="vacio">No hay productos.</div>`;
     return;
   }
-  contenedor.innerHTML = productos.map((p) => `<article class="fila${p.activo ? "" : " fila--inactivo"}" data-producto="${escapar(p.id)}">
+  contenedor.innerHTML = productos.map((p) => {
+    const esSimple = p.tipo === "simple";
+    return `<article class="fila${p.activo ? "" : " fila--inactivo"}" data-producto="${escapar(p.id)}" data-tipo="${esSimple ? "simple" : "cafe"}">
       <div class="fila__info">
         <strong>${escapar(p.nombre)}</strong>
-        <span class="fila__dato">${p.activo ? "Publicado" : "Oculto"} · <b data-stock-de="${escapar(p.id)}">${p.stock}</b> bags${p.origen ? " · " + escapar(p.origen) : ""}${p.imagen ? "" : " · ⚠️ sin foto"}</span>
+        <span class="fila__dato">${p.activo ? "Publicado" : "Oculto"} · <b data-stock-de="${escapar(p.id)}">${p.stock}</b> ${esSimple ? "unidades" : "bags"}${p.origen ? " · " + escapar(p.origen) : ""}${p.imagen ? "" : " · ⚠️ sin foto"}</span>
       </div>
       <div class="fila__form">
-        <input type="number" min="0" step="1" inputmode="numeric" placeholder="Gramos de café" data-gramos aria-label="Gramos de café para ${escapar(p.nombre)}">
-        <span class="fila__preview" data-preview>= 0 bags</span>
+        ${esSimple
+          ? `<input type="number" min="0" step="1" inputmode="numeric" placeholder="Unidades" data-unidades aria-label="Unidades para ${escapar(p.nombre)}">`
+          : `<input type="number" min="0" step="1" inputmode="numeric" placeholder="Gramos de café" data-gramos aria-label="Gramos de café para ${escapar(p.nombre)}">
+        <span class="fila__preview" data-preview>= 0 bags</span>`}
         <button data-stock-action="sumar" disabled>Sumar</button>
         <button class="sec" data-stock-action="fijar" disabled>Fijar</button>
         <button class="${p.activo ? "sec" : ""}" data-producto-toggle="${escapar(p.id)}" data-activo="${p.activo}">${p.activo ? "Ocultar" : "Publicar"}</button>
       </div>
-    </article>`).join("");
+    </article>`;
+  }).join("");
 }
 
 async function cargarProductos() {
@@ -186,14 +191,23 @@ async function cargarProductos() {
 }
 
 $("#productos-lista").addEventListener("input", (e) => {
-  const input = e.target.closest("[data-gramos]");
-  if (!input) return;
-  const fila = input.closest(".fila");
-  const unidades = Math.floor((Number(input.value) || 0) / gramosPorUnidad);
-  fila.querySelector("[data-preview]").textContent = `= ${unidades} bags`;
-  const vacio = input.value.trim() === "";
-  fila.querySelector('[data-stock-action="sumar"]').disabled = unidades <= 0;
-  fila.querySelector('[data-stock-action="fijar"]').disabled = vacio;
+  const gramosInput = e.target.closest("[data-gramos]");
+  if (gramosInput) {
+    const fila = gramosInput.closest(".fila");
+    const unidades = Math.floor((Number(gramosInput.value) || 0) / gramosPorUnidad);
+    fila.querySelector("[data-preview]").textContent = `= ${unidades} bags`;
+    const vacio = gramosInput.value.trim() === "";
+    fila.querySelector('[data-stock-action="sumar"]').disabled = unidades <= 0;
+    fila.querySelector('[data-stock-action="fijar"]').disabled = vacio;
+    return;
+  }
+  const unidadesInput = e.target.closest("[data-unidades]");
+  if (unidadesInput) {
+    const fila = unidadesInput.closest(".fila");
+    const vacio = unidadesInput.value.trim() === "";
+    fila.querySelector('[data-stock-action="sumar"]').disabled = !((Number(unidadesInput.value) || 0) > 0);
+    fila.querySelector('[data-stock-action="fijar"]').disabled = vacio;
+  }
 });
 
 $("#productos-lista").addEventListener("click", async (e) => {
@@ -216,29 +230,45 @@ $("#productos-lista").addEventListener("click", async (e) => {
     return;
   }
 
-  // Sumar / fijar stock por gramos
+  // Sumar / fijar stock (por gramos de café, o directo en unidades)
   const boton = e.target.closest("[data-stock-action]");
   if (!boton) return;
   const fila = boton.closest(".fila");
-  const gramos = Number(fila.querySelector("[data-gramos]").value) || 0;
-  const unidades = Math.floor(gramos / gramosPorUnidad);
+  const esSimple = fila.dataset.tipo === "simple";
   const accion = boton.dataset.stockAction;
   const nombre = fila.querySelector("strong").textContent;
-  const pregunta = accion === "sumar"
-    ? `¿Sumar ${unidades} bags (${gramos} g) al stock de ${nombre}?`
-    : `¿Reemplazar el stock de ${nombre} por ${unidades} bags (${gramos} g)?`;
+
+  let unidades, cuerpo, pregunta;
+  if (esSimple) {
+    unidades = Math.max(0, Math.floor(Number(fila.querySelector("[data-unidades]").value) || 0));
+    cuerpo = { producto_id: fila.dataset.producto, unidades, accion };
+    pregunta = accion === "sumar"
+      ? `¿Sumar ${unidades} unidades al stock de ${nombre}?`
+      : `¿Reemplazar el stock de ${nombre} por ${unidades} unidades?`;
+  } else {
+    const gramos = Number(fila.querySelector("[data-gramos]").value) || 0;
+    unidades = Math.floor(gramos / gramosPorUnidad);
+    cuerpo = { producto_id: fila.dataset.producto, gramos, accion };
+    pregunta = accion === "sumar"
+      ? `¿Sumar ${unidades} bags (${gramos} g) al stock de ${nombre}?`
+      : `¿Reemplazar el stock de ${nombre} por ${unidades} bags (${gramos} g)?`;
+  }
   if (!confirm(pregunta)) return;
 
   fila.querySelectorAll("button").forEach((b) => (b.disabled = true));
   try {
-    const r = await api("/api/admin-stock", { method: "POST", body: JSON.stringify({ producto_id: fila.dataset.producto, gramos, accion }) });
+    const r = await api("/api/admin-stock", { method: "POST", body: JSON.stringify(cuerpo) });
     fila.querySelector("[data-stock-de]").textContent = r.stock;
-    fila.querySelector("[data-gramos]").value = "";
-    fila.querySelector("[data-preview]").textContent = "= 0 bags";
+    if (esSimple) {
+      fila.querySelector("[data-unidades]").value = "";
+    } else {
+      fila.querySelector("[data-gramos]").value = "";
+      fila.querySelector("[data-preview]").textContent = "= 0 bags";
+    }
     fila.querySelectorAll("button").forEach((b) => (b.disabled = false));
     fila.querySelector('[data-stock-action="sumar"]').disabled = true;
     fila.querySelector('[data-stock-action="fijar"]').disabled = true;
-    mensaje("#producto-message", `✅ ${nombre}: stock actualizado a ${r.stock} bags`, true);
+    mensaje("#producto-message", `✅ ${nombre}: stock actualizado a ${r.stock} ${esSimple ? "unidades" : "bags"}`, true);
   } catch (err) {
     mensaje("#producto-message", `⚠️ ${err.message}`);
     fila.querySelectorAll("button").forEach((b) => (b.disabled = false));
@@ -425,7 +455,40 @@ function editorProducto(p) {
     </div>`;
 }
 
+// Editor de un producto simple: sin fórmula, un único campo de precio
+function editorProductoSimple(p) {
+  return `<div class="px-editor">
+      <div class="px-paso">
+        <span class="px-paso__label">Precio de venta</span>
+        <div class="px-paso__control">
+          <input type="number" min="0" step="1" inputmode="numeric" placeholder="0"
+                 value="${p.precio != null ? p.precio : ""}" data-precio-simple aria-label="Precio de venta">
+        </div>
+      </div>
+      <p class="px-resultado" data-resultado-simple></p>
+      <div class="px-editor__acciones">
+        <button type="button" class="px-btn" data-precio-simple-action>Guardar</button>
+      </div>
+    </div>`;
+}
+
+function filaProductoSimple(p) {
+  const abierto = p.id === precioAbierto;
+  return `<article class="px-prod px-prod--simple${abierto ? " px-prod--abierto" : ""}${p.activo ? "" : " px-prod--inactivo"}" data-producto="${escapar(p.id)}">
+      <div class="px-prod__linea">
+        <span class="px-prod__nombre">${escapar(p.nombre || p.id)}${p.activo ? "" : ` <small>oculto</small>`}</span>
+        <span class="px-num">—</span>
+        <span class="px-num px-num--precio">${p.precio != null ? formato.format(p.precio) : "—"}</span>
+        <span class="px-num">—</span>
+        <span class="px-margen">—</span>
+        <button class="px-btn-sec px-editar" data-editar="${escapar(p.id)}">${abierto ? "Cerrar" : "Editar"}</button>
+      </div>
+      ${abierto ? editorProductoSimple(p) : ""}
+    </article>`;
+}
+
 function filaProducto(p, cfg) {
+  if (p.tipo === "simple") return filaProductoSimple(p);
   const costoKg = p.costo_kg != null ? Number(p.costo_kg) : null;
   const costoU = costoKg != null ? Math.round(costoUnidad(costoKg, cfg)) : null;
   const margen = costoKg != null && p.precio ? margenUnidadReal(costoKg, p.precio, cfg) : null;
@@ -448,6 +511,10 @@ function filaProducto(p, cfg) {
 function estadoEditorAbierto() {
   const fila = $("#precios").querySelector(".px-prod--abierto");
   if (!fila) return null;
+  if (fila.classList.contains("px-prod--simple")) {
+    const precio = fila.querySelector("[data-precio-simple]");
+    return precio ? { id: fila.dataset.producto, simple: true, precio: precio.value } : null;
+  }
   const pack = fila.querySelector("[data-precio-pack]");
   return {
     id: fila.dataset.producto,
@@ -481,12 +548,20 @@ function renderPrecios() {
       </div>
     </div>`;
   c.innerHTML = banner + `<div class="px-productos__head">
-      <span>Café</span><span>Costo</span><span>Unidad</span><span>Pack x${cfg.packUnidades}</span><span>Margen</span><span></span>
+      <span>Producto</span><span>Costo</span><span>Unidad</span><span>Pack x${cfg.packUnidades}</span><span>Margen</span><span></span>
     </div>` + preciosCache.map((p) => filaProducto(p, cfg)).join("");
 
   const abierta = c.querySelector(".px-prod--abierto");
   if (!abierta) return;
-  if (estado && estado.id === abierta.dataset.producto) {
+
+  if (abierta.classList.contains("px-prod--simple")) {
+    if (estado && estado.simple && estado.id === abierta.dataset.producto) {
+      abierta.querySelector("[data-precio-simple]").value = estado.precio;
+    }
+    return; // el editor simple no tiene desglose en vivo que recalcular
+  }
+
+  if (estado && !estado.simple && estado.id === abierta.dataset.producto) {
     abierta.querySelector("[data-costo]").value = estado.costo;
     abierta.querySelector("[data-precio]").value = estado.precio;
     const pack = abierta.querySelector("[data-precio-pack]");
@@ -581,6 +656,31 @@ async function guardarPrecio(fila, boton) {
   }
 }
 
+// Guarda el precio de un producto simple: sin costo, sin pack, sin margen
+async function guardarPrecioSimple(fila, boton) {
+  const p = preciosCache.find((x) => x.id === fila.dataset.producto);
+  const precio = Number(fila.querySelector("[data-precio-simple]").value) || 0;
+  const resultado = fila.querySelector("[data-resultado-simple]");
+  if (!(precio > 0)) {
+    if (resultado) resultado.innerHTML = `<span class="px-alerta">⚠️ Ingresá un precio mayor a 0.</span>`;
+    return;
+  }
+  boton.disabled = true;
+  try {
+    const r = await api("/api/admin-precios", {
+      method: "POST",
+      body: JSON.stringify({ producto_id: p.id, precio }),
+    });
+    Object.assign(p, { precio: r.precio });
+    precioAbierto = null;
+    renderPrecios();
+    toast(`${p.nombre}: precio actualizado.`);
+  } catch (err) {
+    if (resultado) resultado.innerHTML = `<span class="px-alerta">⚠️ ${escapar(err.message)}</span>`;
+    boton.disabled = false;
+  }
+}
+
 $("#precios").addEventListener("click", async (e) => {
   const fila = e.target.closest(".px-prod");
 
@@ -654,11 +754,15 @@ $("#precios").addEventListener("click", async (e) => {
 
   const guardar = e.target.closest("[data-precio-action]");
   if (guardar && fila) await guardarPrecio(fila, guardar);
+
+  const guardarSimple = e.target.closest("[data-precio-simple-action]");
+  if (guardarSimple && fila) await guardarPrecioSimple(fila, guardarSimple);
 });
 
 $("#precios").addEventListener("input", (e) => {
   const fila = e.target.closest(".px-prod--abierto");
   if (!fila) return;
+  if (fila.classList.contains("px-prod--simple")) return; // sin desglose en vivo
   // El pack sigue al precio de la unidad (con su % OFF, redondeado) hasta que
   // se lo toque a mano; ahí deja de proponerse solo.
   const campoPack = fila.querySelector("[data-precio-pack]");
@@ -932,6 +1036,24 @@ $("#cupones").addEventListener("click", async (e) => {
 });
 
 // ===== Alta de producto =====
+// Tipo de producto: 'cafe' (fórmula por kilo) o 'simple' (precio fijo a mano)
+let productoTipo = "cafe";
+function aplicarTipoProducto(tipo) {
+  productoTipo = tipo;
+  const esSimple = tipo === "simple";
+  $("#prod-tipo").querySelectorAll("button").forEach((x) => x.classList.toggle("px-chip--activo", x.dataset.tipo === tipo));
+  $("#campos-cafe").hidden = esSimple;
+  $("#prod-costo").hidden = esSimple;
+  $("#prod-costo").required = !esSimple;
+  $("#prod-precio").hidden = !esSimple;
+  $("#prod-stock").placeholder = esSimple ? "Stock (unidades)" : "Stock (bags)";
+  $("#prod-preview").textContent = "";
+}
+$("#prod-tipo").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-tipo]");
+  if (b) aplicarTipoProducto(b.dataset.tipo);
+});
+
 // Vista previa del costo mientras se escribe (el precio final se decide en Precios)
 $("#prod-costo").addEventListener("input", () => {
   const costo = Number($("#prod-costo").value) || 0;
@@ -979,31 +1101,42 @@ $("#producto-form").addEventListener("submit", async (e) => {
       imagen = r.url;
     }
 
-    // 2) Creamos el producto (oculto) con sus dos presentaciones
+    // 2) Creamos el producto (oculto) con su(s) presentación(es)
     mensaje("#producto-message", "Creando el producto…");
-    const r = await api("/api/admin-productos", {
-      method: "POST",
-      body: JSON.stringify({
-        nombre: $("#prod-nombre").value,
-        costo_kg: Number($("#prod-costo").value),
-        stock: Number($("#prod-stock").value) || 0,
-        origen: $("#prod-origen").value,
-        region: $("#prod-region").value,
-        variedad: $("#prod-variedad").value,
-        proceso: $("#prod-proceso").value,
-        tostador: $("#prod-tostador").value,
-        sca: $("#prod-sca").value,
-        notas: $("#prod-notas").value,
-        descripcion: $("#prod-descripcion").value,
-        imagen,
-      }),
-    });
-    mensaje("#producto-message", `✅ ${r.producto.nombre} creado (oculto) · unidad ${formato.format(r.precio)} · pack ${formato.format(r.precioPack)}`, true);
+    const esSimple = productoTipo === "simple";
+    const cuerpo = esSimple
+      ? {
+          tipo: "simple",
+          nombre: $("#prod-nombre").value,
+          precio: Number($("#prod-precio").value),
+          stock: Number($("#prod-stock").value) || 0,
+          descripcion: $("#prod-descripcion").value,
+          imagen,
+        }
+      : {
+          tipo: "cafe",
+          nombre: $("#prod-nombre").value,
+          costo_kg: Number($("#prod-costo").value),
+          stock: Number($("#prod-stock").value) || 0,
+          origen: $("#prod-origen").value,
+          region: $("#prod-region").value,
+          variedad: $("#prod-variedad").value,
+          proceso: $("#prod-proceso").value,
+          tostador: $("#prod-tostador").value,
+          sca: $("#prod-sca").value,
+          notas: $("#prod-notas").value,
+          descripcion: $("#prod-descripcion").value,
+          imagen,
+        };
+    const r = await api("/api/admin-productos", { method: "POST", body: JSON.stringify(cuerpo) });
+    mensaje("#producto-message", esSimple
+      ? `✅ ${r.producto.nombre} creado (oculto) · ${formato.format(r.precio)}`
+      : `✅ ${r.producto.nombre} creado (oculto) · unidad ${formato.format(r.precio)} · pack ${formato.format(r.precioPack)}`, true);
     $("#producto-form").reset();
-    $("#prod-preview").textContent = "";
+    aplicarTipoProducto("cafe");
     $("#prod-thumb").hidden = true;
     fotoDataUrl = null;
-    TABS["tab-precios"].cargado = false; // que Precios muestre el café nuevo
+    TABS["tab-precios"].cargado = false; // que Precios muestre el producto nuevo
     cargarProductos();
   } catch (err) {
     mensaje("#producto-message", `⚠️ ${err.message}`);

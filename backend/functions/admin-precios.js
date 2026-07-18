@@ -1,10 +1,14 @@
-// Administración protegida de precios, a partir del COSTO DEL KILO de café.
-// Los insumos y el margen viven en la base (ver lib/costos.js) y se editan
-// desde la tab Configuración: acá solo se aplican.
+// Administración protegida de precios.
+// Los cafés ('cafe') se cotizan a partir del COSTO DEL KILO: los insumos y el
+// margen viven en la base (ver lib/costos.js) y se editan desde la tab
+// Configuración, acá solo se aplican. Los productos simples ('simple': tazas,
+// cafés en bolsa de 1/4, etc.) no tienen fórmula: el precio se guarda tal
+// cual se carga a mano.
 //
 //   GET                                     → { productos: [...], cfg }
-//   POST { producto_id, costo_kg, precio? } → guarda; `precio` es opcional
-//        (si no viene, se calcula con el margen objetivo)
+//   POST { producto_id, precio }                → simple: guarda el precio
+//   POST { producto_id, costo_kg, precio? }     → cafe: guarda; `precio` es
+//        opcional (si no viene, se calcula con el margen objetivo)
 
 const { sb } = require("../lib/supabase.js");
 const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
@@ -14,13 +18,18 @@ const {
   costoUnidad, costoPack, margenPack, margenUnidadReal,
 } = require("../../public/motor.js");
 
-// Lee productos tolerando que la migración a costo_kg no se haya corrido
+// Lee productos tolerando que las migraciones de costo_kg/tipo no se hayan corrido
 async function traerProductos() {
   try {
-    return await sb("productos?select=id,nombre,activo,costo_kg&order=nombre.asc");
+    return await sb("productos?select=id,nombre,activo,costo_kg,tipo&order=nombre.asc");
   } catch (err) {
-    console.warn("admin-precios: sin columna costo_kg todavía:", err.message);
-    return await sb("productos?select=id,nombre,activo&order=nombre.asc");
+    console.warn("admin-precios: sin columna tipo todavía:", err.message);
+    try {
+      return await sb("productos?select=id,nombre,activo,costo_kg&order=nombre.asc");
+    } catch (err2) {
+      console.warn("admin-precios: sin columna costo_kg todavía:", err2.message);
+      return await sb("productos?select=id,nombre,activo&order=nombre.asc");
+    }
   }
 }
 
@@ -39,6 +48,18 @@ exports.handler = async (event) => {
 
       const lista = productos.map((p) => {
         const unidad = presentaciones.find((x) => x.producto_id === p.id && x.unidades_stock === 1);
+
+        // Producto simple: sin fórmula, el precio es el que se cargó a mano
+        if ((p.tipo || "cafe") === "simple") {
+          return {
+            id: p.id,
+            nombre: p.nombre,
+            activo: p.activo,
+            tipo: "simple",
+            precio: unidad ? unidad.precio : null,
+          };
+        }
+
         const pack = presentaciones.find((x) => x.producto_id === p.id && x.unidades_stock === cfg.packUnidades);
         // Si el costo todavía no está cargado, lo deducimos del precio actual
         const costo = p.costo_kg != null
@@ -48,6 +69,7 @@ exports.handler = async (event) => {
           id: p.id,
           nombre: p.nombre,
           activo: p.activo,
+          tipo: "cafe",
           costo_kg: costo,
           costoUnidad: costo != null ? Math.round(costoUnidad(costo, cfg)) : null,
           costoPack: costo != null ? Math.round(costoPack(costo, cfg)) : null,
@@ -66,8 +88,31 @@ exports.handler = async (event) => {
     if (event.httpMethod === "POST") {
       const body = JSON.parse(event.body || "{}");
       const { producto_id } = body;
+      if (!producto_id) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "Falta el producto" }) };
+      }
+
+      const [producto] = await sb(`productos?id=eq.${encodeURIComponent(producto_id)}&select=id,tipo`).catch(() => [null]);
+
+      // ---- Producto simple: sin fórmula, se guarda el precio tal cual ----
+      if (producto && producto.tipo === "simple") {
+        const precio = Math.round(Number(body.precio));
+        if (!(precio > 0)) {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: "Ingresá un precio mayor a 0" }) };
+        }
+        const actualizadas = await sb(
+          `presentaciones?producto_id=eq.${encodeURIComponent(producto_id)}&unidades_stock=eq.1`,
+          { method: "PATCH", headers: { Prefer: "return=representation" }, body: { precio } }
+        );
+        if (!actualizadas || !actualizadas.length) {
+          return { statusCode: 404, headers, body: JSON.stringify({ error: "El producto no tiene presentación de unidad" }) };
+        }
+        return { statusCode: 200, headers, body: JSON.stringify({ precio }) };
+      }
+
+      // ---- Café: precio calculado desde el costo del kilo ----
       const costo = Number(body.costo_kg);
-      if (!producto_id || !(costo > 0)) {
+      if (!(costo > 0)) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: "Ingresá el costo del kilo (mayor a 0)" }) };
       }
 
