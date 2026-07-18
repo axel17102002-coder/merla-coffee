@@ -205,6 +205,52 @@
                 </div>
               </div>
             </section>
+
+            <!-- Envío: cotización con Zipnova -->
+            <section class="px-seccion">
+              <header class="px-cabecera">
+                <div>
+                  <h3 class="px-titulo">🚚 Envío</h3>
+                  <p class="px-desc">El envío a domicilio se cotiza en vivo con Zipnova, según el peso estimado de lo que se compra. Los pesos se guardan solos al cambiarlos.</p>
+                </div>
+              </header>
+              <p class="mensaje" id="zipnova-estado"></p>
+              <div class="px-config">
+                <div class="px-config__fila">
+                  <div class="px-config__info">
+                    <strong>Peso de una drip bag</strong>
+                    <span>Con empaque incluido. Se usa para los cafés vendidos por unidad/pack.</span>
+                  </div>
+                  <div class="px-config__control">
+                    <input id="cfg-peso-drip" data-clave="peso_drip_bag_g" type="number" min="1" step="1" inputmode="numeric" aria-label="Peso de una drip bag en gramos">
+                    <span class="px-unidad">g</span>
+                    <span class="px-estado" data-estado></span>
+                  </div>
+                </div>
+                <div class="px-config__fila">
+                  <div class="px-config__info">
+                    <strong>Peso de una bolsa de café 1/4</strong>
+                    <span>Con empaque incluido.</span>
+                  </div>
+                  <div class="px-config__control">
+                    <input id="cfg-peso-cafe14" data-clave="peso_cafe_bolsa_g" type="number" min="1" step="1" inputmode="numeric" aria-label="Peso de una bolsa de café de 1/4 en gramos">
+                    <span class="px-unidad">g</span>
+                    <span class="px-estado" data-estado></span>
+                  </div>
+                </div>
+                <div class="px-config__fila">
+                  <div class="px-config__info">
+                    <strong>Peso de una taza / producto simple</strong>
+                    <span>Con empaque incluido.</span>
+                  </div>
+                  <div class="px-config__control">
+                    <input id="cfg-peso-merch" data-clave="peso_merch_g" type="number" min="1" step="1" inputmode="numeric" aria-label="Peso de una taza u otro producto simple en gramos">
+                    <span class="px-unidad">g</span>
+                    <span class="px-estado" data-estado></span>
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
 
           <!-- VISTA: Cupones -->

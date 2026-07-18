@@ -131,7 +131,8 @@ function ahorroDe(producto, pres) {
 
 // Calcula un pedido completo.
 //   items:    [{ presentacion: <id de presentación>, qty }]
-//   opciones: { cupon: <objeto cupón o null>, canjePuntos: bool, puntosDisponibles: int|null }
+//   opciones: { cupon: <objeto cupón o null>, canjePuntos: bool, puntosDisponibles: int|null,
+//               envioCosto: <número ya cotizado con Zipnova, o 0/undefined si es retiro> }
 //   datos:    { productos: [<producto con presentaciones>] }
 // Devuelve { ok: true, ...desglose } o { ok: false, error }
 function calcularPedido(items, opciones, datos) {
@@ -238,8 +239,13 @@ function calcularPedido(items, opciones, datos) {
     puntosCanjeados = CONFIG.fidelidad.canjePuntos;
   }
 
-  const total = subtotal - descuentoCantidad - descuentoCupon - descuentoPuntos;
-  const puntosGanados = Math.floor(total / 100) * CONFIG.fidelidad.puntosPorCien;
+  // El costo de envío ya viene cotizado (con Zipnova, resuelto fuera de este
+  // archivo: acá no se hacen llamadas de red). Los puntos Club Merla se ganan
+  // sobre lo que se compra, no sobre el flete.
+  const envioCosto = Math.max(0, Math.round(Number(opciones.envioCosto) || 0));
+  const totalSinEnvio = subtotal - descuentoCantidad - descuentoCupon - descuentoPuntos;
+  const total = totalSinEnvio + envioCosto;
+  const puntosGanados = Math.floor(totalSinEnvio / 100) * CONFIG.fidelidad.puntosPorCien;
 
   return {
     ok: true,
@@ -252,6 +258,7 @@ function calcularPedido(items, opciones, datos) {
     cupon,
     descuentoPuntos,
     puntosCanjeados,
+    envioCosto,
     total,
     puntosGanados,
   };

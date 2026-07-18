@@ -239,12 +239,13 @@
             <input id="envio-telefono" placeholder="Teléfono" autocomplete="tel" inputmode="tel">
           </div>
           <input id="envio-notas" placeholder="Notas (piso, depto, referencia)" autocomplete="off">
-          <p class="entrega__aviso">📦 El costo del envío lo coordinamos por WhatsApp según tu zona.</p>
+          <p class="entrega__aviso" id="envio-costo-estado">📦 Ingresá tu código postal para calcular el costo de envío.</p>
         </div>
       </div>
       <p class="cart__error" id="cart-error" hidden></p>
       <div id="cart-summary">
         <div class="cart__row"><span>Subtotal</span><span id="cart-subtotal">$0</span></div>
+        <div class="cart__row" id="shipping-row" hidden><span>Envío</span><span id="cart-shipping">$0</span></div>
         <div class="cart__row cart__row--discount" id="discount-row" hidden><span>Descuento 5% (5+ sueltas)</span><span id="cart-discount">-$0</span></div>
         <div class="cart__row cart__row--discount" id="coupon-row" hidden><span id="coupon-row-label">Cupón</span><span id="cart-coupon-discount">-$0</span></div>
         <div class="cart__row cart__row--discount" id="points-row" hidden><span>Canje puntos ⭐</span><span id="cart-points-discount">-$0</span></div>

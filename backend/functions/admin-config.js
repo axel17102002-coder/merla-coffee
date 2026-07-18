@@ -12,8 +12,12 @@ const { sb } = require("../lib/supabase.js");
 const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
 const { obtenerCostos } = require("../lib/costos.js");
 const { precioPack, precioUnidadDesdeCosto } = require("../../public/motor.js");
+const zipnova = require("../lib/zipnova.js");
 
-const CLAVES_VALIDAS = ["margen_unidad", "gramos_por_bag", "pack_unidades", "pack_descuento"];
+const CLAVES_VALIDAS = [
+  "margen_unidad", "gramos_por_bag", "pack_unidades", "pack_descuento",
+  "peso_drip_bag_g", "peso_cafe_bolsa_g", "peso_merch_g",
+];
 
 // Reaplica el margen objetivo a todos los cafés que tengan costo cargado.
 // Se usa cuando cambian los insumos o el margen: evita ir uno por uno.
@@ -55,6 +59,7 @@ exports.handler = async (event) => {
           insumos,
           desdeLaBase, // false = falta correr la migración (se usan los valores viejos)
           totales: { unidad: cfg.fijoUnidad, pack: cfg.fijoPack },
+          zipnovaDisponible: zipnova.disponible(),
         }),
       };
     }

@@ -11,6 +11,7 @@ const { sb, obtenerCatalogo, obtenerCupon, obtenerPuntos, cuponYaUsado } = requi
 const { ambienteMp, crearPreferencia } = require("../lib/mercadopago.js");
 const { CONFIG, calcularPedido } = require("../../public/motor.js");
 const { sanitizarEnvio } = require("../lib/entrega.js");
+const { resolverEnvioCosto } = require("../lib/envio-costo.js");
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json" };
@@ -66,11 +67,24 @@ exports.handler = async (event) => {
       puntosDisponibles = await obtenerPuntos(email);
     }
 
-    const pedido = calcularPedido(
-      body.items,
-      { cupon, canjePuntos: Boolean(body.canjePuntos), puntosDisponibles },
-      { productos }
-    );
+    const opcionesPedido = { cupon, canjePuntos: Boolean(body.canjePuntos), puntosDisponibles };
+
+    // El costo de envío se cotiza en el servidor (nunca se confía en un monto
+    // mandado por el navegador): retiro no cotiza nada, envío sí.
+    const envio = sanitizarEnvio(body.envio);
+    if (envio && envio.metodo === "envio") {
+      const previo = calcularPedido(body.items, opcionesPedido, { productos });
+      if (!previo.ok) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: previo.error }) };
+      }
+      const resultadoEnvio = await resolverEnvioCosto(body.items, productos, envio, previo.subtotal);
+      if (!resultadoEnvio.ok) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: resultadoEnvio.error }) };
+      }
+      opcionesPedido.envioCosto = resultadoEnvio.costo;
+    }
+
+    const pedido = calcularPedido(body.items, opcionesPedido, { productos });
     if (!pedido.ok) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: pedido.error }) };
     }
@@ -79,33 +93,43 @@ exports.handler = async (event) => {
     // `modo_id` guarda la referencia externa del pago (la columna es genérica:
     // sirve para matchear el webhook de cualquier pasarela).
     const externalId = `merla-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const [fila] = await sb("pedidos", {
-      method: "POST",
-      headers: { Prefer: "return=representation" },
-      body: {
-        external_intention_id: externalId,
-        modo_id: externalId,
-        origen: "mercadopago",
-        items: pedido.lineas.map((l) => ({
-          producto_id: l.producto_id,
-          presentacion_id: l.presentacion_id,
-          nombre: `${l.nombre} - ${l.presentacionNombre}`,
-          qty: l.qty,
-          unidades: l.unidades,
-          precio_unitario: l.precioUnitario,
-        })),
-        subtotal: pedido.subtotal,
-        descuento_cantidad: pedido.descuentoCantidad,
-        cupon: pedido.cupon,
-        descuento_cupon: pedido.descuentoCupon,
-        puntos_canjeados: pedido.puntosCanjeados,
-        descuento_puntos: pedido.descuentoPuntos,
-        total: pedido.total,
-        puntos_ganados: emailValido ? pedido.puntosGanados : 0,
-        cliente_email: emailValido ? email : null,
-        envio: sanitizarEnvio(body.envio),
-      },
-    });
+    const filaPedido = {
+      external_intention_id: externalId,
+      modo_id: externalId,
+      origen: "mercadopago",
+      items: pedido.lineas.map((l) => ({
+        producto_id: l.producto_id,
+        presentacion_id: l.presentacion_id,
+        nombre: `${l.nombre} - ${l.presentacionNombre}`,
+        qty: l.qty,
+        unidades: l.unidades,
+        precio_unitario: l.precioUnitario,
+      })),
+      subtotal: pedido.subtotal,
+      descuento_cantidad: pedido.descuentoCantidad,
+      cupon: pedido.cupon,
+      descuento_cupon: pedido.descuentoCupon,
+      puntos_canjeados: pedido.puntosCanjeados,
+      descuento_puntos: pedido.descuentoPuntos,
+      total: pedido.total,
+      envio_costo: pedido.envioCosto,
+      puntos_ganados: emailValido ? pedido.puntosGanados : 0,
+      cliente_email: emailValido ? email : null,
+      envio,
+    };
+    const crearPedido = (cuerpo) =>
+      sb("pedidos", { method: "POST", headers: { Prefer: "return=representation" }, body: cuerpo });
+
+    let fila;
+    try {
+      [fila] = await crearPedido(filaPedido);
+    } catch (err) {
+      // Si la migración de envio_costo todavía no se corrió, registramos
+      // igual: el monto ya está incluido en `total`, solo falta el desglose.
+      console.warn("mercadopago-checkout: reintento sin envio_costo (correr migracion-envio.sql):", err.message);
+      const { envio_costo, ...sinEnvioCosto } = filaPedido;
+      [fila] = await crearPedido(sinEnvioCosto);
+    }
 
     // URL del sitio: SITE_URL manual, o la del propio request (Cloudflare/Netlify)
     const host = (event.headers && event.headers.host) || "";
@@ -114,8 +138,8 @@ exports.handler = async (event) => {
 
     let preferencia;
     try {
-      // MP no acepta ítems con monto negativo, así que si hay descuentos
-      // mandamos un único ítem por el total final para que la cuenta cierre.
+      // MP no acepta ítems con monto negativo, así que si hay descuentos o
+      // envío mandamos un único ítem por el total final para que la cuenta cierre.
       const itemsMp =
         pedido.total === pedido.subtotal
           ? pedido.lineas.map((l) => ({
@@ -129,7 +153,7 @@ exports.handler = async (event) => {
           : [
               {
                 id: "pedido",
-                title: `Pedido Merla Coffee (${pedido.unidades} drip bags, descuentos aplicados)`,
+                title: `Pedido Merla Coffee (${pedido.unidades} drip bags${pedido.envioCosto ? " + envío" : ", descuentos aplicados"})`,
                 category_id: "food",
                 quantity: 1,
                 currency_id: "ARS",

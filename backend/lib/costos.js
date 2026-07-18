@@ -18,6 +18,10 @@ const RESPALDO = {
   gramosPorBag: 12,
   packUnidades: 5,
   packDescuento: 10,
+  // Peso estimado por tipo de producto (gramos), para cotizar el envío con Zipnova
+  pesoDripBagG: 18,
+  pesoCafeBolsaG: 270,
+  pesoMerchG: 350,
 };
 
 const CLAVES = {
@@ -25,6 +29,9 @@ const CLAVES = {
   gramos_por_bag: "gramosPorBag",
   pack_unidades: "packUnidades",
   pack_descuento: "packDescuento",
+  peso_drip_bag_g: "pesoDripBagG",
+  peso_cafe_bolsa_g: "pesoCafeBolsaG",
+  peso_merch_g: "pesoMerchG",
 };
 
 // Trae los insumos tolerando el esquema viejo (columna `aplica` en vez de

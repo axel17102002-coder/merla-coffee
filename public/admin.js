@@ -830,6 +830,13 @@ async function cargarPrecios() {
     renderInsumos();
     $("#cfg-gramos").value = cfgPrecios.gramosPorBag;
     $("#cfg-pack-desc").value = cfgPrecios.packDescuento;
+    $("#cfg-peso-drip").value = cfgPrecios.pesoDripBagG;
+    $("#cfg-peso-cafe14").value = cfgPrecios.pesoCafeBolsaG;
+    $("#cfg-peso-merch").value = cfgPrecios.pesoMerchG;
+    mensaje("#zipnova-estado", dataConfig.zipnovaDisponible
+      ? "✅ Conectado: el envío a domicilio cotiza en vivo."
+      : "⚠️ Sin conectar: faltan ZIPNOVA_TOKEN, ZIPNOVA_SECRET y/o ZIPNOVA_ACCOUNT_ID en las variables de entorno. Mientras tanto, el envío a domicilio no se puede cobrar.",
+      dataConfig.zipnovaDisponible);
     mensaje("#precio-message", dataConfig.desdeLaBase ? "" : "⚠️ Falta correr supabase/migracion-insumos.sql: mientras tanto se usan los valores anteriores y los insumos no se pueden editar.");
   } catch (err) {
     mensaje("#precio-message", `⚠️ ${err.message}`);
@@ -1000,6 +1007,9 @@ async function guardarConfigGlobal(input, fila) {
       renderPrecios();
       ponerEstado(fila, "✓ Guardado", true);
       toast("Packs recalculados con el nuevo descuento.");
+    } else {
+      // Claves sin efecto sobre precios (ej. pesos para cotizar el envío): solo se guardan
+      ponerEstado(fila, "✓ Guardado", true);
     }
   } catch (err) {
     ponerEstado(fila, `⚠️ ${err.message}`);

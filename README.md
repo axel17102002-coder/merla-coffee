@@ -114,6 +114,22 @@ Configuración (una sola vez):
 
 Sin `BREVO_API_KEY` no se rompe nada: los mails simplemente no se envían y queda el aviso en los logs.
 
+## Envío (Zipnova)
+
+El envío a domicilio se cotiza **en vivo** con [Zipnova](https://www.zipnova.com/ar/productos/envios) según el peso estimado de lo que se compra, y ese costo se suma al total que se cobra (Mercado Pago o WhatsApp): nunca se confía en un monto mandado por el navegador, se vuelve a calcular en el servidor al pagar.
+
+- **Peso estimado**: cada tipo de producto (drip bag, café en bolsa de 1/4, tazas/otros) tiene un peso configurable en `/admin` → Precios → Envío. Se usa `peso × unidades del carrito` para cotizar.
+- **Retiro** no cotiza nada: el envío solo entra en juego cuando el cliente elige "Envío a domicilio" y carga su código postal.
+- **Sin credenciales** no se rompe nada: el envío a domicilio queda deshabilitado con un aviso claro (retiro y WhatsApp sin envío siguen funcionando).
+
+Configuración (una sola vez):
+
+1. Creá una cuenta en [Zipnova](https://www.zipnova.com/ar/productos/envios) y pedí tus credenciales de integración por **API con autenticación Basic** (token + secret de una cuenta propia; no hace falta el flujo OAuth, que es para apps multi-cuenta).
+2. Cargá `ZIPNOVA_TOKEN`, `ZIPNOVA_SECRET` y `ZIPNOVA_ACCOUNT_ID` en `.env`/`.dev.vars` (local) y como **Secrets** en Cloudflare → Settings → Variables and Secrets.
+3. En `/admin` → Precios → Envío vas a ver "✅ Conectado" cuando las tres variables estén cargadas.
+
+Docs de la API: https://docs.zipnova.com/envios/recursos-api/envios/cotizar-envios
+
 ## Notas
 
 - El número de WhatsApp está en `WHATSAPP` al inicio de `app.js`.

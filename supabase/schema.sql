@@ -70,6 +70,7 @@ create table if not exists pedidos (
   cliente_email text,
   numero integer,                    -- número de pedido secuencial (#0001); ver secuencia abajo
   envio jsonb,                       -- { metodo:'retiro'|'envio', nombre, direccion, ciudad, provincia, cp, telefono, notas }
+  envio_costo integer not null default 0, -- cotizado con Zipnova; 0 si es retiro
   origen text not null default 'mercadopago' check (origen in ('modo', 'whatsapp', 'mercadopago')),
   estado text not null default 'pendiente'
     check (estado in ('pendiente', 'aprobado', 'rechazado')),

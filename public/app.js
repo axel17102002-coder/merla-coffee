@@ -64,6 +64,10 @@ let DATOS = null; // { productos, config } — llega de /tienda
 let filtroRegion = "todos";
 let saldoPuntos = null; // saldo conocido del email actual (null = sin consultar)
 
+// Última cotización de envío a domicilio (Zipnova), atada al CP y al
+// contenido del carrito en ese momento: si cualquiera cambia, se recotiza.
+let envioQuote = { cp: "", firma: "", costo: null, cargando: false, error: null };
+
 const $ = (sel) => document.querySelector(sel);
 /**
  * Formatea un número como moneda argentina.
@@ -288,28 +292,41 @@ function presSeleccionada(contenedor, productoId) {
  * @returns {{
  *   items:Array,
  *   calc:Object|null,
- *   error:string|null
+ *   error:string|null,
+ *   pendiente:string|null  (envío a domicilio sin cotizar todavía; no es un error)
  * }}
  */
 function estadoPedido() {
   const items = itemsDelCarrito();
-  if (!DATOS || items.length === 0) return { items, calc: null, error: null };
+  if (!DATOS || items.length === 0) return { items, calc: null, error: null, pendiente: null };
+
+  if (metodoEntrega() === "envio") actualizarCotizacionEnvio(items); // dispara la cotización si hace falta
+
+  const envioCosto = envioCostoActual(items);
+  if (envioCosto == null) {
+    const pendiente = envioQuote.cargando
+      ? "Calculando el costo de envío…"
+      : envioQuote.error || "Ingresá tu código postal para calcular el envío";
+    return { items, calc: null, error: null, pendiente };
+  }
 
   let cupon = cuponActivo();
   let canje = canjeActivo();
 
-  let calc = calcularPedido(items, { cupon, canjePuntos: canje, puntosDisponibles: saldoPuntos }, DATOS);
+  let calc = calcularPedido(items, { cupon, canjePuntos: canje, puntosDisponibles: saldoPuntos, envioCosto }, DATOS);
   if (!calc.ok && canje) {
     canje = false;
     localStorage.removeItem("merla-canje");
-    calc = calcularPedido(items, { cupon }, DATOS);
+    calc = calcularPedido(items, { cupon, envioCosto }, DATOS);
   }
   if (!calc.ok && cupon) {
     cupon = null;
     localStorage.removeItem("merla-cupon");
-    calc = calcularPedido(items, {}, DATOS);
+    calc = calcularPedido(items, { envioCosto }, DATOS);
   }
-  return calc.ok ? { items, calc, error: null } : { items, calc: null, error: calc.error };
+  return calc.ok
+    ? { items, calc, error: null, pendiente: null }
+    : { items, calc: null, error: calc.error, pendiente: null };
 }
 
 /**
@@ -324,7 +341,7 @@ function estadoPedido() {
  */
 function renderCarrito() {
   if (!DATOS) return;
-  const { items, calc, error } = estadoPedido();
+  const { items, calc, error, pendiente } = estadoPedido();
   const badge = $("#cart-count");
 
   badge.hidden = items.length === 0;
@@ -375,10 +392,12 @@ function renderCarrito() {
   $("#coupon-applied").hidden = !cupon;
   if (cupon) $("#coupon-applied-code").textContent = cupon;
 
-  if (error) {
+  actualizarEnvioCostoEstado(items);
+
+  if (error || pendiente) {
     $("#cart-summary").hidden = true;
     $("#cart-error").hidden = false;
-    $("#cart-error").textContent = `⚠️ ${error}. Ajustá las cantidades para continuar.`;
+    $("#cart-error").textContent = error ? `⚠️ ${error}. Ajustá las cantidades para continuar.` : pendiente;
     $("#pay-mp").disabled = true;
     $("#pay-modo").disabled = true;
     $("#checkout").disabled = true;
@@ -392,6 +411,9 @@ function renderCarrito() {
   $("#checkout").disabled = false;
 
   $("#cart-subtotal").textContent = formatear(calc.subtotal);
+
+  $("#shipping-row").hidden = !calc.envioCosto;
+  $("#cart-shipping").textContent = formatear(calc.envioCosto);
 
   $("#discount-row").hidden = calc.descuentoCantidad === 0;
   $("#cart-discount").textContent = "-" + formatear(calc.descuentoCantidad);
@@ -516,6 +538,7 @@ function vaciarCarrito() {
   guardar();
   localStorage.removeItem("merla-cupon");
   localStorage.removeItem("merla-canje");
+  envioQuote = { cp: "", firma: "", costo: null, cargando: false, error: null };
   renderCarrito();
 }
 
@@ -662,6 +685,9 @@ async function checkoutWhatsApp() {
   if (calc.descuentoPuntos) {
     msg += `\nCanje puntos Club Merla: -${formatear(calc.descuentoPuntos)}`;
   }
+  if (calc.envioCosto) {
+    msg += `\nEnvío: ${formatear(calc.envioCosto)}`;
+  }
   msg += `\n*Total: ${formatear(calc.total)}*`;
   msg += `\n💵 Pagando por transferencia o depósito: *${formatear(precioTransferencia(calc.total))}* (${CONFIG.transferencia.descuento}% OFF)`;
 
@@ -721,10 +747,78 @@ function validarEntrega() {
 // Muestra u oculta el formulario de envío según el método elegido
 function actualizarEntrega() {
   $("#envio-form").hidden = metodoEntrega() !== "envio";
+  renderCarrito();
 }
 document.querySelectorAll('input[name="entrega"]').forEach((r) =>
   r.addEventListener("change", actualizarEntrega)
 );
+
+// ===== Cotización de envío (Zipnova) =====
+// "Firma" del carrito: cambia si cambian los ítems o las cantidades, para
+// saber cuándo una cotización guardada quedó vieja y hay que pedir otra.
+function firmaCarrito(items) {
+  return items.map((i) => `${i.presentacion}:${i.qty}`).sort().join(",");
+}
+
+// Costo de envío ya cotizado para el CP y el carrito actuales, o null si
+// todavía no hay una cotización válida (falta pedirla, está en curso, o
+// cambió el CP/carrito desde la última vez).
+function envioCostoActual(items) {
+  if (metodoEntrega() !== "envio") return 0;
+  const cp = $("#envio-cp").value.trim();
+  if (envioQuote.cp === cp && envioQuote.firma === firmaCarrito(items) && envioQuote.costo != null) {
+    return envioQuote.costo;
+  }
+  return null;
+}
+
+// Pide una cotización nueva si hace falta (CP válido, carrito no vacío, y
+// no hay ya una cotización o una petición en curso para ese mismo CP+carrito).
+// No bloquea: solo dispara el fetch y vuelve a renderizar cuando termina.
+async function actualizarCotizacionEnvio(items) {
+  const cp = $("#envio-cp").value.trim();
+  if (metodoEntrega() !== "envio" || cp.length < 4 || !items.length) return;
+  const firma = firmaCarrito(items);
+  if (envioQuote.cp === cp && envioQuote.firma === firma) return; // ya cotizado o pedido en curso
+
+  envioQuote = { cp, firma, costo: null, cargando: true, error: null };
+  renderCarrito();
+  try {
+    const res = await fetch("/api/cotizar-envio", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items, cp }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "No pudimos calcular el envío");
+    envioQuote = { cp, firma, costo: data.costo, cargando: false, error: null };
+  } catch (err) {
+    envioQuote = { cp, firma, costo: null, cargando: false, error: err.message };
+  }
+  renderCarrito();
+}
+
+// Actualiza el aviso dentro del formulario de envío con el estado actual
+function actualizarEnvioCostoEstado(items) {
+  const el = $("#envio-costo-estado");
+  if (metodoEntrega() !== "envio") return;
+  const cp = $("#envio-cp").value.trim();
+  if (!cp) {
+    el.textContent = "📦 Ingresá tu código postal para calcular el costo de envío.";
+  } else if (envioQuote.cargando) {
+    el.textContent = "📦 Calculando el costo de envío…";
+  } else if (envioQuote.cp === cp && envioQuote.error) {
+    el.textContent = `⚠️ ${envioQuote.error}`;
+  } else if (envioQuote.cp === cp && envioQuote.costo != null) {
+    el.textContent = `📦 Envío a domicilio: ${formatear(envioQuote.costo)}`;
+  } else {
+    el.textContent = "📦 Ingresá tu código postal para calcular el costo de envío.";
+  }
+}
+$("#envio-cp").addEventListener("input", () => {
+  clearTimeout($("#envio-cp")._debounce);
+  $("#envio-cp")._debounce = setTimeout(() => renderCarrito(), 500);
+});
 
 // ===== Checkout con Mercado Pago (Checkout Pro) =====
 async function pagarConMercadoPago() {
