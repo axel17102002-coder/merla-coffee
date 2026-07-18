@@ -30,6 +30,17 @@ const PAQUETE_CM = { height: 10, width: 20, length: 25 };
 // categoría especial (no es colchón, sanitario, electro, vidrio, etc.).
 const CLASIFICACION_GENERAL = 1;
 
+// Solo mostramos transportistas conocidos: Zipnova conecta con muchos
+// (Chazki, Toparco, Cabify Logistics, etc.) y elegir entre tantos abruma
+// más de lo que ayuda. Comparación case-insensitive y por substring, para
+// tolerar variantes de nombre ("Correo Argentino S.A.", etc.).
+const TRANSPORTISTAS_PERMITIDOS = ["andreani", "correo argentino", "oca"];
+
+function transportistaPermitido(nombre) {
+  const n = (nombre || "").toLowerCase();
+  return TRANSPORTISTAS_PERMITIDOS.some((t) => n.includes(t));
+}
+
 // Zipnova puede devolver el mismo carrier+servicio dos veces con precios
 // distintos (tarifas/condiciones que no se diferencian en estos campos), así
 // que "carrier+servicio" identifica un GRUPO, no una fila única. `clave`
@@ -122,7 +133,13 @@ async function cotizarOpciones({ cp, ciudad, provincia, pesoGramos, valorDeclara
     return { ok: false, error: "No hay opciones de envío disponibles para esa dirección." };
   }
 
-  const opciones = crudas.map(normalizarOpcion).sort((a, b) => a.precio - b.precio);
+  const opciones = crudas
+    .map(normalizarOpcion)
+    .filter((o) => transportistaPermitido(o.transportista))
+    .sort((a, b) => a.precio - b.precio);
+  if (!opciones.length) {
+    return { ok: false, error: "No hay opciones de envío disponibles para esa dirección." };
+  }
   return { ok: true, opciones };
 }
 

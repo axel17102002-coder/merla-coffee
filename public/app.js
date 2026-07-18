@@ -896,7 +896,7 @@ function actualizarEnvioCostoEstado(items) {
     let html = `<label class="envio-opcion">
         <span class="envio-opcion__label">
           <input type="radio" name="envio-opcion" value="${o.clave}" ${marcada ? "checked" : ""}>
-          ${icono} ${etiqueta} — ${o.transportista}
+          <span class="envio-opcion__texto">${icono} ${etiqueta} — ${o.transportista}</span>
         </span>
         <span class="envio-opcion__precio">${formatear(o.precio)}</span>
       </label>`;

@@ -1321,16 +1321,20 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 .entrega__aviso { font-size: 0.78rem; color: var(--caramelo); font-weight: 600; margin: 2px 0 0; }
 
 /* Opciones de envío (a domicilio / a sucursal, por transportista) */
-.entrega__opciones { display: grid; gap: 6px; }
+.entrega__opciones { display: grid; gap: 6px; max-height: 260px; overflow-y: auto; padding-right: 2px; }
 .envio-opcion {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  border: 1.5px solid var(--crema-borde); border-radius: 12px; padding: 9px 12px;
-  font-size: 0.84rem; cursor: pointer; background: var(--crema-suave);
+  display: flex; align-items: center; gap: 10px;
+  border: 1.5px solid var(--crema-borde); border-radius: 12px; padding: 10px 12px;
+  font-size: 0.83rem; cursor: pointer; background: var(--crema-suave);
 }
-.envio-opcion:has(input:checked) { border-color: var(--verde); background: #eef3ec; font-weight: 700; }
-.envio-opcion input { accent-color: var(--verde); }
-.envio-opcion__label { display: flex; align-items: center; gap: 7px; }
-.envio-opcion__precio { white-space: nowrap; }
+.envio-opcion:has(input:checked) { border-color: var(--verde); background: #eef3ec; }
+/* .entrega__form input pone width:100% a todos los inputs del formulario;
+   acá el radio tiene que quedar chico para dejarle lugar al texto */
+.envio-opcion input { width: auto; accent-color: var(--verde); flex-shrink: 0; }
+.envio-opcion__label { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+.envio-opcion__texto { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.envio-opcion:has(input:checked) .envio-opcion__label { font-weight: 700; }
+.envio-opcion__precio { white-space: nowrap; flex-shrink: 0; font-weight: 700; }
 .envio-sucursal-select {
   width: 100%; border: 1.5px solid var(--crema-borde); border-radius: 12px;
   padding: 9px 14px; font-family: var(--fuente-texto); font-size: 0.86rem;
