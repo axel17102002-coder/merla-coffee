@@ -21,12 +21,21 @@ function disponible() {
   return credenciales() !== null;
 }
 
+// Caja genérica para pedidos de café/merch: liviano y chico, entra cualquier
+// combinación de drip bags, bolsas de 1/4 y alguna taza. En centímetros.
+const PAQUETE_CM = { height: 10, width: 20, length: 25 };
+
+// Clasificación de producto de Zipnova (docs/envios/referencia/clasificaciones-de-producto):
+// 1 = "General", la que corresponde a café envasado, tazas y mercadería sin
+// categoría especial (no es colchón, sanitario, electro, vidrio, etc.).
+const CLASIFICACION_GENERAL = 1;
+
 // Cotiza un envío a domicilio con los datos ya calculados del pedido.
-//   cp: código postal de destino
+//   cp, ciudad, provincia: destino (Zipnova exige ciudad/provincia además del CP)
 //   pesoGramos: peso total estimado del paquete
 //   valorDeclarado: valor de la mercadería (el subtotal del pedido)
 // Devuelve { ok:true, precio, servicio } o { ok:false, error } — nunca tira.
-async function cotizar({ cp, pesoGramos, valorDeclarado }) {
+async function cotizar({ cp, ciudad, provincia, pesoGramos, valorDeclarado }) {
   const cred = credenciales();
   if (!cred) {
     return { ok: false, error: "El envío a domicilio no está disponible en este momento. Probá con retiro o escribinos por WhatsApp." };
@@ -37,8 +46,16 @@ async function cotizar({ cp, pesoGramos, valorDeclarado }) {
     account_id: Number(cred.accountId),
     source: "merla-coffee-web",
     declared_value: Math.max(1, Math.round(Number(valorDeclarado) || 0)),
-    destination: { zip_code: String(cp || "").trim() },
-    items: [{ weight: Math.max(1, Math.round(Number(pesoGramos) || 0)), quantity: 1 }],
+    destination: {
+      zipcode: String(cp || "").trim(),
+      city: String(ciudad || "").trim(),
+      state: String(provincia || "").trim(),
+    },
+    packages: [{
+      ...PAQUETE_CM,
+      weight: Math.max(1, Math.round(Number(pesoGramos) || 0)),
+      classification_id: CLASIFICACION_GENERAL,
+    }],
     sort_by: "price",
   };
 

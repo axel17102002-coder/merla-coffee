@@ -64,9 +64,9 @@ let DATOS = null; // { productos, config } — llega de /tienda
 let filtroRegion = "todos";
 let saldoPuntos = null; // saldo conocido del email actual (null = sin consultar)
 
-// Última cotización de envío a domicilio (Zipnova), atada al CP y al
-// contenido del carrito en ese momento: si cualquiera cambia, se recotiza.
-let envioQuote = { cp: "", firma: "", costo: null, cargando: false, error: null };
+// Última cotización de envío a domicilio (Zipnova), atada al destino (CP,
+// ciudad, provincia) y al contenido del carrito: si cualquiera cambia, se recotiza.
+let envioQuote = { clave: "", firma: "", costo: null, cargando: false, error: null };
 
 const $ = (sel) => document.querySelector(sel);
 /**
@@ -538,7 +538,7 @@ function vaciarCarrito() {
   guardar();
   localStorage.removeItem("merla-cupon");
   localStorage.removeItem("merla-canje");
-  envioQuote = { cp: "", firma: "", costo: null, cargando: false, error: null };
+  envioQuote = { clave: "", firma: "", costo: null, cargando: false, error: null };
   renderCarrito();
 }
 
@@ -760,40 +760,54 @@ function firmaCarrito(items) {
   return items.map((i) => `${i.presentacion}:${i.qty}`).sort().join(",");
 }
 
-// Costo de envío ya cotizado para el CP y el carrito actuales, o null si
-// todavía no hay una cotización válida (falta pedirla, está en curso, o
-// cambió el CP/carrito desde la última vez).
+// Zipnova exige código postal + ciudad + provincia para cotizar.
+function destinoEnvio() {
+  return {
+    cp: $("#envio-cp").value.trim(),
+    ciudad: $("#envio-ciudad").value.trim(),
+    provincia: $("#envio-provincia").value.trim(),
+  };
+}
+function claveDestino(d) {
+  return `${d.cp}|${d.ciudad.toLowerCase()}|${d.provincia.toLowerCase()}`;
+}
+
+// Costo de envío ya cotizado para el destino y el carrito actuales, o null
+// si todavía no hay una cotización válida (falta pedirla, está en curso, o
+// cambió el destino/carrito desde la última vez).
 function envioCostoActual(items) {
   if (metodoEntrega() !== "envio") return 0;
-  const cp = $("#envio-cp").value.trim();
-  if (envioQuote.cp === cp && envioQuote.firma === firmaCarrito(items) && envioQuote.costo != null) {
+  const clave = claveDestino(destinoEnvio());
+  if (envioQuote.clave === clave && envioQuote.firma === firmaCarrito(items) && envioQuote.costo != null) {
     return envioQuote.costo;
   }
   return null;
 }
 
-// Pide una cotización nueva si hace falta (CP válido, carrito no vacío, y
-// no hay ya una cotización o una petición en curso para ese mismo CP+carrito).
-// No bloquea: solo dispara el fetch y vuelve a renderizar cuando termina.
+// Pide una cotización nueva si hace falta (destino completo, carrito no
+// vacío, y no hay ya una cotización o una petición en curso para ese mismo
+// destino+carrito). No bloquea: solo dispara el fetch y vuelve a renderizar
+// cuando termina.
 async function actualizarCotizacionEnvio(items) {
-  const cp = $("#envio-cp").value.trim();
-  if (metodoEntrega() !== "envio" || cp.length < 4 || !items.length) return;
+  const destino = destinoEnvio();
+  if (metodoEntrega() !== "envio" || destino.cp.length < 4 || !destino.ciudad || !destino.provincia || !items.length) return;
+  const clave = claveDestino(destino);
   const firma = firmaCarrito(items);
-  if (envioQuote.cp === cp && envioQuote.firma === firma) return; // ya cotizado o pedido en curso
+  if (envioQuote.clave === clave && envioQuote.firma === firma) return; // ya cotizado o pedido en curso
 
-  envioQuote = { cp, firma, costo: null, cargando: true, error: null };
+  envioQuote = { clave, firma, costo: null, cargando: true, error: null };
   renderCarrito();
   try {
     const res = await fetch("/api/cotizar-envio", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items, cp }),
+      body: JSON.stringify({ items, ...destino }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || "No pudimos calcular el envío");
-    envioQuote = { cp, firma, costo: data.costo, cargando: false, error: null };
+    envioQuote = { clave, firma, costo: data.costo, cargando: false, error: null };
   } catch (err) {
-    envioQuote = { cp, firma, costo: null, cargando: false, error: err.message };
+    envioQuote = { clave, firma, costo: null, cargando: false, error: err.message };
   }
   renderCarrito();
 }
@@ -802,22 +816,25 @@ async function actualizarCotizacionEnvio(items) {
 function actualizarEnvioCostoEstado(items) {
   const el = $("#envio-costo-estado");
   if (metodoEntrega() !== "envio") return;
-  const cp = $("#envio-cp").value.trim();
-  if (!cp) {
-    el.textContent = "📦 Ingresá tu código postal para calcular el costo de envío.";
+  const destino = destinoEnvio();
+  const clave = claveDestino(destino);
+  if (!destino.cp || !destino.ciudad || !destino.provincia) {
+    el.textContent = "📦 Ingresá tu código postal, ciudad y provincia para calcular el costo de envío.";
   } else if (envioQuote.cargando) {
     el.textContent = "📦 Calculando el costo de envío…";
-  } else if (envioQuote.cp === cp && envioQuote.error) {
+  } else if (envioQuote.clave === clave && envioQuote.error) {
     el.textContent = `⚠️ ${envioQuote.error}`;
-  } else if (envioQuote.cp === cp && envioQuote.costo != null) {
+  } else if (envioQuote.clave === clave && envioQuote.costo != null) {
     el.textContent = `📦 Envío a domicilio: ${formatear(envioQuote.costo)}`;
   } else {
-    el.textContent = "📦 Ingresá tu código postal para calcular el costo de envío.";
+    el.textContent = "📦 Ingresá tu código postal, ciudad y provincia para calcular el costo de envío.";
   }
 }
-$("#envio-cp").addEventListener("input", () => {
-  clearTimeout($("#envio-cp")._debounce);
-  $("#envio-cp")._debounce = setTimeout(() => renderCarrito(), 500);
+["#envio-cp", "#envio-ciudad", "#envio-provincia"].forEach((sel) => {
+  $(sel).addEventListener("input", () => {
+    clearTimeout($(sel)._debounce);
+    $(sel)._debounce = setTimeout(() => renderCarrito(), 500);
+  });
 });
 
 // ===== Checkout con Mercado Pago (Checkout Pro) =====

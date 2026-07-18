@@ -30,15 +30,25 @@ function pesoTotalGramos(items, productos, cfg) {
   return total;
 }
 
-// envio: el objeto ya sanitizado por sanitizarEnvio() (o { metodo:'envio', cp }
-// desde el cotizador). Si es retiro, no hay nada que cotizar.
+// envio: el objeto ya sanitizado por sanitizarEnvio() (o { metodo:'envio', cp,
+// ciudad, provincia } desde el cotizador). Si es retiro, no hay nada que cotizar.
+// Zipnova exige ciudad y provincia además del código postal para cotizar.
 async function resolverEnvioCosto(items, productos, envio, valorDeclarado) {
   if (!envio || envio.metodo !== "envio") return { ok: true, costo: 0 };
   if (!envio.cp) return { ok: false, error: "Ingresá tu código postal para calcular el envío" };
+  if (!envio.ciudad || !envio.provincia) {
+    return { ok: false, error: "Ingresá tu ciudad y provincia para calcular el envío" };
+  }
 
   const { cfg } = await obtenerCostos();
   const peso = pesoTotalGramos(items, productos, cfg);
-  const resultado = await zipnova.cotizar({ cp: envio.cp, pesoGramos: peso, valorDeclarado });
+  const resultado = await zipnova.cotizar({
+    cp: envio.cp,
+    ciudad: envio.ciudad,
+    provincia: envio.provincia,
+    pesoGramos: peso,
+    valorDeclarado,
+  });
   if (!resultado.ok) return { ok: false, error: resultado.error };
   return { ok: true, costo: resultado.precio };
 }

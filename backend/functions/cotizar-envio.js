@@ -1,5 +1,5 @@
 // POST /api/cotizar-envio
-//   { items: [{presentacion, qty}], cp: string }
+//   { items: [{presentacion, qty}], cp: string, ciudad: string, provincia: string }
 //
 // Cotiza en vivo el envío a domicilio con Zipnova a partir del carrito.
 // Es público (lo llama el carrito antes de pagar) y no expone nada sensible,
@@ -20,8 +20,13 @@ exports.handler = async (event) => {
   try {
     const body = JSON.parse(event.body || "{}");
     const cp = String(body.cp || "").trim();
+    const ciudad = String(body.ciudad || "").trim();
+    const provincia = String(body.provincia || "").trim();
     if (!cp) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: "Ingresá tu código postal" }) };
+    }
+    if (!ciudad || !provincia) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: "Ingresá tu ciudad y provincia" }) };
     }
 
     const productos = await obtenerCatalogo();
@@ -30,7 +35,9 @@ exports.handler = async (event) => {
       return { statusCode: 400, headers, body: JSON.stringify({ error: pedido.error }) };
     }
 
-    const resultado = await resolverEnvioCosto(body.items, productos, { metodo: "envio", cp }, pedido.subtotal);
+    const resultado = await resolverEnvioCosto(
+      body.items, productos, { metodo: "envio", cp, ciudad, provincia }, pedido.subtotal
+    );
     if (!resultado.ok) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: resultado.error }) };
     }
