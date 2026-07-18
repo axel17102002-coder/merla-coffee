@@ -138,39 +138,54 @@ $("#secciones").addEventListener("click", (e) => {
   $("#seccion-pedidos").hidden = b.dataset.seccion !== "pedidos";
   $("#seccion-gestion").hidden = b.dataset.seccion !== "gestion";
 });
-// ===== Stock por gramos de café =====
+// ===== Productos y stock (unificados) =====
+// Una sola lista: cada producto muestra su estado y su stock, con la carga
+// por gramos y el publicar/ocultar en la misma fila.
 let gramosPorUnidad = 12;
 
-function renderStock(productos) {
-  const contenedor = $("#stock");
+function renderProductos(productos) {
+  const contenedor = $("#productos-lista");
   $("#stock-gpu").textContent = gramosPorUnidad;
-  if (!productos) return;
+  if (!productos || !productos.length) {
+    contenedor.innerHTML = `<div class="vacio">No hay productos.</div>`;
+    return;
+  }
   contenedor.innerHTML = productos.map((p) => `<article class="fila${p.activo ? "" : " fila--inactivo"}" data-producto="${escapar(p.id)}">
       <div class="fila__info">
         <strong>${escapar(p.nombre)}</strong>
-        <span class="fila__dato">Stock: <b data-stock-de="${escapar(p.id)}">${p.stock}</b> bags${p.activo ? "" : " · inactivo"}</span>
+        <span class="fila__dato">${p.activo ? "Publicado" : "Oculto"} · <b data-stock-de="${escapar(p.id)}">${p.stock}</b> bags${p.origen ? " · " + escapar(p.origen) : ""}${p.imagen ? "" : " · ⚠️ sin foto"}</span>
       </div>
       <div class="fila__form">
         <input type="number" min="0" step="1" inputmode="numeric" placeholder="Gramos de café" data-gramos aria-label="Gramos de café para ${escapar(p.nombre)}">
         <span class="fila__preview" data-preview>= 0 bags</span>
         <button data-stock-action="sumar" disabled>Sumar</button>
         <button class="sec" data-stock-action="fijar" disabled>Fijar</button>
+        <button class="${p.activo ? "sec" : ""}" data-producto-toggle="${escapar(p.id)}" data-activo="${p.activo}">${p.activo ? "Ocultar" : "Publicar"}</button>
       </div>
     </article>`).join("");
 }
 
-async function cargarStock() {
+async function cargarProductos() {
+  mensaje("#producto-message", "Cargando productos…");
   try {
-    const data = await api("/api/admin-stock");
-    gramosPorUnidad = data.gramosPorUnidad || 12;
-    renderStock(data.productos);
-    mensaje("#stock-message", "");
+    // La vista previa del costo y los gramos por bag salen de la config
+    if (!cfgPrecios) {
+      try {
+        const d = await api("/api/admin-config");
+        cfgPrecios = d.cfg;
+        insumosCache = d.insumos;
+      } catch {}
+    }
+    if (cfgPrecios && cfgPrecios.gramosPorBag) gramosPorUnidad = cfgPrecios.gramosPorBag;
+    const { productos } = await api("/api/admin-productos");
+    renderProductos(productos);
+    mensaje("#producto-message", "");
   } catch (err) {
-    mensaje("#stock-message", `⚠️ ${err.message}`);
+    mensaje("#producto-message", `⚠️ ${err.message}`);
   }
 }
 
-$("#stock").addEventListener("input", (e) => {
+$("#productos-lista").addEventListener("input", (e) => {
   const input = e.target.closest("[data-gramos]");
   if (!input) return;
   const fila = input.closest(".fila");
@@ -181,7 +196,27 @@ $("#stock").addEventListener("input", (e) => {
   fila.querySelector('[data-stock-action="fijar"]').disabled = vacio;
 });
 
-$("#stock").addEventListener("click", async (e) => {
+$("#productos-lista").addEventListener("click", async (e) => {
+  // Publicar / ocultar
+  const toggle = e.target.closest("[data-producto-toggle]");
+  if (toggle) {
+    const publicar = toggle.dataset.activo !== "true";
+    if (publicar && !confirm("¿Publicar este producto? Va a aparecer en la tienda.")) return;
+    toggle.disabled = true;
+    try {
+      await api("/api/admin-productos", {
+        method: "PATCH",
+        body: JSON.stringify({ id: toggle.dataset.productoToggle, activo: publicar }),
+      });
+      cargarProductos();
+    } catch (err) {
+      mensaje("#producto-message", `⚠️ ${err.message}`);
+      toggle.disabled = false;
+    }
+    return;
+  }
+
+  // Sumar / fijar stock por gramos
   const boton = e.target.closest("[data-stock-action]");
   if (!boton) return;
   const fila = boton.closest(".fila");
@@ -200,9 +235,12 @@ $("#stock").addEventListener("click", async (e) => {
     fila.querySelector("[data-stock-de]").textContent = r.stock;
     fila.querySelector("[data-gramos]").value = "";
     fila.querySelector("[data-preview]").textContent = "= 0 bags";
-    mensaje("#stock-message", `✅ ${nombre}: stock actualizado a ${r.stock} bags`, true);
+    fila.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    fila.querySelector('[data-stock-action="sumar"]').disabled = true;
+    fila.querySelector('[data-stock-action="fijar"]').disabled = true;
+    mensaje("#producto-message", `✅ ${nombre}: stock actualizado a ${r.stock} bags`, true);
   } catch (err) {
-    mensaje("#stock-message", `⚠️ ${err.message}`);
+    mensaje("#producto-message", `⚠️ ${err.message}`);
     fila.querySelectorAll("button").forEach((b) => (b.disabled = false));
   }
 });
@@ -893,43 +931,7 @@ $("#cupones").addEventListener("click", async (e) => {
   }
 });
 
-// ===== Productos =====
-function renderProductos(productos) {
-  const contenedor = $("#productos");
-  if (!productos || !productos.length) {
-    contenedor.innerHTML = `<div class="vacio">No hay productos.</div>`;
-    return;
-  }
-  contenedor.innerHTML = productos.map((p) => `<article class="fila${p.activo ? "" : " fila--inactivo"}">
-      <div class="fila__info">
-        <strong>${escapar(p.nombre)}</strong>
-        <span class="fila__dato">${p.activo ? "Publicado" : "Oculto"} · ${p.stock} bags${p.origen ? " · " + escapar(p.origen) : ""}${p.imagen ? "" : " · ⚠️ sin foto"}</span>
-      </div>
-      <div class="fila__form">
-        <button class="${p.activo ? "sec" : ""}" data-producto-toggle="${escapar(p.id)}" data-activo="${p.activo}">${p.activo ? "Ocultar" : "Publicar"}</button>
-      </div>
-    </article>`).join("");
-}
-
-async function cargarProductos() {
-  mensaje("#producto-message", "Cargando productos…");
-  try {
-    // La vista previa del costo necesita la config (insumos + gramos por bag)
-    if (!cfgPrecios) {
-      try {
-        const d = await api("/api/admin-config");
-        cfgPrecios = d.cfg;
-        insumosCache = d.insumos;
-      } catch {}
-    }
-    const { productos } = await api("/api/admin-productos");
-    renderProductos(productos);
-    mensaje("#producto-message", "");
-  } catch (err) {
-    mensaje("#producto-message", `⚠️ ${err.message}`);
-  }
-}
-
+// ===== Alta de producto =====
 // Vista previa del costo mientras se escribe (el precio final se decide en Precios)
 $("#prod-costo").addEventListener("input", () => {
   const costo = Number($("#prod-costo").value) || 0;
@@ -1010,30 +1012,11 @@ $("#producto-form").addEventListener("submit", async (e) => {
   }
 });
 
-$("#productos").addEventListener("click", async (e) => {
-  const boton = e.target.closest("[data-producto-toggle]");
-  if (!boton) return;
-  const publicar = boton.dataset.activo !== "true";
-  if (publicar && !confirm("¿Publicar este producto? Va a aparecer en la tienda.")) return;
-  boton.disabled = true;
-  try {
-    await api("/api/admin-productos", {
-      method: "PATCH",
-      body: JSON.stringify({ id: boton.dataset.productoToggle, activo: publicar }),
-    });
-    cargarProductos();
-  } catch (err) {
-    mensaje("#producto-message", `⚠️ ${err.message}`);
-    boton.disabled = false;
-  }
-});
-
 // ===== Tabs de gestión =====
 const TABS = {
-  "tab-stock": { vista: "vista-stock", cargar: cargarStock, cargado: false },
+  "tab-productos": { vista: "vista-productos", cargar: cargarProductos, cargado: false },
   "tab-precios": { vista: "vista-precios", cargar: cargarPrecios, cargado: false },
   "tab-cupones": { vista: "vista-cupones", cargar: cargarCupones, cargado: false },
-  "tab-productos": { vista: "vista-productos", cargar: cargarProductos, cargado: false },
 };
 
 function activarTab(tabId) {
@@ -1054,9 +1037,9 @@ function abrirPanel() {
   $("#panel").hidden = false;
   $("#logout").hidden = false;
   cargarPedidos();
-  // reiniciar el estado "cargado" de las tabs y abrir Stock
+  // reiniciar el estado "cargado" de las tabs y abrir Productos
   Object.values(TABS).forEach((t) => (t.cargado = false));
-  activarTab("tab-stock");
+  activarTab("tab-productos");
 }
 
 function cerrarSesion() {
