@@ -335,6 +335,11 @@ section[id], footer[id] { scroll-margin-top: 90px; }
   gap: 24px;
 }
 
+/* Café en bolsa / tazas: catálogos aparte debajo de los drip bags */
+.catalogo__extra { margin-top: clamp(46px, 6vw, 64px); }
+.catalogo__subhead { margin: 0 auto clamp(20px, 3vw, 30px); }
+.catalogo__subhead h3 { font-family: var(--fuente-display); font-size: clamp(1.3rem, 2.6vw, 1.7rem); font-weight: 800; color: var(--verde); }
+
 .card {
   background: var(--blanco);
   border: 1px solid var(--crema-borde);

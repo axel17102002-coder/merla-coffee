@@ -204,20 +204,10 @@ function badgeStock(p) {
   return "";
 }
 
-function renderProductos() {
-  const visibles = DATOS.productos
-    .filter((p) => filtroRegion === "todos" || p.origen === filtroRegion)
-    // Con stock primero, agotados al final (el orden original se mantiene dentro de cada grupo)
-    .sort((a, b) => (b.stock > 0) - (a.stock > 0));
-  if (visibles.length === 0) {
-    $("#product-grid").innerHTML = `<p class="grid__estado">No hay cafés de ${filtroRegion} ahora mismo.</p>`;
-    return;
-  }
-  $("#product-grid").innerHTML = visibles
-    .map((p, i) => {
-      const presentaciones = presentacionesDe(p);
-      const base = presentaciones[0];
-      return `
+function tarjetaProducto(p, i) {
+  const presentaciones = presentacionesDe(p);
+  const base = presentaciones[0];
+  return `
     <article class="card reveal ${p.stock === 0 ? "card--agotado" : ""}" style="--delay:${i * 60}ms" data-card="${p.id}">
       <div class="card__img" data-modal="${p.id}">
         <img src="${p.imagen}" alt="${p.nombre}" loading="lazy">
@@ -241,8 +231,40 @@ function renderProductos() {
         </div>
       </div>
     </article>`;
-    })
-    .join("");
+}
+
+// Con stock primero, agotados al final (el orden original se mantiene dentro de cada grupo)
+function ordenados(productos) {
+  return [...productos].sort((a, b) => (b.stock > 0) - (a.stock > 0));
+}
+
+function renderGrilla(selector, productos, mensajeVacio) {
+  const el = $(selector);
+  if (!productos.length) {
+    el.innerHTML = mensajeVacio ? `<p class="grid__estado">${mensajeVacio}</p>` : "";
+    return;
+  }
+  el.innerHTML = productos.map((p, i) => tarjetaProducto(p, i)).join("");
+}
+
+// El catálogo se separa en tres vidrieras: drip bags (con filtro de región),
+// café en bolsa de 1/4 y tazas/otros — cada una en su propia sección.
+function renderProductos() {
+  const cafes = ordenados(
+    DATOS.productos
+      .filter((p) => p.tipo !== "simple")
+      .filter((p) => filtroRegion === "todos" || p.origen === filtroRegion)
+  );
+  renderGrilla("#product-grid", cafes, `No hay cafés de ${filtroRegion} ahora mismo.`);
+
+  const cafe14 = ordenados(DATOS.productos.filter((p) => p.tipo === "simple" && p.categoria === "cafe_bolsa"));
+  $("#cafe14-seccion").hidden = cafe14.length === 0;
+  if (cafe14.length) renderGrilla("#product-grid-cafe14", cafe14);
+
+  const merch = ordenados(DATOS.productos.filter((p) => p.tipo === "simple" && p.categoria !== "cafe_bolsa"));
+  $("#tazas-seccion").hidden = merch.length === 0;
+  if (merch.length) renderGrilla("#product-grid-merch", merch);
+
   observarReveals();
 }
 

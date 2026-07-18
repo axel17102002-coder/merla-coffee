@@ -143,16 +143,10 @@ $("#secciones").addEventListener("click", (e) => {
 // por gramos y el publicar/ocultar en la misma fila.
 let gramosPorUnidad = 12;
 
-function renderProductos(productos) {
-  const contenedor = $("#productos-lista");
-  $("#stock-gpu").textContent = gramosPorUnidad;
-  if (!productos || !productos.length) {
-    contenedor.innerHTML = `<div class="vacio">No hay productos.</div>`;
-    return;
-  }
-  contenedor.innerHTML = productos.map((p) => {
-    const esSimple = p.tipo === "simple";
-    return `<article class="fila${p.activo ? "" : " fila--inactivo"}" data-producto="${escapar(p.id)}" data-tipo="${esSimple ? "simple" : "cafe"}">
+// Fila de un producto (café o simple) para la lista de Productos y Stock
+function filaProductoStock(p) {
+  const esSimple = p.tipo === "simple";
+  return `<article class="fila${p.activo ? "" : " fila--inactivo"}" data-producto="${escapar(p.id)}" data-fila-tipo="${esSimple ? "simple" : "cafe"}">
       <div class="fila__info">
         <strong>${escapar(p.nombre)}</strong>
         <span class="fila__dato">${p.activo ? "Publicado" : "Oculto"} · <b data-stock-de="${escapar(p.id)}">${p.stock}</b> ${esSimple ? "unidades" : "bags"}${p.origen ? " · " + escapar(p.origen) : ""}${p.imagen ? "" : " · ⚠️ sin foto"}</span>
@@ -167,7 +161,23 @@ function renderProductos(productos) {
         <button class="${p.activo ? "sec" : ""}" data-producto-toggle="${escapar(p.id)}" data-activo="${p.activo}">${p.activo ? "Ocultar" : "Publicar"}</button>
       </div>
     </article>`;
-  }).join("");
+}
+
+function listaOVacio(productos, vacioTexto) {
+  return productos.length ? productos.map(filaProductoStock).join("") : `<div class="vacio">${vacioTexto}</div>`;
+}
+
+// Se agrupan en tres bloques: drip bags (café), café en bolsa 1/4 y tazas/otros
+function renderProductos(productos) {
+  $("#stock-gpu").textContent = gramosPorUnidad;
+  const lista = productos || [];
+  const cafes = lista.filter((p) => p.tipo !== "simple");
+  const cafe14 = lista.filter((p) => p.tipo === "simple" && p.categoria === "cafe_bolsa");
+  const merch = lista.filter((p) => p.tipo === "simple" && p.categoria !== "cafe_bolsa");
+
+  $("#productos-lista-cafe").innerHTML = listaOVacio(cafes, "No hay drip bags todavía.");
+  $("#productos-lista-cafe14").innerHTML = listaOVacio(cafe14, "No hay café en bolsa todavía.");
+  $("#productos-lista-merch").innerHTML = listaOVacio(merch, "No hay tazas ni otros productos todavía.");
 }
 
 async function cargarProductos() {
@@ -190,7 +200,7 @@ async function cargarProductos() {
   }
 }
 
-$("#productos-lista").addEventListener("input", (e) => {
+$("#productos-columnas").addEventListener("input", (e) => {
   const gramosInput = e.target.closest("[data-gramos]");
   if (gramosInput) {
     const fila = gramosInput.closest(".fila");
@@ -210,7 +220,7 @@ $("#productos-lista").addEventListener("input", (e) => {
   }
 });
 
-$("#productos-lista").addEventListener("click", async (e) => {
+$("#productos-columnas").addEventListener("click", async (e) => {
   // Publicar / ocultar
   const toggle = e.target.closest("[data-producto-toggle]");
   if (toggle) {
@@ -234,7 +244,7 @@ $("#productos-lista").addEventListener("click", async (e) => {
   const boton = e.target.closest("[data-stock-action]");
   if (!boton) return;
   const fila = boton.closest(".fila");
-  const esSimple = fila.dataset.tipo === "simple";
+  const esSimple = fila.dataset.filaTipo === "simple";
   const accion = boton.dataset.stockAction;
   const nombre = fila.querySelector("strong").textContent;
 
@@ -547,9 +557,18 @@ function renderPrecios() {
         <button type="button" class="px-btn" data-propuesta="aplicar">Actualizar precios</button>
       </div>
     </div>`;
+  const cafes = preciosCache.filter((p) => p.tipo !== "simple");
+  const cafe14 = preciosCache.filter((p) => p.tipo === "simple" && p.categoria === "cafe_bolsa");
+  const merch = preciosCache.filter((p) => p.tipo === "simple" && p.categoria !== "cafe_bolsa");
+  const grupo = (titulo, lista, vacioTexto) => `<h4 class="px-grupo__titulo">${titulo}</h4>` +
+    (lista.length ? lista.map((p) => filaProducto(p, cfg)).join("") : `<div class="vacio">${vacioTexto}</div>`);
+
   c.innerHTML = banner + `<div class="px-productos__head">
       <span>Producto</span><span>Costo</span><span>Unidad</span><span>Pack x${cfg.packUnidades}</span><span>Margen</span><span></span>
-    </div>` + preciosCache.map((p) => filaProducto(p, cfg)).join("");
+    </div>`
+    + grupo("☕ Drip bags", cafes, "No hay drip bags todavía.")
+    + grupo("🛍️ Café en bolsa (1/4)", cafe14, "No hay café en bolsa todavía.")
+    + grupo("🏷️ Tazas y otros", merch, "No hay tazas ni otros productos todavía.");
 
   const abierta = c.querySelector(".px-prod--abierto");
   if (!abierta) return;
@@ -1038,10 +1057,13 @@ $("#cupones").addEventListener("click", async (e) => {
 // ===== Alta de producto =====
 // Tipo de producto: 'cafe' (fórmula por kilo) o 'simple' (precio fijo a mano)
 let productoTipo = "cafe";
+// Categoría, solo aplica a 'simple': 'cafe_bolsa' (café en bolsa 1/4) o 'merch' (tazas y otros)
+let productoCategoria = "cafe_bolsa";
 function aplicarTipoProducto(tipo) {
   productoTipo = tipo;
   const esSimple = tipo === "simple";
   $("#prod-tipo").querySelectorAll("button").forEach((x) => x.classList.toggle("px-chip--activo", x.dataset.tipo === tipo));
+  $("#prod-categoria").hidden = !esSimple;
   $("#campos-cafe").hidden = esSimple;
   $("#prod-costo").hidden = esSimple;
   $("#prod-costo").required = !esSimple;
@@ -1052,6 +1074,12 @@ function aplicarTipoProducto(tipo) {
 $("#prod-tipo").addEventListener("click", (e) => {
   const b = e.target.closest("[data-tipo]");
   if (b) aplicarTipoProducto(b.dataset.tipo);
+});
+$("#prod-categoria").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-categoria]");
+  if (!b) return;
+  productoCategoria = b.dataset.categoria;
+  $("#prod-categoria").querySelectorAll("button").forEach((x) => x.classList.toggle("px-chip--activo", x === b));
 });
 
 // Vista previa del costo mientras se escribe (el precio final se decide en Precios)
@@ -1107,6 +1135,7 @@ $("#producto-form").addEventListener("submit", async (e) => {
     const cuerpo = esSimple
       ? {
           tipo: "simple",
+          categoria: productoCategoria,
           nombre: $("#prod-nombre").value,
           precio: Number($("#prod-precio").value),
           stock: Number($("#prod-stock").value) || 0,
@@ -1134,6 +1163,8 @@ $("#producto-form").addEventListener("submit", async (e) => {
       : `✅ ${r.producto.nombre} creado (oculto) · unidad ${formato.format(r.precio)} · pack ${formato.format(r.precioPack)}`, true);
     $("#producto-form").reset();
     aplicarTipoProducto("cafe");
+    productoCategoria = "cafe_bolsa";
+    $("#prod-categoria").querySelectorAll("button").forEach((x) => x.classList.toggle("px-chip--activo", x.dataset.categoria === "cafe_bolsa"));
     $("#prod-thumb").hidden = true;
     fotoDataUrl = null;
     TABS["tab-precios"].cargado = false; // que Precios muestre el producto nuevo

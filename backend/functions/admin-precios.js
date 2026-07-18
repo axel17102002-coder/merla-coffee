@@ -18,8 +18,13 @@ const {
   costoUnidad, costoPack, margenPack, margenUnidadReal,
 } = require("../../public/motor.js");
 
-// Lee productos tolerando que las migraciones de costo_kg/tipo no se hayan corrido
+// Lee productos tolerando que las migraciones de costo_kg/tipo/categoria no se hayan corrido
 async function traerProductos() {
+  try {
+    return await sb("productos?select=id,nombre,activo,costo_kg,tipo,categoria&order=nombre.asc");
+  } catch (err) {
+    console.warn("admin-precios: sin columna categoria todavía:", err.message);
+  }
   try {
     return await sb("productos?select=id,nombre,activo,costo_kg,tipo&order=nombre.asc");
   } catch (err) {
@@ -56,6 +61,7 @@ exports.handler = async (event) => {
             nombre: p.nombre,
             activo: p.activo,
             tipo: "simple",
+            categoria: p.categoria === "cafe_bolsa" ? "cafe_bolsa" : "merch",
             precio: unidad ? unidad.precio : null,
           };
         }

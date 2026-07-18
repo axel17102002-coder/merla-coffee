@@ -72,12 +72,31 @@
           <!-- Formulario de alta de producto (Se mantiene igual) -->          
           <p class="mensaje" id="producto-message"></p>
           
-          <!-- Lista única donde JS inyectará los productos y sus controles de stock -->
-          <div class="lista" id="productos-lista"></div>
+          <!-- Productos agrupados: drip bags a la izquierda; café 1/4 y tazas a la derecha -->
+          <div class="productos-columnas" id="productos-columnas">
+            <section class="productos-bloque">
+              <h4 class="productos-bloque__titulo">☕ Drip bags</h4>
+              <div class="lista" id="productos-lista-cafe"></div>
+            </section>
+            <div class="productos-columna-derecha">
+              <section class="productos-bloque">
+                <h4 class="productos-bloque__titulo">🛍️ Café en bolsa (1/4)</h4>
+                <div class="lista" id="productos-lista-cafe14"></div>
+              </section>
+              <section class="productos-bloque">
+                <h4 class="productos-bloque__titulo">🏷️ Tazas y otros</h4>
+                <div class="lista" id="productos-lista-merch"></div>
+              </section>
+            </div>
+          </div>
           <form class="cupon-form" id="producto-form">
             <div class="px-modo" id="prod-tipo">
               <button type="button" class="px-chip px-chip--activo" data-tipo="cafe">☕ Café (por kilo)</button>
               <button type="button" class="px-chip" data-tipo="simple">🏷️ Producto simple</button>
+            </div>
+            <div class="px-modo" id="prod-categoria" hidden>
+              <button type="button" class="px-chip px-chip--activo" data-categoria="cafe_bolsa">🛍️ Café en bolsa (1/4)</button>
+              <button type="button" class="px-chip" data-categoria="merch">🏷️ Tazas y otros</button>
             </div>
             <input id="prod-nombre" placeholder="Nombre (ej. Café en Grano)" maxlength="60" required aria-label="Nombre del producto">
             <div class="entrega__row">

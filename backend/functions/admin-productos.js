@@ -39,10 +39,15 @@ exports.handler = async (event) => {
     if (event.httpMethod === "GET") {
       let productos;
       try {
-        productos = await sb("productos?select=id,nombre,activo,stock,origen,imagen,tipo&order=nombre.asc");
+        productos = await sb("productos?select=id,nombre,activo,stock,origen,imagen,tipo,categoria&order=nombre.asc");
       } catch (err) {
-        console.warn("admin-productos: sin columna tipo todavía (correr migracion-productos-simples.sql):", err.message);
-        productos = await sb("productos?select=id,nombre,activo,stock,origen,imagen&order=nombre.asc");
+        console.warn("admin-productos: sin columna categoria todavía (correr migracion-categoria-productos.sql):", err.message);
+        try {
+          productos = await sb("productos?select=id,nombre,activo,stock,origen,imagen,tipo&order=nombre.asc");
+        } catch (err2) {
+          console.warn("admin-productos: sin columna tipo todavía (correr migracion-productos-simples.sql):", err2.message);
+          productos = await sb("productos?select=id,nombre,activo,stock,origen,imagen&order=nombre.asc");
+        }
       }
       return { statusCode: 200, headers, body: JSON.stringify({ productos }) };
     }
@@ -74,12 +79,14 @@ exports.handler = async (event) => {
         if (!(precio > 0)) {
           return { statusCode: 400, headers, body: JSON.stringify({ error: "Poné el precio de venta" }) };
         }
+        const categoria = b.categoria === "cafe_bolsa" ? "cafe_bolsa" : "merch";
         const fila = {
           id,
           nombre,
           activo: false,
           stock,
           tipo: "simple",
+          categoria,
           descripcion: texto(b.descripcion, 600),
           imagen: texto(b.imagen, 400),
         };
@@ -87,9 +94,15 @@ exports.handler = async (event) => {
         try {
           [producto] = await crear(fila);
         } catch (err) {
-          console.warn("admin-productos: reintento sin tipo (correr migracion-productos-simples.sql):", err.message);
-          const { tipo, ...sinTipo } = fila;
-          [producto] = await crear(sinTipo);
+          console.warn("admin-productos: reintento sin categoria (correr migracion-categoria-productos.sql):", err.message);
+          const { categoria: _categoria, ...sinCategoria } = fila;
+          try {
+            [producto] = await crear(sinCategoria);
+          } catch (err2) {
+            console.warn("admin-productos: reintento sin tipo (correr migracion-productos-simples.sql):", err2.message);
+            const { tipo, ...sinTipo } = sinCategoria;
+            [producto] = await crear(sinTipo);
+          }
         }
         await sb("presentaciones", {
           method: "POST",

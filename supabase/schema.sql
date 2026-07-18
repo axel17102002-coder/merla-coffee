@@ -14,6 +14,8 @@ create table if not exists productos (
   -- 'cafe': precio calculado por fórmula desde costo_kg (motor.js).
   -- 'simple': precio fijo, cargado a mano (tazas, cafés en bolsa 1/4, etc.)
   tipo text not null default 'cafe' check (tipo in ('cafe', 'simple')),
+  -- Solo para 'simple': 'cafe_bolsa' o 'merch'. Null en los cafés.
+  categoria text check (categoria is null or categoria in ('cafe_bolsa', 'merch')),
   origen text,
   region text,
   variedad text,
