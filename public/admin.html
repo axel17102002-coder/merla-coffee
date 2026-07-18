@@ -69,7 +69,11 @@
             Para el stock, calculamos las drip bags a <strong id="stock-gpu">12</strong> g por unidad.
           </p>
           
-          <!-- Formulario de alta de producto (Se mantiene igual) -->
+          <!-- Formulario de alta de producto (Se mantiene igual) -->          
+          <p class="mensaje" id="producto-message"></p>
+          
+          <!-- Lista única donde JS inyectará los productos y sus controles de stock -->
+          <div class="lista" id="productos-lista"></div>
           <form class="cupon-form" id="producto-form">
             <input id="prod-nombre" placeholder="Nombre (ej. Café en Grano)" maxlength="60" required aria-label="Nombre del producto">
             <div class="entrega__row">
@@ -98,11 +102,6 @@
             <img id="prod-thumb" class="prod-thumb" alt="" hidden>
             <button type="submit">Crear producto (oculto)</button>
           </form>
-          
-          <p class="mensaje" id="producto-message"></p>
-          
-          <!-- Lista única donde JS inyectará los productos y sus controles de stock -->
-          <div class="lista" id="productos-lista"></div>
         </div>
 
           <!-- VISTA: Precios -->
