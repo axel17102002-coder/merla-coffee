@@ -1096,6 +1096,14 @@ function actualizarCamposDescriptivos() {
   const mostrar = productoTipo === "cafe" || (productoTipo === "simple" && productoCategoria === "cafe_bolsa");
   $("#campos-cafe").hidden = !mostrar;
 }
+function actualizarPlaceholderNombre() {
+  const ejemplo = productoTipo === "cafe"
+    ? "ej. Café en Grano"
+    : productoCategoria === "cafe_bolsa"
+      ? "ej. Andino - Bolsa 1/4"
+      : "ej. Taza Merla";
+  $("#prod-nombre").placeholder = `Nombre (${ejemplo})`;
+}
 function aplicarTipoProducto(tipo) {
   productoTipo = tipo;
   const esSimple = tipo === "simple";
@@ -1107,6 +1115,7 @@ function aplicarTipoProducto(tipo) {
   $("#prod-stock").placeholder = esSimple ? "Stock (unidades)" : "Stock (bags)";
   $("#prod-preview").textContent = "";
   actualizarCamposDescriptivos();
+  actualizarPlaceholderNombre();
 }
 $("#prod-tipo").addEventListener("click", (e) => {
   const b = e.target.closest("[data-tipo]");
@@ -1123,6 +1132,7 @@ $("#prod-categoria").addEventListener("click", (e) => {
       .forEach((sel) => { $(sel).value = ""; });
   }
   actualizarCamposDescriptivos();
+  actualizarPlaceholderNombre();
 });
 
 // Vista previa del costo mientras se escribe (el precio final se decide en Precios)
