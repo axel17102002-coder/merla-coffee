@@ -184,8 +184,13 @@ button:disabled { opacity: .55; cursor: wait; }
 .px-paso__control input:focus { outline: 2px solid #3d604733; border-color: var(--verde); }
 .px-modo { display: flex; gap: 4px; background: #f3eede; border-radius: 999px; padding: 3px; }
 .px-modo[hidden] { display: none; } /* [hidden] solo, sin esto, pierde contra el display:flex de arriba */
-.px-chip { border: 0; border-radius: 999px; padding: 6px 12px; background: transparent; color: var(--gris); font-weight: 700; font-size: .8rem; }
-.px-chip--activo { background: #fff; color: var(--verde); box-shadow: 0 1px 3px #22301f20; }
+/* .px-modo delante de .px-chip: .cupon-form button (usado por el botón de
+   "Crear producto") tiene más especificidad que .px-chip solo y le ganaba,
+   dejando los dos chips siempre verde oscuro sin distinguir cuál está activo.
+   flex:1 + text-align:center: mismo ancho para los dos, en vez de ajustarse
+   cada uno a su propio texto (quedaban descompensados). */
+.px-modo .px-chip { flex: 1; border: 0; border-radius: 999px; padding: 7px 10px; background: transparent; color: var(--gris); font-weight: 700; font-size: .8rem; text-align: center; white-space: nowrap; transition: background .15s, color .15s; }
+.px-modo .px-chip--activo { background: #fff; color: var(--verde); box-shadow: 0 1px 3px #22301f20; }
 .px-calculo { background: #f6f2e5; border-radius: 12px; padding: 6px 4px; display: grid; gap: 1px; }
 .px-calculo__fila { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 12px; font-size: .9rem; }
 .px-calculo__fila small { color: var(--gris); font-weight: 500; }
