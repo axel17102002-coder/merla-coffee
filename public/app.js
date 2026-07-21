@@ -1348,6 +1348,24 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// ===== Banner de cookies (consentimiento para la analítica GA4) =====
+// La analítica en sí vive en el <head> (activarAnalitica). Acá solo mostramos
+// el banner la primera vez y recordamos la elección en localStorage.
+(function bannerCookies() {
+  const banner = $("#cookie-banner");
+  if (!banner) return;
+  if (!localStorage.getItem("merla-cookies")) banner.hidden = false;
+  $("#cookie-accept").addEventListener("click", () => {
+    localStorage.setItem("merla-cookies", "aceptadas");
+    banner.hidden = true;
+    if (window.activarAnalitica) window.activarAnalitica();
+  });
+  $("#cookie-reject").addEventListener("click", () => {
+    localStorage.setItem("merla-cookies", "rechazadas");
+    banner.hidden = true;
+  });
+})();
+
 // ===== Inicio =====
 const emailGuardado = emailCliente();
 if ($("#club-email") && emailGuardado) $("#club-email").value = emailGuardado;

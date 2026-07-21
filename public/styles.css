@@ -881,6 +881,32 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 
 .wa-float:hover { transform: scale(1.08); }
 
+/* Banner de cookies (consentimiento para la analítica). Abajo a la izquierda
+   en desktop para no tapar el botón de WhatsApp; barra completa en móvil. */
+.cookie-banner {
+  position: fixed;
+  left: 22px;
+  bottom: 22px;
+  z-index: 85;
+  max-width: 420px;
+  background: var(--blanco);
+  border: 1px solid var(--crema-borde);
+  border-radius: 18px;
+  box-shadow: var(--sombra);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cookie-banner[hidden] { display: none; }
+.cookie-banner__texto { margin: 0; font-size: 0.9rem; line-height: 1.5; color: var(--tinta); }
+.cookie-banner__acciones { display: flex; gap: 10px; justify-content: flex-end; }
+.cookie-banner__acciones .btn { padding: 10px 20px; font-size: 0.86rem; }
+@media (max-width: 560px) {
+  .cookie-banner { left: 12px; right: 12px; bottom: 12px; max-width: none; }
+  .cookie-banner__acciones .btn { flex: 1; }
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 900px) {
   .hero { grid-template-columns: 1fr; }
