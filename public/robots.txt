@@ -1,0 +1,8 @@
+# Merla Coffee
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin.html
+Disallow: /api/
+
+Sitemap: https://merla-coffee.merlacoffee.workers.dev/sitemap.xml
