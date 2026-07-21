@@ -1,6 +1,7 @@
 # Merla Coffee
 User-agent: *
 Allow: /
+Allow: /api/feed
 Disallow: /admin
 Disallow: /admin.html
 Disallow: /api/

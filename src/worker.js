@@ -23,6 +23,7 @@ import { handler as adminConfig } from "../backend/functions/admin-config.js";
 import { handler as whatsappPedido } from "../backend/functions/whatsapp-pedido.js";
 import { handler as adminPrecios } from "../backend/functions/admin-precios.js";
 import { handler as cotizarEnvio } from "../backend/functions/cotizar-envio.js";
+import { handler as feed } from "../backend/functions/feed.js";
 
 const rutas = {
   "tienda": adaptar(tienda),
@@ -43,6 +44,7 @@ const rutas = {
   "whatsapp-pedido": adaptar(whatsappPedido),
   "admin-precios": adaptar(adminPrecios),
   "cotizar-envio": adaptar(cotizarEnvio),
+  "feed": adaptar(feed),
 };
 
 function cargarEnv(env) {

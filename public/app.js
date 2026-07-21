@@ -124,6 +124,7 @@ async function cargarTienda() {
     renderFiltros();
     renderProductos();
     renderCarrito();
+    abrirProductoDeURL(); // deep-link ?producto=<id> (lo usan los feeds de ads)
   } catch (err) {
     console.error("No se pudo cargar la tienda:", err);
     $("#product-grid").innerHTML = `
@@ -1164,6 +1165,14 @@ function cerrarCarrito() {
 }
 
 // ===== UI: modal de producto =====
+// Deep-link: /?producto=<id> abre ese café directamente al cargar la página.
+// Lo usan los feeds de Meta/Google como `link` de cada producto, para que el
+// anuncio caiga en la tienda con el café ya abierto.
+function abrirProductoDeURL() {
+  const id = new URLSearchParams(location.search).get("producto");
+  if (id && DATOS.productos.some((p) => p.id === id)) abrirModal(id);
+}
+
 function abrirModal(id) {
   const p = DATOS.productos.find((p) => p.id === id);
   if (!p) return;
