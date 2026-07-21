@@ -44,9 +44,9 @@ exports.handler = async (event) => {
     if (event.httpMethod === "GET") {
       let productos;
       try {
-        productos = await sb("productos?select=id,nombre,activo,stock,origen,imagen,tipo,categoria&order=nombre.asc");
+        productos = await sb("productos?select=id,nombre,activo,stock,origen,imagen,tipo,categoria,descontinuado&order=nombre.asc");
       } catch (err) {
-        console.warn("admin-productos: sin columna categoria todavía (correr migracion-categoria-productos.sql):", err.message);
+        console.warn("admin-productos: sin columna categoria/descontinuado todavía (correr migraciones):", err.message);
         try {
           productos = await sb("productos?select=id,nombre,activo,stock,origen,imagen,tipo&order=nombre.asc");
         } catch (err2) {
@@ -179,14 +179,23 @@ exports.handler = async (event) => {
     }
 
     if (event.httpMethod === "PATCH") {
-      const { id, activo } = JSON.parse(event.body || "{}");
+      const body = JSON.parse(event.body || "{}");
+      const { id } = body;
       if (!id) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: "Falta el producto" }) };
+      }
+      // Actualización parcial: publicar/ocultar (activo) y/o marcar sin
+      // reposición (descontinuado). Solo se tocan los campos que vengan.
+      const cambios = {};
+      if (body.activo !== undefined) cambios.activo = Boolean(body.activo);
+      if (body.descontinuado !== undefined) cambios.descontinuado = Boolean(body.descontinuado);
+      if (!Object.keys(cambios).length) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "No hay nada para actualizar" }) };
       }
       const [producto] = await sb(`productos?id=eq.${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: { Prefer: "return=representation" },
-        body: { activo: Boolean(activo) },
+        body: cambios,
       });
       if (!producto) {
         return { statusCode: 404, headers, body: JSON.stringify({ error: "Producto inexistente" }) };

@@ -202,8 +202,10 @@ function selectorPresentaciones(p) {
  * @returns {string}
  */
 function badgeStock(p) {
-  // Productos que no vuelven a ingresar  · Sin reposición
-  if (p.id === "andino" || p.id === "silverio-nina") {
+  // "Sin reposición": productos que no vuelven a ingresar. El flag
+  // `descontinuado` se edita desde el panel (Productos y Stock); antes estos
+  // ids venían hardcodeados acá y había que tocar el código en cada cambio.
+  if (p.descontinuado && p.stock > 0) {
     return `<span class="card__stock--ultima">
         🔥 Últimas ${p.stock} unidades
       </span>

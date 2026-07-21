@@ -149,7 +149,7 @@ function filaProductoStock(p) {
   return `<article class="fila${p.activo ? "" : " fila--inactivo"}" data-producto="${escapar(p.id)}" data-fila-tipo="${esSimple ? "simple" : "cafe"}">
       <div class="fila__info">
         <strong>${escapar(p.nombre)}</strong>
-        <span class="fila__dato">${p.activo ? "Publicado" : "Oculto"} · <b data-stock-de="${escapar(p.id)}">${p.stock}</b> ${esSimple ? "unidades" : "bags"}${p.origen ? " · " + escapar(p.origen) : ""}${p.imagen ? "" : " · ⚠️ sin foto"}</span>
+        <span class="fila__dato">${p.activo ? "Publicado" : "Oculto"} · <b data-stock-de="${escapar(p.id)}">${p.stock}</b> ${esSimple ? "unidades" : "bags"}${p.origen ? " · " + escapar(p.origen) : ""}${p.descontinuado ? " · 🔥 sin reposición" : ""}${p.imagen ? "" : " · ⚠️ sin foto"}</span>
       </div>
       <div class="fila__form">
         ${esSimple
@@ -158,6 +158,7 @@ function filaProductoStock(p) {
         <span class="fila__preview" data-preview>= 0 bags</span>`}
         <button data-stock-action="sumar" disabled>Sumar</button>
         <button class="sec" data-stock-action="fijar" disabled>Fijar</button>
+        <button class="sec" data-desc-toggle="${escapar(p.id)}" data-desc="${Boolean(p.descontinuado)}" title="Producto sin reposición: la tienda muestra 'Últimas N unidades' en vez del stock normal">${p.descontinuado ? "Reponer" : "Sin reposición"}</button>
         <button class="${p.activo ? "sec" : ""}" data-producto-toggle="${escapar(p.id)}" data-activo="${p.activo}">${p.activo ? "Ocultar" : "Publicar"}</button>
         <button class="px-borrar" data-producto-eliminar="${escapar(p.id)}" title="Eliminar producto" aria-label="Eliminar ${escapar(p.nombre)}">🗑</button>
       </div>
@@ -237,6 +238,25 @@ $("#productos-columnas").addEventListener("click", async (e) => {
     } catch (err) {
       mensaje("#producto-message", `⚠️ ${err.message}`);
       toggle.disabled = false;
+    }
+    return;
+  }
+
+  // Marcar / desmarcar "sin reposición" (muestra "Últimas N unidades" en la tienda)
+  const desc = e.target.closest("[data-desc-toggle]");
+  if (desc) {
+    const marcar = desc.dataset.desc !== "true";
+    desc.disabled = true;
+    try {
+      await api("/api/admin-productos", {
+        method: "PATCH",
+        body: JSON.stringify({ id: desc.dataset.descToggle, descontinuado: marcar }),
+      });
+      await cargarProductos();
+      mensaje("#producto-message", marcar ? "✅ Marcado sin reposición." : "✅ Vuelve a reponerse.", true);
+    } catch (err) {
+      mensaje("#producto-message", `⚠️ ${err.message}`);
+      desc.disabled = false;
     }
     return;
   }
