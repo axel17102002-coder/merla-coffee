@@ -10,3 +10,11 @@ node_modules
 .DS_Store
 /.DS_Store
 /.claude
+
+# Fotos originales de producto (pesadas, sin optimizar). Solo se versiona la
+# versión .webp que usa la web (ej. img/prod_1.webp). Guardá los originales
+# .JPG en tu compu por si necesitás re-editarlos, pero NO van al repo ni a
+# producción: si los dejás en public/img/ igual se suben como assets al hacer
+# `wrangler deploy`, así que lo mejor es tenerlos fuera de public/.
+public/img/*.JPG
+public/img/*.jpeg
