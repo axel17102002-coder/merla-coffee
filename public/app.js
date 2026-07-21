@@ -526,7 +526,16 @@ function agregar(productoId, presentacionId, abrir = false) {
   const info = productoDe(presentacionId);
   if (!info) return;
   const ok = intentarCambio(nuevo, `${info.producto.nombre} (${info.pres.nombre}) agregado ☕`);
-  if (ok && abrir) abrirCarrito();
+  if (ok) {
+    metaTrack("AddToCart", {
+      content_ids: [info.producto.id],
+      content_type: "product",
+      content_name: `${info.producto.nombre} (${info.pres.nombre})`,
+      value: info.pres.precio,
+      currency: "ARS",
+    });
+    if (abrir) abrirCarrito();
+  }
 }
 
 function cambiar(presentacionId, delta) {
@@ -642,6 +651,7 @@ function quitarCanje() {
 async function checkoutWhatsApp() {
   const { calc } = estadoPedido();
   if (!calc) return;
+  metaTrack("InitiateCheckout", metaDesdeCalc(calc));
 
   const errorEntrega = validarEntrega();
   if (errorEntrega) { mostrarToast(`⚠️ ${errorEntrega}`); return; }
@@ -937,6 +947,7 @@ $("#envio-opciones").addEventListener("change", (e) => {
 async function pagarConMercadoPago() {
   const { calc } = estadoPedido();
   if (!calc) return;
+  metaTrack("InitiateCheckout", metaDesdeCalc(calc));
 
   const errorEntrega = validarEntrega();
   if (errorEntrega) { mostrarToast(`⚠️ ${errorEntrega}`); return; }
@@ -997,6 +1008,7 @@ async function crearPagoModo() {
 async function pagarConModo() {
   const { calc } = estadoPedido();
   if (!calc) return;
+  metaTrack("InitiateCheckout", metaDesdeCalc(calc));
 
   const btn = $("#pay-modo");
   const textoOriginal = btn.innerHTML;
@@ -1049,6 +1061,9 @@ async function pagarConModo() {
 // descuenta stock y acredita puntos). El webhook hace lo mismo por su lado;
 // la operación es idempotente.
 async function confirmarCompra(pagoId, mpPaymentId) {
+  // Se captura antes de vaciar el carrito; si está vacío (recarga del success)
+  // no se dispara, así no cuenta la compra dos veces.
+  const compra = metaDesdeCarrito();
   const id = pagoId || localStorage.getItem("merla-ultimo-pago");
   let puntos = null;
   if (id || mpPaymentId) {
@@ -1067,6 +1082,8 @@ async function confirmarCompra(pagoId, mpPaymentId) {
     }
     localStorage.removeItem("merla-ultimo-pago");
   }
+
+  if (compra.content_ids.length) metaTrack("Purchase", compra);
 
   vaciarCarrito();
   cerrarCarrito();
@@ -1177,6 +1194,13 @@ function abrirModal(id) {
   const p = DATOS.productos.find((p) => p.id === id);
   if (!p) return;
   const base = presentacionesDe(p)[0];
+  metaTrack("ViewContent", {
+    content_ids: [p.id],
+    content_type: "product",
+    content_name: p.nombre,
+    value: base ? base.precio : undefined,
+    currency: "ARS",
+  });
   $("#modal-card").innerHTML = `
     <div class="modal__img"><img src="${p.imagen}" alt="${p.nombre}"></div>
     <div class="modal__body" data-card="${p.id}">
@@ -1356,6 +1380,41 @@ document.addEventListener("keydown", (e) => {
     cerrarCarrito();
   }
 });
+
+// ===== Meta Pixel: eventos estándar =====
+// Solo disparan si el visitante aceptó las cookies (activarAnalitica ya cargó
+// el pixel). Usamos el id de PRODUCTO como content_id: coincide con el <g:id>
+// del feed (/api/feed), que es lo que Meta necesita para el retargeting dinámico.
+function metaTrack(evento, params) {
+  if (window.__analiticaCargada && window.fbq) window.fbq("track", evento, params);
+}
+
+// Parámetros de Meta a partir de un pedido calculado (calcularPedido)
+function metaDesdeCalc(calc) {
+  return {
+    content_ids: [...new Set(calc.lineas.map((l) => l.producto_id))],
+    content_type: "product",
+    value: calc.total,
+    num_items: calc.unidades,
+    currency: "ARS",
+  };
+}
+
+// Parámetros de Meta a partir del carrito actual (para Purchase, cuando ya no
+// tenemos el calc a mano: al volver del pago la página se recargó)
+function metaDesdeCarrito() {
+  const ids = new Set();
+  let value = 0;
+  let items = 0;
+  for (const { presentacion, qty } of itemsDelCarrito()) {
+    const info = productoDe(presentacion);
+    if (!info) continue;
+    ids.add(info.producto.id);
+    value += info.pres.precio * qty;
+    items += qty;
+  }
+  return { content_ids: [...ids], content_type: "product", value, num_items: items, currency: "ARS" };
+}
 
 // ===== Banner de cookies (consentimiento para la analítica GA4) =====
 // La analítica en sí vive en el <head> (activarAnalitica). Acá solo mostramos
