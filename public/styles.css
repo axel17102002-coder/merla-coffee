@@ -238,6 +238,9 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 
 .hero__img img {
   width: 100%;
+  /* height:auto para que mande el aspect-ratio 4/5 aunque el <img> tenga
+     atributos width/height: si no, un height fijo lo deforma y recorta. */
+  height: auto;
   border-radius: var(--radio);
   box-shadow: var(--sombra);
   aspect-ratio: 4 / 5;
