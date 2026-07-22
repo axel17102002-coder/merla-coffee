@@ -271,55 +271,53 @@ function renderProductos() {
   renderGrilla("#product-grid", cafes, `No hay cafés de ${filtroRegion} ahora mismo.`);
 
   const cafe14 = ordenados(DATOS.productos.filter((p) => p.tipo === "simple" && p.categoria === "cafe_bolsa"));
-  $("#cafe14-seccion").hidden = cafe14.length === 0;
   if (cafe14.length) renderGrilla("#product-grid-cafe14", cafe14);
 
   const merch = ordenados(DATOS.productos.filter((p) => p.tipo === "simple" && p.categoria !== "cafe_bolsa"));
-  $("#tazas-seccion").hidden = merch.length === 0;
   if (merch.length) renderGrilla("#product-grid-merch", merch);
 
-  actualizarChipsCategorias(cafe14.length > 0, merch.length > 0);
+  construirTabsCategorias(cafe14.length > 0, merch.length > 0);
   observarReveals();
 }
 
-// Barra de accesos rápidos por categoría. Solo aparece si hay café 1/4 y/o
-// tazas; no oculta nada, solo lleva con scroll suave a cada sección. El chip
-// se resalta según la sección que estés mirando.
-let observadorCategorias = null;
-function actualizarChipsCategorias(hayCafe14, hayTazas) {
-  const bar = $("#cat-chips");
-  if (!bar) return;
-  if (observadorCategorias) observadorCategorias.disconnect();
-  if (!hayCafe14 && !hayTazas) { bar.hidden = true; bar.innerHTML = ""; return; }
+// Selector de categorías tipo pestañas (como el panel de admin): al cambiar,
+// se muestran SOLO los productos de esa categoría en el lugar (no scrollea).
+// Solo aparece si hay café 1/4 y/o tazas; con drip bags nomás, no se muestra.
+let categoriaActiva = "cafes";
+function construirTabsCategorias(hayCafe14, hayTazas) {
+  const tabs = $("#cat-tabs");
+  if (!tabs) return;
 
-  const chips = [{ t: "☕ Cafés", id: "product-grid" }];
-  if (hayCafe14) chips.push({ t: "🛍️ Café ¼ kg", id: "cafe14-seccion" });
-  if (hayTazas) chips.push({ t: "🍵 Tazas", id: "tazas-seccion" });
-  bar.innerHTML = chips
-    .map((c, i) => `<button class="cat-chip${i === 0 ? " activo" : ""}" data-scroll-to="${c.id}">${c.t}</button>`)
-    .join("");
-  bar.hidden = false;
+  const cats = [{ id: "cafes", t: "Cafés" }];
+  if (hayCafe14) cats.push({ id: "cafe14", t: "Café ¼ kg" });
+  if (hayTazas) cats.push({ id: "tazas", t: "Tazas" });
 
-  // Resalta el chip de la sección que cruza el centro de la pantalla
-  observadorCategorias = new IntersectionObserver(
-    (entradas) => entradas.forEach((en) => {
-      if (!en.isIntersecting) return;
-      bar.querySelectorAll(".cat-chip").forEach((x) => x.classList.toggle("activo", x.dataset.scrollTo === en.target.id));
-    }),
-    { rootMargin: "-45% 0px -45% 0px" }
-  );
-  chips.forEach((c) => { const el = document.getElementById(c.id); if (el) observadorCategorias.observe(el); });
+  if (cats.length === 1) {
+    tabs.hidden = true;
+    tabs.innerHTML = "";
+    categoriaActiva = "cafes";
+  } else {
+    // Si la categoría activa dejó de existir (cambió el catálogo), vuelve a Cafés
+    if (!cats.some((c) => c.id === categoriaActiva)) categoriaActiva = "cafes";
+    tabs.innerHTML = cats.map((c) => `<button class="cat-tab" data-categoria="${c.id}">${c.t}</button>`).join("");
+    tabs.hidden = false;
+  }
+  aplicarCategoria(categoriaActiva);
 }
 
-// Clic en un chip → scroll suave a la sección (descontando header + barra sticky)
-$("#cat-chips").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-scroll-to]");
-  if (!b) return;
-  const el = document.getElementById(b.dataset.scrollTo);
-  if (!el) return;
-  $("#cat-chips").querySelectorAll(".cat-chip").forEach((x) => x.classList.toggle("activo", x === b));
-  const y = el.getBoundingClientRect().top + window.scrollY - 130;
-  window.scrollTo({ top: y, behavior: "smooth" });
+// Muestra el panel de la categoría activa y oculta los demás (sin scrollear)
+function aplicarCategoria(cat) {
+  categoriaActiva = cat;
+  $("#panel-cafes").hidden = cat !== "cafes";
+  $("#cafe14-seccion").hidden = cat !== "cafe14";
+  $("#tazas-seccion").hidden = cat !== "tazas";
+  const tabs = $("#cat-tabs");
+  if (tabs) tabs.querySelectorAll(".cat-tab").forEach((b) => b.classList.toggle("activo", b.dataset.categoria === cat));
+}
+
+$("#cat-tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-categoria]");
+  if (b) aplicarCategoria(b.dataset.categoria);
 });
 
 // Presentación seleccionada dentro de una tarjeta o del modal

@@ -196,11 +196,13 @@
         <h2>Nuestros cafés</h2>
         <p>Seleccionamos microlotes de Sudamérica, tostados por los mejores tostadores del país. Cada drip bag rinde una taza de 200 cc.</p>
       </div>
-      <!-- Accesos rápidos por categoría: aparecen solo si hay café 1/4 y/o tazas.
-           No ocultan nada: llevan con scroll suave a cada sección. -->
-      <nav class="cat-chips" id="cat-chips" hidden aria-label="Categorías de productos"></nav>
-      <div class="filtros" id="region-filtros" hidden></div>
-      <div class="grid" id="product-grid"></div>
+      <!-- Selector de categorías tipo pestañas: aparece solo si hay café 1/4
+           y/o tazas. Al cambiar, se muestran los productos de esa categoría. -->
+      <div class="cat-tabs" id="cat-tabs" hidden role="tablist" aria-label="Categorías de productos"></div>
+      <div class="cat-panel" id="panel-cafes">
+        <div class="filtros" id="region-filtros" hidden></div>
+        <div class="grid" id="product-grid"></div>
+      </div>
 
       <div class="catalogo__extra" id="cafe14-seccion" hidden>
         <div class="section__head catalogo__subhead">
