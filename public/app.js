@@ -1147,6 +1147,7 @@ async function consultarClub() {
     return;
   }
   localStorage.setItem("merla-email", email);
+  metaActualizarEmail(email); // Advanced Matching del pixel
   const btn = $("#club-consultar");
   btn.disabled = true;
   try {
@@ -1349,6 +1350,7 @@ $("#coupon-input").addEventListener("keydown", (e) => {
 $("#email-input").addEventListener("change", () => {
   const email = $("#email-input").value.trim().toLowerCase();
   localStorage.setItem("merla-email", email);
+  metaActualizarEmail(email); // Advanced Matching del pixel
   saldoPuntos = null; // saldo desconocido para el nuevo email
   localStorage.removeItem("merla-canje");
   renderCarrito();
@@ -1387,6 +1389,16 @@ document.addEventListener("keydown", (e) => {
 // del feed (/api/feed), que es lo que Meta necesita para el retargeting dinámico.
 function metaTrack(evento, params) {
   if (window.__analiticaCargada && window.fbq) window.fbq("track", evento, params);
+}
+
+// Advanced Matching: cuando el cliente deja su email (carrito o Club Merla),
+// re-inicializamos el pixel con ese dato. fbq lo hashea antes de enviarlo, así
+// Meta matchea mejor las conversiones. Solo corre si ya aceptó las cookies.
+function metaActualizarEmail(email) {
+  const em = String(email || "").trim().toLowerCase();
+  if (em && window.__analiticaCargada && window.fbq && window.META_PIXEL_ID) {
+    window.fbq("init", window.META_PIXEL_ID, { em });
+  }
 }
 
 // Parámetros de Meta a partir de un pedido calculado (calcularPedido)

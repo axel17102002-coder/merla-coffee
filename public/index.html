@@ -17,9 +17,9 @@
   <meta property="og:title" content="Merla Coffee — Café de especialidad en drip bags">
   <meta property="og:description" content="Preparalo donde quieras, con la calidad y el sabor que te merecés. Envíos a todo el país desde La Plata.">
   <meta property="og:image" content="https://merla-coffee.merlacoffee.workers.dev/img/logo.webp">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="1500">
-  <meta property="og:image:alt" content="Drip bag Merla Coffee preparándose en una taza">
+  <meta property="og:image:width" content="591">
+  <meta property="og:image:height" content="236">
+  <meta property="og:image:alt" content="Merla Coffee">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
@@ -106,13 +106,17 @@
         gtag("js", new Date());
         gtag("config", window.GA_ID);
       }
-      // Meta Pixel
+      // Meta Pixel — con Advanced Matching: si ya conocemos el email del
+      // cliente (lo dejó en el carrito o en Club Merla), se lo pasamos a fbq,
+      // que lo hashea (SHA-256) antes de enviarlo. Mejora el match de las
+      // conversiones y la puntuación de calidad de datos.
       if (window.META_PIXEL_ID && window.fbq) {
         var m = document.createElement("script");
         m.async = true;
         m.src = "https://connect.facebook.net/en_US/fbevents.js";
         document.head.appendChild(m);
-        fbq("init", window.META_PIXEL_ID);
+        var em = (localStorage.getItem("merla-email") || "").trim().toLowerCase();
+        fbq("init", window.META_PIXEL_ID, em ? { em: em } : {});
         fbq("track", "PageView");
       }
     };
