@@ -333,21 +333,21 @@ function construirTabsCategorias(hayCafe14, hayTazas) {
 function aplicarCategoria(cat) {
   categoriaActiva = cat;
 
+  filtroRegion = "todos";
+
+  renderFiltros();
+  renderProductos();
+
   $("#panel-cafes").hidden = cat !== "cafes";
   $("#cafe14-seccion").hidden = cat !== "cafe14";
   $("#tazas-seccion").hidden = cat !== "tazas";
-  
-  filtroRegion = "todos";
-  renderFiltros();
-  renderProductos();
-  
+
   const tabs = $("#cat-tabs");
   if (tabs) {
-    tabs.querySelectorAll(".cat-tab")
-      .forEach((b) => b.classList.toggle("activo", b.dataset.categoria === cat));
+    tabs.querySelectorAll(".cat-tab").forEach((b) =>
+      b.classList.toggle("activo", b.dataset.categoria === cat)
+    );
   }
-
-  
 }
 
 // Desliza la pill activa al centro de su barra con scroll suave (para que al
