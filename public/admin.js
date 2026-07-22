@@ -598,7 +598,9 @@ function renderPrecios() {
       </div>
     </div>`;
   const cafes = preciosCache.filter((p) => p.tipo !== "simple");
-  const cafe14 = preciosCache.filter((p) => p.tipo === "simple" && p.categoria === "cafe_bolsa");
+  const cafe14 = preciosCache.filter((p) => p.tipo === "simple" && p.categoria === "cafe_bolsa")
+        .filter((p) => filtroRegion === "todos" || p.origen === filtroRegion)
+  ;
   const merch = preciosCache.filter((p) => p.tipo === "simple" && p.categoria !== "cafe_bolsa");
   const grupo = (titulo, lista, vacioTexto) => `<h4 class="px-grupo__titulo">${titulo}</h4>` +
     (lista.length ? lista.map((p) => filaProducto(p, cfg)).join("") : `<div class="vacio">${vacioTexto}</div>`);
