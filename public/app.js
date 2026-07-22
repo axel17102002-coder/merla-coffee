@@ -155,16 +155,25 @@ function productoDe(presentacionId) {
 // ===== Filtro por región =====
 function renderFiltros() {
   const filtros = document.querySelectorAll(".region-filtros");
-  // Solo drip bags: el café en bolsa (1/4) puede tener el mismo origen, pero
-  // el filtro controla la grilla principal, que es solo de drip bags.
-  const origenes = [...new Set(DATOS.productos.filter((p) => p.tipo !== "simple").map((p) => p.origen).filter(Boolean))];
+
+  const origenes = [
+    ...new Set(
+      DATOS.productos
+        .filter((p) => p.tipo !== "simple")
+        .map((p) => p.origen)
+        .filter(Boolean)
+    ),
+  ];
+
   if (origenes.length < 2) {
-    box.hidden = true;
-    box.innerHTML = html;
+    filtros.forEach((box) => {
+      box.hidden = true;
+      box.innerHTML = "";
+    });
     return;
   }
-  box.hidden = false;
-  box.innerHTML =
+
+  const html =
     `<button class="filtro ${filtroRegion === "todos" ? "activo" : ""}" data-region="todos">Todos</button>` +
     origenes
       .map(
@@ -172,6 +181,11 @@ function renderFiltros() {
           `<button class="filtro ${filtroRegion === o ? "activo" : ""}" data-region="${o}">${o}</button>`
       )
       .join("");
+
+  filtros.forEach((box) => {
+    box.hidden = false;
+    box.innerHTML = html;
+  });
 }
 
 // ===== Render de productos =====
