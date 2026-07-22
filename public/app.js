@@ -297,14 +297,19 @@ function renderProductos() {
   renderGrilla("#product-grid", cafes, `No hay cafés de ${filtroRegion} ahora mismo.`);
 
   const cafe14 = ordenados(
-  DATOS.productos
-    .filter((p) => p.tipo === "simple" && p.categoria === "cafe_bolsa")
-    .filter((p) => filtroRegion === "todos" || p.origen === filtroRegion)
-);
-
-  const merch = ordenados(DATOS.productos.filter((p) => p.tipo === "simple" && p.categoria !== "cafe_bolsa"));
-  if (merch.length) renderGrilla("#product-grid-merch", merch);
-
+    DATOS.productos
+      .filter((p) => p.tipo === "simple" && p.categoria === "cafe_bolsa")
+      .filter((p) => filtroRegion === "todos" || p.origen === filtroRegion)
+  );
+  renderGrilla("#product-grid-cafe14", cafe14);
+  const merch = ordenados(
+    DATOS.productos.filter(
+      (p) => p.tipo === "simple" && p.categoria !== "cafe_bolsa"
+    )
+  );
+  if (merch.length) {
+    renderGrilla("#product-grid-merch", merch);
+  }
   construirTabsCategorias(cafe14.length > 0, merch.length > 0);
   observarReveals();
 }
@@ -344,6 +349,11 @@ function construirTabsCategorias(hayCafe14, hayTazas) {
 // Muestra el panel de la categoría activa y oculta los demás (sin scrollear)
 function aplicarCategoria(cat) {
   categoriaActiva = cat;
+
+  filtroRegion = "todos"; // importante
+
+  renderFiltros();
+  renderProductos();
 
   $("#panel-cafes").hidden = cat !== "cafes";
   $("#cafe14-seccion").hidden = cat !== "cafe14";
