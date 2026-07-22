@@ -131,6 +131,43 @@ button:disabled { opacity: .55; cursor: wait; }
   .fila__form input { flex: 1; width: auto; }
 }
 
+/* Insights */
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.stat { background: var(--papel); border: 1px solid var(--borde); border-radius: 16px; padding: 18px 20px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 5px 18px #22301f10; }
+.stat__label { color: var(--gris); font-size: .82rem; font-weight: 700; }
+.stat__valor { font-family: "Baloo 2", sans-serif; font-size: 1.6rem; color: var(--verde); }
+.stat__nota { color: var(--gris); font-size: .78rem; }
+.stat--pendiente .stat__valor { color: #705400; }
+.stat--aprobado .stat__valor { color: #2f6931; }
+.stat--rechazado .stat__valor { color: #8d3328; }
+
+.stats-canales { background: var(--papel); border: 1px solid var(--borde); border-radius: 16px; padding: 18px 20px; display: grid; gap: 4px; }
+.stats-canales__titulo { margin: 0 0 10px; font-family: "Baloo 2", sans-serif; color: var(--verde); font-size: .95rem; }
+.canal-fila { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--borde); }
+.canal-fila:last-child { border-bottom: 0; }
+
+/* Dos paneles de gráficos lado a lado */
+.stats-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+.stats-panel { background: var(--papel); border: 1px solid var(--borde); border-radius: 16px; padding: 18px 20px; }
+.stats-panel__titulo { margin: 0 0 4px; font-family: "Baloo 2", sans-serif; color: var(--verde); font-size: .95rem; }
+.stats-panel__sub { margin: 0 0 14px; color: var(--gris); font-size: .78rem; }
+@media (max-width: 720px) { .stats-grid2 { grid-template-columns: 1fr; } }
+
+/* Ranking: barras horizontales, una sola serie (verde de marca) */
+.rank { display: grid; gap: 11px; }
+.rank__fila { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
+.rank__nombre { font-size: .84rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank__valor { font-size: .84rem; font-weight: 700; color: var(--texto); font-variant-numeric: tabular-nums; }
+.rank__track { grid-column: 1 / -1; height: 10px; background: var(--crema); border-radius: 5px; overflow: hidden; }
+.rank__barra { height: 100%; background: var(--verde); border-radius: 0 5px 5px 0; min-width: 3px; }
+
+/* Ventas por mes: columnas, una sola serie */
+.cols { display: flex; align-items: flex-end; gap: 8px; height: 150px; padding-top: 6px; }
+.cols__col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; height: 100%; min-width: 0; }
+.cols__valor { font-size: .72rem; font-weight: 700; color: var(--gris); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cols__barra { width: 100%; max-width: 34px; background: var(--verde); border-radius: 4px 4px 0 0; min-height: 3px; }
+.cols__mes { font-size: .72rem; color: var(--gris); text-transform: capitalize; }
+
 /* Secciones Pedidos / Gestión */
 .secciones { display: flex; gap: 8px; margin-bottom: 22px; }
 .secciones button { border: 1px solid var(--borde); border-radius: 12px; padding: 12px 22px; background: var(--papel); color: var(--gris); font-weight: 800; font-size: 1rem; }

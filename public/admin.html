@@ -32,6 +32,7 @@
     <section id="panel" hidden>
       <nav class="secciones" id="secciones">
         <button data-seccion="pedidos" class="seccion-activa">🧾 Pedidos</button>
+        <button data-seccion="insights">📊 Insights</button>
         <button data-seccion="gestion">⚙️ Gestión</button>
       </nav>
       <div class="panel__layout">
@@ -50,6 +51,20 @@
           <p class="panel__hint">Los de WhatsApp se crean pendientes: al aprobar se descuenta el stock y se suman los puntos. Los de Mercado Pago se aprueban solos al cobrar.</p>
           <p class="mensaje" id="panel-message"></p>
           <div class="pedidos" id="pedidos"></div>
+        </div>
+
+        <!-- SECCIÓN: Insights -->
+        <div class="columna-insights" id="seccion-insights" hidden>
+          <div class="col__head">
+            <h2 class="admin__subtitulo">Insights</h2>
+          </div>
+          <p class="panel__hint">Resumen de los últimos 200 pedidos. No existe un registro de "carritos": el carrito vive en el navegador del cliente hasta que confirma la compra. Lo más parecido son los <strong>pendientes</strong> (WhatsApp sin confirmar o Mercado Pago sin pagar), que se borran solos a las 48&nbsp;h si nadie los completa.</p>
+          <div class="stats" id="stats"></div>
+          <div class="stats-grid2">
+            <div class="stats-panel" id="stats-top-productos"></div>
+            <div class="stats-panel" id="stats-mensual"></div>
+          </div>
+          <div class="stats-canales" id="stats-canales"></div>
         </div>
 
         <!-- SECCIÓN: Gestión (Productos / Precios / Cupones ) -->

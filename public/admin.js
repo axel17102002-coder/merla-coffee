@@ -86,11 +86,144 @@ async function cargarPedidos() {
     const { pedidos } = await api("/api/admin-pedidos");
     pedidosCache = pedidos;
     renderPedidos();
+    renderInsights();
     mensaje("#panel-message", "");
   } catch (err) {
     mensaje("#panel-message", `⚠️ ${err.message}`);
     if (/autorizado/i.test(err.message)) cerrarSesion();
   }
+}
+
+// ===== Insights =====
+// Todo sale del mismo pedidosCache que ya carga la pestaña Pedidos: nada nuevo
+// para pedirle al servidor. "Pendientes" es lo más parecido a un carrito en
+// curso que existe, porque el carrito en sí nunca toca el backend.
+function calcularInsights(pedidos) {
+  const aprobados = pedidos.filter((p) => p.estado === "aprobado");
+  const pendientes = pedidos.filter((p) => p.estado === "pendiente");
+  const rechazados = pedidos.filter((p) => p.estado === "rechazado");
+  const ventasTotales = aprobados.reduce((t, p) => t + (Number(p.total) || 0), 0);
+  const ticketPromedio = aprobados.length ? ventasTotales / aprobados.length : 0;
+  const conCupon = pedidos.filter((p) => p.cupon);
+  const descuentoTotal = conCupon.reduce((t, p) => t + (Number(p.descuento_cupon) || 0), 0);
+
+  const porCanal = {};
+  for (const p of pedidos) {
+    const canal = p.origen || "otro";
+    porCanal[canal] = (porCanal[canal] || 0) + 1;
+  }
+
+  // Ranking de productos: unidades vendidas por nombre (solo pedidos cobrados)
+  const unidadesPorProducto = {};
+  for (const p of aprobados) {
+    for (const it of p.items || []) {
+      const nombre = it.nombre || "—";
+      unidadesPorProducto[nombre] = (unidadesPorProducto[nombre] || 0) + (Number(it.qty) || 0);
+    }
+  }
+  const topProductos = Object.entries(unidadesPorProducto)
+    .map(([nombre, unidades]) => ({ nombre, unidades }))
+    .sort((a, b) => b.unidades - a.unidades)
+    .slice(0, 5);
+
+  // Ventas por mes (últimos 6 meses con datos), sumando pedidos cobrados
+  const porMes = {};
+  for (const p of aprobados) {
+    const d = new Date(p.creado);
+    if (isNaN(d)) continue;
+    const clave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    porMes[clave] = (porMes[clave] || 0) + (Number(p.total) || 0);
+  }
+  const ventasMensuales = Object.entries(porMes)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-6)
+    .map(([clave, total]) => ({ clave, total }));
+
+  return { aprobados, pendientes, rechazados, ventasTotales, ticketPromedio, conCupon, descuentoTotal, porCanal, topProductos, ventasMensuales };
+}
+
+// "2026-07" → "jul" (etiqueta corta para el eje de meses)
+function etiquetaMes(clave) {
+  const [anio, mes] = clave.split("-").map(Number);
+  return new Date(anio, mes - 1, 1).toLocaleString("es-AR", { month: "short" });
+}
+
+function renderInsights() {
+  const i = calcularInsights(pedidosCache);
+  $("#stats").innerHTML = `
+    <div class="stat">
+      <span class="stat__label">Vendido (aprobados)</span>
+      <strong class="stat__valor">${formato.format(i.ventasTotales)}</strong>
+    </div>
+    <div class="stat">
+      <span class="stat__label">Ticket promedio</span>
+      <strong class="stat__valor">${formato.format(Math.round(i.ticketPromedio))}</strong>
+    </div>
+    <div class="stat stat--aprobado">
+      <span class="stat__label">Completados</span>
+      <strong class="stat__valor">${i.aprobados.length}</strong>
+    </div>
+    <div class="stat stat--pendiente">
+      <span class="stat__label">Pendientes</span>
+      <strong class="stat__valor">${i.pendientes.length}</strong>
+      <span class="stat__nota">≈ "carritos" en curso</span>
+    </div>
+    <div class="stat stat--rechazado">
+      <span class="stat__label">Rechazados</span>
+      <strong class="stat__valor">${i.rechazados.length}</strong>
+    </div>
+    <div class="stat">
+      <span class="stat__label">Cupones usados</span>
+      <strong class="stat__valor">${i.conCupon.length}</strong>
+      <span class="stat__nota">${formato.format(i.descuentoTotal)} en descuentos</span>
+    </div>
+  `;
+  renderTopProductos(i.topProductos);
+  renderVentasMensuales(i.ventasMensuales);
+
+  const canales = Object.entries(i.porCanal);
+  $("#stats-canales").innerHTML = `<h3 class="stats-canales__titulo">Por canal</h3>` +
+    (canales.length
+      ? canales.map(([canal, n]) => `<div class="canal-fila">
+          <span class="canal canal--${escapar(canal)}">${escapar(CANALES[canal] || canal)}</span>
+          <span>${n} pedido${n === 1 ? "" : "s"}</span>
+        </div>`).join("")
+      : `<div class="vacio">Todavía no hay pedidos.</div>`);
+}
+
+// Ranking horizontal: la barra más larga fija la escala (100%); una sola serie,
+// así que el color es el verde de marca y no hace falta leyenda.
+function renderTopProductos(top) {
+  const cuerpo = !top.length
+    ? `<div class="vacio">Sin ventas cobradas todavía.</div>`
+    : (() => {
+        const max = Math.max(...top.map((p) => p.unidades)) || 1;
+        return `<div class="rank">` + top.map((p) => `<div class="rank__fila">
+            <span class="rank__nombre" title="${escapar(p.nombre)}">${escapar(p.nombre)}</span>
+            <span class="rank__valor">${p.unidades} u.</span>
+            <div class="rank__track"><div class="rank__barra" style="width:${(p.unidades / max) * 100}%"></div></div>
+          </div>`).join("") + `</div>`;
+      })();
+  $("#stats-top-productos").innerHTML =
+    `<h3 class="stats-panel__titulo">Más vendidos</h3>
+     <p class="stats-panel__sub">Unidades en pedidos cobrados</p>` + cuerpo;
+}
+
+// Columnas de ventas mensuales: la columna más alta fija la escala; una serie.
+function renderVentasMensuales(meses) {
+  const cuerpo = !meses.length
+    ? `<div class="vacio">Sin ventas cobradas todavía.</div>`
+    : (() => {
+        const max = Math.max(...meses.map((m) => m.total)) || 1;
+        return `<div class="cols">` + meses.map((m) => `<div class="cols__col" title="${escapar(etiquetaMes(m.clave))}: ${formato.format(m.total)}">
+            <span class="cols__valor">${formato.format(m.total)}</span>
+            <div class="cols__barra" style="height:${(m.total / max) * 100}%"></div>
+            <span class="cols__mes">${escapar(etiquetaMes(m.clave))}</span>
+          </div>`).join("") + `</div>`;
+      })();
+  $("#stats-mensual").innerHTML =
+    `<h3 class="stats-panel__titulo">Ventas por mes</h3>
+     <p class="stats-panel__sub">Total cobrado, últimos 6 meses con datos</p>` + cuerpo;
 }
 
 $("#filtros").addEventListener("click", (e) => {
@@ -136,6 +269,7 @@ $("#secciones").addEventListener("click", (e) => {
   if (!b) return;
   $("#secciones").querySelectorAll("button").forEach((x) => x.classList.toggle("seccion-activa", x === b));
   $("#seccion-pedidos").hidden = b.dataset.seccion !== "pedidos";
+  $("#seccion-insights").hidden = b.dataset.seccion !== "insights";
   $("#seccion-gestion").hidden = b.dataset.seccion !== "gestion";
 });
 // ===== Productos y stock (unificados) =====
@@ -174,11 +308,7 @@ function renderProductos(productos) {
   $("#stock-gpu").textContent = gramosPorUnidad;
   const lista = productos || [];
   const cafes = lista.filter((p) => p.tipo !== "simple");
-  const cafe14 = ordenados(
-  DATOS.productos
-    .filter((p) => p.tipo === "simple" && p.categoria === "cafe_bolsa")
-    .filter((p) => filtroRegion === "todos" || p.origen === filtroRegion)
-    );
+  const cafe14 = lista.filter((p) => p.tipo === "simple" && p.categoria === "cafe_bolsa");
   const merch = lista.filter((p) => p.tipo === "simple" && p.categoria !== "cafe_bolsa");
 
   $("#productos-lista-cafe").innerHTML = listaOVacio(cafes, "No hay drip bags todavía.");
@@ -602,9 +732,7 @@ function renderPrecios() {
       </div>
     </div>`;
   const cafes = preciosCache.filter((p) => p.tipo !== "simple");
-  const cafe14 = preciosCache.filter((p) => p.tipo === "simple" && p.categoria === "cafe_bolsa")
-        .filter((p) => filtroRegion === "todos" || p.origen === filtroRegion)
-  ;
+  const cafe14 = preciosCache.filter((p) => p.tipo === "simple" && p.categoria === "cafe_bolsa");
   const merch = preciosCache.filter((p) => p.tipo === "simple" && p.categoria !== "cafe_bolsa");
   const grupo = (titulo, lista, vacioTexto) => `<h4 class="px-grupo__titulo">${titulo}</h4>` +
     (lista.length ? lista.map((p) => filaProducto(p, cfg)).join("") : `<div class="vacio">${vacioTexto}</div>`);
