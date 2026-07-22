@@ -333,11 +333,6 @@ function construirTabsCategorias(hayCafe14, hayTazas) {
 function aplicarCategoria(cat) {
   categoriaActiva = cat;
 
-  filtroRegion = "todos";
-
-  renderFiltros();
-  renderProductos();
-
   $("#panel-cafes").hidden = cat !== "cafes";
   $("#cafe14-seccion").hidden = cat !== "cafe14";
   $("#tazas-seccion").hidden = cat !== "tazas";
