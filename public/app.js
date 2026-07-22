@@ -156,14 +156,23 @@ function productoDe(presentacionId) {
 function renderFiltros() {
   const filtros = document.querySelectorAll(".region-filtros");
 
-  const origenes = [
-    ...new Set(
-      DATOS.productos
-        .filter((p) => p.tipo !== "simple")
-        .map((p) => p.origen)
-        .filter(Boolean)
-    ),
-  ];
+  let productosFiltro = [];
+
+if (categoriaActiva === "cafes") {
+  productosFiltro = DATOS.productos.filter((p) => p.tipo !== "simple");
+} else if (categoriaActiva === "cafe14") {
+  productosFiltro = DATOS.productos.filter(
+    (p) => p.tipo === "simple" && p.categoria === "cafe_bolsa"
+  );
+}
+
+const origenes = [
+  ...new Set(
+    productosFiltro
+      .map((p) => p.origen)
+      .filter(Boolean)
+  )
+];
 
   if (origenes.length < 2) {
     filtros.forEach((box) => {
