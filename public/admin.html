@@ -58,7 +58,13 @@
           <div class="col__head">
             <h2 class="admin__subtitulo">Insights</h2>
           </div>
-          <p class="panel__hint">Resumen de los últimos 200 pedidos. No existe un registro de "carritos": el carrito vive en el navegador del cliente hasta que confirma la compra. Lo más parecido son los <strong>pendientes</strong> (WhatsApp sin confirmar o Mercado Pago sin pagar), que se borran solos a las 48&nbsp;h si nadie los completa.</p>
+          <p class="panel__hint">Resumen sobre los últimos 200 pedidos. No existe un registro de "carritos": el carrito vive en el navegador del cliente hasta que confirma la compra. Lo más parecido son los <strong>pendientes</strong> (WhatsApp sin confirmar o Mercado Pago sin pagar), que se borran solos a las 48&nbsp;h si nadie los completa.</p>
+          <div class="filtros" id="stats-filtros">
+            <button data-rango="todo" class="filtro-activo">Todo</button>
+            <button data-rango="este-mes">Este mes</button>
+            <button data-rango="30-dias">Últimos 30 días</button>
+            <button data-rango="este-anio">Este año</button>
+          </div>
           <div class="stats" id="stats"></div>
           <div class="stats-grid2">
             <div class="stats-panel" id="stats-top-productos"></div>

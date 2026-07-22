@@ -126,30 +126,64 @@ function calcularInsights(pedidos) {
     .sort((a, b) => b.unidades - a.unidades)
     .slice(0, 5);
 
-  // Ventas por mes (últimos 6 meses con datos), sumando pedidos cobrados
-  const porMes = {};
+  return { aprobados, pendientes, rechazados, ventasTotales, ticketPromedio, conCupon, descuentoTotal, porCanal, topProductos };
+}
+
+// ===== Filtro de rango y granularidad =====
+// El filtro achica pedidosCache a un período; la serie de ventas se agrupa por
+// semana o mes. Ojo: todo se calcula sobre los últimos 200 pedidos que trae el
+// panel, así que un rango más viejo que esa ventana quedaría incompleto.
+let insightsRango = "todo";        // todo | este-mes | 30-dias | este-anio
+let insightsGranularidad = "mes";  // semana | mes
+
+// Fecha desde la que empieza el rango (o null = sin límite)
+function inicioDeRango(rango) {
+  const ahora = new Date();
+  if (rango === "este-mes") return new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+  if (rango === "30-dias") { const d = new Date(ahora); d.setDate(d.getDate() - 30); return d; }
+  if (rango === "este-anio") return new Date(ahora.getFullYear(), 0, 1);
+  return null;
+}
+
+function pedidosEnRango() {
+  const desde = inicioDeRango(insightsRango);
+  if (!desde) return pedidosCache;
+  return pedidosCache.filter((p) => { const d = new Date(p.creado); return !isNaN(d) && d >= desde; });
+}
+
+// Lunes de la semana de una fecha (semana arranca lunes)
+function inicioSemana(fecha) {
+  const d = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d;
+}
+
+function etiquetaBucket(fecha, granularidad) {
+  return granularidad === "semana"
+    ? fecha.toLocaleDateString("es-AR", { day: "numeric", month: "short" })
+    : fecha.toLocaleString("es-AR", { month: "short" });
+}
+
+// Serie de ventas cobradas agrupadas por semana (últimas 8) o mes (últimos 6)
+function serieVentas(aprobados, granularidad) {
+  const buckets = {};
   for (const p of aprobados) {
     const d = new Date(p.creado);
     if (isNaN(d)) continue;
-    const clave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    porMes[clave] = (porMes[clave] || 0) + (Number(p.total) || 0);
+    const inicio = granularidad === "semana" ? inicioSemana(d) : new Date(d.getFullYear(), d.getMonth(), 1);
+    const clave = inicio.toISOString().slice(0, 10);
+    if (!buckets[clave]) buckets[clave] = { total: 0, fecha: inicio };
+    buckets[clave].total += Number(p.total) || 0;
   }
-  const ventasMensuales = Object.entries(porMes)
+  return Object.entries(buckets)
     .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-6)
-    .map(([clave, total]) => ({ clave, total }));
-
-  return { aprobados, pendientes, rechazados, ventasTotales, ticketPromedio, conCupon, descuentoTotal, porCanal, topProductos, ventasMensuales };
-}
-
-// "2026-07" → "jul" (etiqueta corta para el eje de meses)
-function etiquetaMes(clave) {
-  const [anio, mes] = clave.split("-").map(Number);
-  return new Date(anio, mes - 1, 1).toLocaleString("es-AR", { month: "short" });
+    .slice(granularidad === "semana" ? -8 : -6)
+    .map(([clave, v]) => ({ clave, total: v.total, etiqueta: etiquetaBucket(v.fecha, granularidad) }));
 }
 
 function renderInsights() {
-  const i = calcularInsights(pedidosCache);
+  sincronizarFiltrosInsights();
+  const i = calcularInsights(pedidosEnRango());
   $("#stats").innerHTML = `
     <div class="stat">
       <span class="stat__label">Vendido (aprobados)</span>
@@ -179,7 +213,7 @@ function renderInsights() {
     </div>
   `;
   renderTopProductos(i.topProductos);
-  renderVentasMensuales(i.ventasMensuales);
+  renderVentasSerie(serieVentas(i.aprobados, insightsGranularidad));
 
   const canales = Object.entries(i.porCanal);
   $("#stats-canales").innerHTML = `<h3 class="stats-canales__titulo">Por canal</h3>` +
@@ -209,22 +243,54 @@ function renderTopProductos(top) {
      <p class="stats-panel__sub">Unidades en pedidos cobrados</p>` + cuerpo;
 }
 
-// Columnas de ventas mensuales: la columna más alta fija la escala; una serie.
-function renderVentasMensuales(meses) {
-  const cuerpo = !meses.length
-    ? `<div class="vacio">Sin ventas cobradas todavía.</div>`
+// Columnas de ventas: la columna más alta fija la escala; una sola serie. El
+// toggle semana/mes vive en el encabezado y se maneja por delegación.
+function renderVentasSerie(serie) {
+  const esSemana = insightsGranularidad === "semana";
+  const cuerpo = !serie.length
+    ? `<div class="vacio">Sin ventas cobradas en este período.</div>`
     : (() => {
-        const max = Math.max(...meses.map((m) => m.total)) || 1;
-        return `<div class="cols">` + meses.map((m) => `<div class="cols__col" title="${escapar(etiquetaMes(m.clave))}: ${formato.format(m.total)}">
-            <span class="cols__valor">${formato.format(m.total)}</span>
-            <div class="cols__barra" style="height:${(m.total / max) * 100}%"></div>
-            <span class="cols__mes">${escapar(etiquetaMes(m.clave))}</span>
+        const max = Math.max(...serie.map((s) => s.total)) || 1;
+        return `<div class="cols">` + serie.map((s) => `<div class="cols__col" title="${escapar(s.etiqueta)}: ${formato.format(s.total)}">
+            <span class="cols__valor">${formato.format(s.total)}</span>
+            <div class="cols__barra" style="height:${(s.total / max) * 100}%"></div>
+            <span class="cols__mes">${escapar(s.etiqueta)}</span>
           </div>`).join("") + `</div>`;
       })();
   $("#stats-mensual").innerHTML =
-    `<h3 class="stats-panel__titulo">Ventas por mes</h3>
-     <p class="stats-panel__sub">Total cobrado, últimos 6 meses con datos</p>` + cuerpo;
+    `<div class="stats-panel__head">
+       <div>
+         <h3 class="stats-panel__titulo">Ventas por ${esSemana ? "semana" : "mes"}</h3>
+         <p class="stats-panel__sub">Total cobrado, ${esSemana ? "últimas 8 semanas" : "últimos 6 meses"} con datos</p>
+       </div>
+       <div class="stats-toggle" id="stats-toggle">
+         <button data-gran="semana" class="${esSemana ? "activo" : ""}">Semana</button>
+         <button data-gran="mes" class="${esSemana ? "" : "activo"}">Mes</button>
+       </div>
+     </div>` + cuerpo;
 }
+
+// Marca el preset de rango activo (los botones son estáticos en el HTML)
+function sincronizarFiltrosInsights() {
+  $("#stats-filtros").querySelectorAll("button").forEach((b) =>
+    b.classList.toggle("filtro-activo", b.dataset.rango === insightsRango));
+}
+
+// Cambiar el rango de fechas: recalcula tarjetas y gráficos
+$("#stats-filtros").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-rango]");
+  if (!b || b.dataset.rango === insightsRango) return;
+  insightsRango = b.dataset.rango;
+  renderInsights();
+});
+
+// Toggle semana/mes del gráfico de ventas (encabezado re-renderizado, delegación)
+$("#stats-mensual").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-gran]");
+  if (!b || b.dataset.gran === insightsGranularidad) return;
+  insightsGranularidad = b.dataset.gran;
+  renderVentasSerie(serieVentas(calcularInsights(pedidosEnRango()).aprobados, insightsGranularidad));
+});
 
 $("#filtros").addEventListener("click", (e) => {
   const b = e.target.closest("[data-filtro]");

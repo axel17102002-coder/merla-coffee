@@ -151,6 +151,10 @@ button:disabled { opacity: .55; cursor: wait; }
 .stats-panel { background: var(--papel); border: 1px solid var(--borde); border-radius: 16px; padding: 18px 20px; }
 .stats-panel__titulo { margin: 0 0 4px; font-family: "Baloo 2", sans-serif; color: var(--verde); font-size: .95rem; }
 .stats-panel__sub { margin: 0 0 14px; color: var(--gris); font-size: .78rem; }
+.stats-panel__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.stats-toggle { display: flex; gap: 3px; background: var(--crema); border-radius: 9px; padding: 3px; flex-shrink: 0; }
+.stats-toggle button { border: 0; border-radius: 7px; padding: 5px 11px; background: transparent; color: var(--gris); font-weight: 700; font-size: .78rem; }
+.stats-toggle button.activo { background: var(--verde); color: #fff; }
 @media (max-width: 720px) { .stats-grid2 { grid-template-columns: 1fr; } }
 
 /* Ranking: barras horizontales, una sola serie (verde de marca) */
