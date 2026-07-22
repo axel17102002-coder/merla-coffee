@@ -158,21 +158,23 @@ function renderFiltros() {
 
   let productosFiltro = [];
 
-if (categoriaActiva === "cafes") {
-  productosFiltro = DATOS.productos.filter((p) => p.tipo !== "simple");
-} else if (categoriaActiva === "cafe14") {
-  productosFiltro = DATOS.productos.filter(
-    (p) => p.tipo === "simple" && p.categoria === "cafe_bolsa"
-  );
-}
+  if (categoriaActiva === "cafes") {
+    productosFiltro = DATOS.productos.filter((p) => p.tipo !== "simple");
+  } else if (categoriaActiva === "cafe14") {
+    productosFiltro = DATOS.productos.filter(
+      (p) => p.tipo === "simple" && p.categoria === "cafe_bolsa"
+    );
+  } else {
+    filtros.forEach((box) => {
+      box.hidden = true;
+      box.innerHTML = "";
+    });
+    return;
+  }
 
-const origenes = [
-  ...new Set(
-    productosFiltro
-      .map((p) => p.origen)
-      .filter(Boolean)
-  )
-];
+  const origenes = [
+    ...new Set(productosFiltro.map((p) => p.origen).filter(Boolean))
+  ];
 
   if (origenes.length < 2) {
     filtros.forEach((box) => {
@@ -308,11 +310,12 @@ function renderProductos() {
 // se muestran SOLO los productos de esa categoría en el lugar (no scrollea).
 // Solo aparece si hay café 1/4 y/o tazas; con drip bags nomás, no se muestra.
 let categoriaActiva = "cafes";
+
 function construirTabsCategorias(hayCafe14, hayTazas) {
   const tabs = $("#cat-tabs");
   if (!tabs) return;
 
-  const cats = [{ id: "cafes", t: "Dip Bags" }];
+  const cats = [{ id: "cafes", t: "Drip Bags" }];
   if (hayCafe14) cats.push({ id: "cafe14", t: "Café ⅛ kg" });
   if (hayTazas) cats.push({ id: "tazas", t: "Tazas" });
 
@@ -321,11 +324,17 @@ function construirTabsCategorias(hayCafe14, hayTazas) {
     tabs.innerHTML = "";
     categoriaActiva = "cafes";
   } else {
-    // Si la categoría activa dejó de existir (cambió el catálogo), vuelve a Cafés
-    if (!cats.some((c) => c.id === categoriaActiva)) categoriaActiva = "cafes";
-    tabs.innerHTML = cats.map((c) => `<button class="cat-tab" data-categoria="${c.id}">${c.t}</button>`).join("");
+    if (!cats.some(c => c.id === categoriaActiva)) {
+      categoriaActiva = "cafes";
+    }
+
+    tabs.innerHTML = cats.map(c =>
+      `<button class="cat-tab" data-categoria="${c.id}">${c.t}</button>`
+    ).join("");
+
     tabs.hidden = false;
   }
+
   aplicarCategoria(categoriaActiva);
 }
 

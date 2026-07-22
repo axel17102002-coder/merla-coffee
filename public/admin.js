@@ -174,7 +174,11 @@ function renderProductos(productos) {
   $("#stock-gpu").textContent = gramosPorUnidad;
   const lista = productos || [];
   const cafes = lista.filter((p) => p.tipo !== "simple");
-  const cafe14 = lista.filter((p) => p.tipo === "simple" && p.categoria === "cafe_bolsa");
+  const cafe14 = ordenados(
+  DATOS.productos
+    .filter((p) => p.tipo === "simple" && p.categoria === "cafe_bolsa")
+    .filter((p) => filtroRegion === "todos" || p.origen === filtroRegion)
+    );
   const merch = lista.filter((p) => p.tipo === "simple" && p.categoria !== "cafe_bolsa");
 
   $("#productos-lista-cafe").innerHTML = listaOVacio(cafes, "No hay drip bags todavía.");
