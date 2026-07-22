@@ -193,28 +193,34 @@
 
     <section class="section" id="cafes">
       <div class="section__head">
-        <h1> Nuestros Productos</h1>
-        <h2>Nuestras drip bags</h2>
-        <p>Seleccionamos microlotes de Sudamérica, tostados por los mejores tostadores del país. Cada drip bag rinde una taza de 200 cc.</p>
+        <h2>Nuestros productos</h2>
       </div>
       <!-- Selector de categorías tipo pestañas: aparece solo si hay café 1/4
-           y/o tazas. Al cambiar, se muestran los productos de esa categoría. -->
+           y/o tazas. Al cambiar, se muestran los productos de esa categoría.
+           Cada categoría tiene su propio título + descripción dentro del panel. -->
       <div class="cat-tabs" id="cat-tabs" hidden role="tablist" aria-label="Categorías de productos"></div>
+
       <div class="cat-panel" id="panel-cafes">
+        <div class="section__head catalogo__subhead">
+          <h3>Nuestras drip bags</h3>
+          <p>Seleccionamos microlotes de Sudamérica, tostados por los mejores tostadores del país. Cada drip bag rinde una taza de 200 cc.</p>
+        </div>
         <div class="filtros" id="region-filtros" hidden></div>
         <div class="grid" id="product-grid"></div>
       </div>
 
       <div class="catalogo__extra" id="cafe14-seccion" hidden>
         <div class="section__head catalogo__subhead">
-          <h3>🛍️ Café en bolsa (1/4 kg)</h3>
+          <h3>Café en bolsa · ¼ kg</h3>
+          <p>Nuestros mismos cafés de especialidad, en bolsa de 250 g. Para quienes ya tienen su método y quieren preparar en casa.</p>
         </div>
         <div class="grid" id="product-grid-cafe14"></div>
       </div>
 
       <div class="catalogo__extra" id="tazas-seccion" hidden>
         <div class="section__head catalogo__subhead">
-          <h3>☕ Tazas y accesorios</h3>
+          <h3>Tazas y accesorios</h3>
+          <p>Todo lo que necesitás para disfrutar tu café como se merece.</p>
         </div>
         <div class="grid" id="product-grid-merch"></div>
       </div>
