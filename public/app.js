@@ -296,8 +296,11 @@ function renderProductos() {
   );
   renderGrilla("#product-grid", cafes, `No hay cafés de ${filtroRegion} ahora mismo.`);
 
-  const cafe14 = ordenados(DATOS.productos.filter((p) => p.tipo === "simple" && p.categoria === "cafe_bolsa"));
-  if (cafe14.length) renderGrilla("#product-grid-cafe14", cafe14);
+  const cafe14 = ordenados(
+  DATOS.productos
+    .filter((p) => p.tipo === "simple" && p.categoria === "cafe_bolsa")
+    .filter((p) => filtroRegion === "todos" || p.origen === filtroRegion)
+);
 
   const merch = ordenados(DATOS.productos.filter((p) => p.tipo === "simple" && p.categoria !== "cafe_bolsa"));
   if (merch.length) renderGrilla("#product-grid-merch", merch);
