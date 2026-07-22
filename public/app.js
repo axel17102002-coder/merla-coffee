@@ -288,8 +288,8 @@ function construirTabsCategorias(hayCafe14, hayTazas) {
   const tabs = $("#cat-tabs");
   if (!tabs) return;
 
-  const cats = [{ id: "cafes", t: "Cafés" }];
-  if (hayCafe14) cats.push({ id: "cafe14", t: "Café ¼ kg" });
+  const cats = [{ id: "cafes", t: "Dip Bags" }];
+  if (hayCafe14) cats.push({ id: "cafe14", t: "Café ⅛ kg" });
   if (hayTazas) cats.push({ id: "tazas", t: "Tazas" });
 
   if (cats.length === 1) {
