@@ -315,9 +315,15 @@ function aplicarCategoria(cat) {
   if (tabs) tabs.querySelectorAll(".cat-tab").forEach((b) => b.classList.toggle("activo", b.dataset.categoria === cat));
 }
 
+// Desliza la pill activa al centro de su barra con scroll suave (para que al
+// elegir una que quedaba medio tapada, entre completa y no se sienta brusco)
+function centrarPill(pill) {
+  if (pill) pill.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+}
+
 $("#cat-tabs").addEventListener("click", (e) => {
   const b = e.target.closest("[data-categoria]");
-  if (b) aplicarCategoria(b.dataset.categoria);
+  if (b) { aplicarCategoria(b.dataset.categoria); centrarPill(b); }
 });
 
 // Presentación seleccionada dentro de una tarjeta o del modal
@@ -1323,6 +1329,7 @@ document.addEventListener("click", (e) => {
     filtroRegion = filtro.dataset.region;
     renderFiltros();
     renderProductos();
+    centrarPill($("#region-filtros").querySelector(".activo")); // desliza al centro
     return;
   }
 

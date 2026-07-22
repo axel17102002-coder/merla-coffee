@@ -342,20 +342,28 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 .catalogo__extra { margin-top: 0; }
 .catalogo__subhead { margin: 0 auto clamp(20px, 3vw, 30px); }
 
-/* Selector de categorías tipo pestañas (segmented control), como el panel de
-   admin: barrita grisácea bien redondeada con la pestaña activa en verde. */
-.cat-tabs {
+/* Selector de categorías y filtro de países: segmented control tipo panel de
+   admin — barrita grisácea bien redondeada, activa en verde. Se puede deslizar
+   en horizontal (scroll suave) cuando hay muchas pills. */
+.cat-tabs, .filtros {
   display: flex;
+  flex-wrap: nowrap;
   width: max-content;
   max-width: 100%;
   gap: 4px;
-  margin: 0 auto clamp(28px, 4vw, 40px);
+  margin: 0 auto clamp(16px, 2.5vw, 24px);
   padding: 5px;
   background: #e7e3da;
   border-radius: 999px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;          /* Firefox: sin barra de scroll */
 }
-.cat-tabs[hidden] { display: none; }
-.cat-tab {
+.cat-tabs::-webkit-scrollbar, .filtros::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+.cat-tabs[hidden], .filtros[hidden] { display: none; }
+.cat-tab, .filtro {
+  flex: 0 0 auto;                 /* no se encogen: permiten el deslizado */
   border: 0;
   border-radius: 999px;
   padding: 9px 22px;
@@ -368,8 +376,8 @@ section[id], footer[id] { scroll-margin-top: 90px; }
   white-space: nowrap;
   transition: background 0.2s, color 0.2s;
 }
-.cat-tab:hover:not(.activo) { color: var(--verde); }
-.cat-tab.activo { background: var(--verde); color: var(--crema); }
+.cat-tab:hover:not(.activo), .filtro:hover:not(.activo) { color: var(--verde); }
+.cat-tab.activo, .filtro.activo { background: var(--verde); color: var(--crema); }
 .catalogo__subhead h3 { font-family: var(--fuente-display); font-size: clamp(1.3rem, 2.6vw, 1.7rem); font-weight: 800; color: var(--verde); }
 
 .card {
@@ -1223,34 +1231,7 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 }
 
 /* ===== Filtros por región ===== */
-.filtros {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: center;
-  margin-bottom: 28px;
-}
-
-.filtro {
-  background: var(--blanco);
-  border: 1.5px solid var(--crema-borde);
-  border-radius: 999px;
-  padding: 9px 20px;
-  font-family: var(--fuente-texto);
-  font-weight: 700;
-  font-size: 0.88rem;
-  color: #5a6552;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.15s;
-}
-
-.filtro:hover { border-color: var(--verde); transform: translateY(-1px); }
-
-.filtro.activo {
-  background: var(--verde);
-  border-color: var(--verde);
-  color: var(--crema);
-}
+/* (.filtros y .filtro se estilan junto con .cat-tabs/.cat-tab más arriba) */
 
 /* ===== Estados de la grilla ===== */
 .grid__estado {
