@@ -358,7 +358,15 @@ function centrarPill(pill) {
 
 $("#cat-tabs").addEventListener("click", (e) => {
   const b = e.target.closest("[data-categoria]");
-  if (b) { aplicarCategoria(b.dataset.categoria); centrarPill(b); }
+  if (!b) return;
+
+  categoriaActiva = b.dataset.categoria;
+  filtroRegion = "todos";
+
+  renderFiltros();
+  renderProductos();
+
+  centrarPill(b);
 });
 
 // Presentación seleccionada dentro de una tarjeta o del modal
