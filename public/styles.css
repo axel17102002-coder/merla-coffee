@@ -341,6 +341,38 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 /* Café en bolsa / tazas: catálogos aparte debajo de los drip bags */
 .catalogo__extra { margin-top: clamp(46px, 6vw, 64px); }
 .catalogo__subhead { margin: 0 auto clamp(20px, 3vw, 30px); }
+
+/* Barra de accesos rápidos por categoría (chips verdes, sticky bajo el header) */
+.cat-chips {
+  position: sticky;
+  top: 60px;
+  z-index: 40;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 12px 0;
+  margin-bottom: clamp(20px, 3vw, 28px);
+  background: rgba(242, 234, 216, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.cat-chips[hidden] { display: none; }
+.cat-chip {
+  background: var(--blanco);
+  border: 1.5px solid var(--verde);
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-family: var(--fuente-texto);
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--verde);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s, color 0.2s, transform 0.15s;
+}
+.cat-chip:hover { transform: translateY(-1px); }
+.cat-chip.activo { background: var(--verde); color: var(--crema); }
 .catalogo__subhead h3 { font-family: var(--fuente-display); font-size: clamp(1.3rem, 2.6vw, 1.7rem); font-weight: 800; color: var(--verde); }
 
 .card {
