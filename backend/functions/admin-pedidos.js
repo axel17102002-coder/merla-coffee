@@ -14,7 +14,7 @@ exports.handler = async (event) => {
   try {
     if (event.httpMethod === "GET") {
       const pedidos = await sb(
-        "pedidos?select=id,numero,origen,items,total,cupon,descuento_cupon,cliente_email,estado,creado,puntos_ganados,puntos_canjeados,envio&order=creado.desc&limit=200"
+        "pedidos?select=id,numero,origen,items,total,cupon,descuento_cupon,cliente_email,estado,creado,puntos_ganados,puntos_canjeados,envio,envio_costo&order=creado.desc&limit=200"
       );
       return { statusCode: 200, headers, body: JSON.stringify({ pedidos }) };
     }

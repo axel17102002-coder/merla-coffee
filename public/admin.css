@@ -146,6 +146,14 @@ button:disabled { opacity: .55; cursor: wait; }
 .canal-fila { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--borde); }
 .canal-fila:last-child { border-bottom: 0; }
 
+/* Dos totales grandes (facturación / contribución), cada uno ancho de 2 cards */
+.stats-hero { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.stats-hero-card { background: var(--papel); border: 1px solid var(--borde); border-radius: 16px; padding: 22px 24px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 5px 18px #22301f10; }
+.stats-hero__label { color: var(--gris); font-size: .9rem; font-weight: 700; }
+.stats-hero__valor { font-family: "Baloo 2", sans-serif; font-size: 2.4rem; line-height: 1; color: var(--verde); }
+.stats-hero__nota { color: var(--gris); font-size: .8rem; }
+@media (max-width: 720px) { .stats-hero { grid-template-columns: 1fr; } }
+
 /* Dos paneles de gráficos lado a lado */
 .stats-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
 .stats-panel { background: var(--papel); border: 1px solid var(--borde); border-radius: 16px; padding: 18px 20px; }

@@ -83,7 +83,9 @@ function renderPedidos() {
 async function cargarPedidos() {
   mensaje("#panel-message", "Cargando pedidos…");
   try {
-    const { pedidos } = await api("/api/admin-pedidos");
+    // Los costos (para la contribución marginal) se traen en paralelo y no
+    // frenan la carga si fallan: la contribución simplemente queda sin costo.
+    const [{ pedidos }] = await Promise.all([api("/api/admin-pedidos"), cargarCostosInsights()]);
     pedidosCache = pedidos;
     renderPedidos();
     renderInsights();
@@ -95,17 +97,72 @@ async function cargarPedidos() {
 }
 
 // ===== Insights =====
-// Todo sale del mismo pedidosCache que ya carga la pestaña Pedidos: nada nuevo
-// para pedirle al servidor. "Pendientes" es lo más parecido a un carrito en
-// curso que existe, porque el carrito en sí nunca toca el backend.
+// Sale de los pedidos que ya carga la pestaña Pedidos, más los costos por
+// producto (admin-precios) para la contribución marginal. "Pendientes" es lo
+// más parecido a un carrito en curso, porque el carrito no toca el backend.
+
+// Costos por producto para la contribución marginal. café: costo por drip bag y
+// por pack (ya con insumos); simple: costo por unidad. Más el origen (para el
+// rendimiento por lote). Se cargan una vez, junto con los pedidos.
+let costosPorProducto = null;
+async function cargarCostosInsights() {
+  try {
+    const { productos } = await api("/api/admin-precios");
+    costosPorProducto = {};
+    for (const p of productos) {
+      costosPorProducto[p.id] = {
+        costoUnidad: p.tipo === "simple" ? (p.costo != null ? p.costo : null) : (p.costoUnidad != null ? p.costoUnidad : null),
+        costoPack: p.tipo === "simple" ? null : (p.costoPack != null ? p.costoPack : null),
+        origen: p.origen || null,
+      };
+    }
+  } catch {
+    costosPorProducto = costosPorProducto || {};
+  }
+}
+
+// Contribución marginal de un pedido cobrado: ingreso de productos (total menos
+// envío, que es un pass-through al correo) menos el costo de los productos.
+// `revSinCosto` = facturación de líneas sin costo cargado (ese margen queda
+// inflado, porque cuenta como si no costara nada). Usa los costos ACTUALES, no
+// los del momento de la venta (no se guardan históricos).
+function contribucionPedido(p) {
+  const costos = costosPorProducto || {};
+  let costo = 0, revSinCosto = 0;
+  for (const it of p.items || []) {
+    const c = costos[it.producto_id];
+    const unidades = Number(it.unidades) || 0;
+    const qty = Number(it.qty) || 0;
+    const rev = (Number(it.precio_unitario) || 0) * qty;
+    const esPack = qty > 0 && unidades / qty > 1;
+    let lc = null;
+    if (c) {
+      if (esPack && c.costoPack != null) lc = c.costoPack * qty;
+      else if (c.costoUnidad != null) lc = c.costoUnidad * unidades;
+    }
+    if (lc != null) costo += lc;
+    else revSinCosto += rev;
+  }
+  const ingresoProducto = (Number(p.total) || 0) - (Number(p.envio_costo) || 0);
+  return { margen: ingresoProducto - costo, revSinCosto };
+}
+
 function calcularInsights(pedidos) {
   const aprobados = pedidos.filter((p) => p.estado === "aprobado");
   const pendientes = pedidos.filter((p) => p.estado === "pendiente");
   const rechazados = pedidos.filter((p) => p.estado === "rechazado");
-  const ventasTotales = aprobados.reduce((t, p) => t + (Number(p.total) || 0), 0);
-  const ticketPromedio = aprobados.length ? ventasTotales / aprobados.length : 0;
+  const facturacion = aprobados.reduce((t, p) => t + (Number(p.total) || 0), 0);
+  const ticketPromedio = aprobados.length ? facturacion / aprobados.length : 0;
   const conCupon = pedidos.filter((p) => p.cupon);
   const descuentoTotal = conCupon.reduce((t, p) => t + (Number(p.descuento_cupon) || 0), 0);
+
+  // Contribución marginal total y facturación sin costo conocido
+  let contribucion = 0, revSinCosto = 0;
+  for (const p of aprobados) {
+    const r = contribucionPedido(p);
+    contribucion += r.margen;
+    revSinCosto += r.revSinCosto;
+  }
 
   const porCanal = {};
   for (const p of pedidos) {
@@ -126,7 +183,37 @@ function calcularInsights(pedidos) {
     .sort((a, b) => b.unidades - a.unidades)
     .slice(0, 5);
 
-  return { aprobados, pendientes, rechazados, ventasTotales, ticketPromedio, conCupon, descuentoTotal, porCanal, topProductos };
+  // Tasa de recompra: clientes (por email) con 2+ compras cobradas ÷ total
+  const comprasPorEmail = {};
+  for (const p of aprobados) {
+    const email = (p.cliente_email || "").trim().toLowerCase();
+    if (email) comprasPorEmail[email] = (comprasPorEmail[email] || 0) + 1;
+  }
+  const clientes = Object.keys(comprasPorEmail).length;
+  const repiten = Object.values(comprasPorEmail).filter((n) => n >= 2).length;
+  const tasaRecompra = clientes ? Math.round((repiten / clientes) * 100) : null;
+
+  // Rendimiento por origen/lote: unidades y facturación (solo cafés con origen)
+  const costos = costosPorProducto || {};
+  const porOrigen = {};
+  for (const p of aprobados) {
+    for (const it of p.items || []) {
+      const origen = costos[it.producto_id] && costos[it.producto_id].origen;
+      if (!origen) continue;
+      if (!porOrigen[origen]) porOrigen[origen] = { unidades: 0, revenue: 0 };
+      porOrigen[origen].unidades += Number(it.unidades) || 0;
+      porOrigen[origen].revenue += (Number(it.precio_unitario) || 0) * (Number(it.qty) || 0);
+    }
+  }
+  const rendimientoOrigen = Object.entries(porOrigen)
+    .map(([origen, v]) => ({ origen, ...v }))
+    .sort((a, b) => b.unidades - a.unidades);
+
+  return {
+    aprobados, pendientes, rechazados, facturacion, contribucion, revSinCosto,
+    ticketPromedio, conCupon, descuentoTotal, porCanal, topProductos,
+    tasaRecompra, clientes, repiten, rendimientoOrigen,
+  };
 }
 
 // ===== Filtro de rango y granularidad =====
@@ -134,7 +221,6 @@ function calcularInsights(pedidos) {
 // semana o mes. Ojo: todo se calcula sobre los últimos 200 pedidos que trae el
 // panel, así que un rango más viejo que esa ventana quedaría incompleto.
 let insightsRango = "todo";        // todo | este-mes | 30-dias | este-anio
-let insightsGranularidad = "mes";  // semana | mes
 
 // Fecha desde la que empieza el rango (o null = sin límite)
 function inicioDeRango(rango) {
@@ -164,8 +250,9 @@ function etiquetaBucket(fecha, granularidad) {
     : fecha.toLocaleString("es-AR", { month: "short" });
 }
 
-// Serie de ventas cobradas agrupadas por semana (últimas 8) o mes (últimos 6)
-function serieVentas(aprobados, granularidad) {
+// Serie agrupada por semana (últimas 8) o mes (últimos 6). `valorFn(pedido)`
+// decide qué se suma en cada bucket: facturación (total) o contribución.
+function serieAgrupada(aprobados, granularidad, valorFn) {
   const buckets = {};
   for (const p of aprobados) {
     const d = new Date(p.creado);
@@ -173,7 +260,7 @@ function serieVentas(aprobados, granularidad) {
     const inicio = granularidad === "semana" ? inicioSemana(d) : new Date(d.getFullYear(), d.getMonth(), 1);
     const clave = inicio.toISOString().slice(0, 10);
     if (!buckets[clave]) buckets[clave] = { total: 0, fecha: inicio };
-    buckets[clave].total += Number(p.total) || 0;
+    buckets[clave].total += valorFn(p);
   }
   return Object.entries(buckets)
     .sort(([a], [b]) => a.localeCompare(b))
@@ -184,14 +271,38 @@ function serieVentas(aprobados, granularidad) {
 function renderInsights() {
   sincronizarFiltrosInsights();
   const i = calcularInsights(pedidosEnRango());
+
+  // Dos totales grandes: facturación y contribución marginal
+  $("#hero-facturacion").innerHTML = `
+    <span class="stats-hero__label">Facturación</span>
+    <strong class="stats-hero__valor">${formato.format(i.facturacion)}</strong>
+    <span class="stats-hero__nota">Total cobrado en ${i.aprobados.length} pedido${i.aprobados.length === 1 ? "" : "s"} · incluye envío</span>`;
+  const notaCM = i.revSinCosto > 0
+    ? `⚠️ ${formato.format(Math.round(i.revSinCosto))} de productos sin costo cargado (ese margen está inflado)`
+    : "Facturación de productos − costos (café + insumos)";
+  $("#hero-contribucion").innerHTML = `
+    <span class="stats-hero__label">Contribución marginal</span>
+    <strong class="stats-hero__valor">${formato.format(Math.round(i.contribucion))}</strong>
+    <span class="stats-hero__nota">${notaCM}</span>`;
+
+  // Debajo de cada total, el desglose por mes y por semana
+  const fact = (p) => Number(p.total) || 0;
+  const cm = (p) => contribucionPedido(p).margen;
+  renderColumnas("#fact-mes", serieAgrupada(i.aprobados, "mes", fact), "Facturación por mes", "Últimos 6 meses con datos");
+  renderColumnas("#fact-semana", serieAgrupada(i.aprobados, "semana", fact), "Facturación por semana", "Últimas 8 semanas con datos");
+  renderColumnas("#cm-mes", serieAgrupada(i.aprobados, "mes", cm), "Contribución por mes", "Últimos 6 meses con datos");
+  renderColumnas("#cm-semana", serieAgrupada(i.aprobados, "semana", cm), "Contribución por semana", "Últimas 8 semanas con datos");
+
+  // KPIs (la facturación ya es un total grande, así que acá no se repite)
   $("#stats").innerHTML = `
-    <div class="stat">
-      <span class="stat__label">Vendido (aprobados)</span>
-      <strong class="stat__valor">${formato.format(i.ventasTotales)}</strong>
-    </div>
     <div class="stat">
       <span class="stat__label">Ticket promedio</span>
       <strong class="stat__valor">${formato.format(Math.round(i.ticketPromedio))}</strong>
+    </div>
+    <div class="stat">
+      <span class="stat__label">Recompra</span>
+      <strong class="stat__valor">${i.tasaRecompra != null ? i.tasaRecompra + "%" : "—"}</strong>
+      <span class="stat__nota">${i.repiten}/${i.clientes} cliente${i.clientes === 1 ? "" : "s"} volvieron</span>
     </div>
     <div class="stat stat--aprobado">
       <span class="stat__label">Completados</span>
@@ -212,8 +323,9 @@ function renderInsights() {
       <span class="stat__nota">${formato.format(i.descuentoTotal)} en descuentos</span>
     </div>
   `;
+
+  renderOrigen(i.rendimientoOrigen);
   renderTopProductos(i.topProductos);
-  renderVentasSerie(serieVentas(i.aprobados, insightsGranularidad));
 
   const canales = Object.entries(i.porCanal);
   $("#stats-canales").innerHTML = `<h3 class="stats-canales__titulo">Por canal</h3>` +
@@ -243,31 +355,41 @@ function renderTopProductos(top) {
      <p class="stats-panel__sub">Unidades en pedidos cobrados</p>` + cuerpo;
 }
 
-// Columnas de ventas: la columna más alta fija la escala; una sola serie. El
-// toggle semana/mes vive en el encabezado y se maneja por delegación.
-function renderVentasSerie(serie) {
-  const esSemana = insightsGranularidad === "semana";
+// Columnas de una serie: la más alta fija la escala; una sola serie → verde de
+// marca, sin leyenda. La contribución puede ser negativa: la barra se topa en 0
+// pero el valor muestra el número real.
+function renderColumnas(containerId, serie, titulo, sub) {
   const cuerpo = !serie.length
-    ? `<div class="vacio">Sin ventas cobradas en este período.</div>`
+    ? `<div class="vacio">Sin datos en este período.</div>`
     : (() => {
-        const max = Math.max(...serie.map((s) => s.total)) || 1;
-        return `<div class="cols">` + serie.map((s) => `<div class="cols__col" title="${escapar(s.etiqueta)}: ${formato.format(s.total)}">
-            <span class="cols__valor">${formato.format(s.total)}</span>
-            <div class="cols__barra" style="height:${(s.total / max) * 100}%"></div>
+        const max = Math.max(...serie.map((s) => s.total), 0) || 1;
+        return `<div class="cols">` + serie.map((s) => `<div class="cols__col" title="${escapar(s.etiqueta)}: ${formato.format(Math.round(s.total))}">
+            <span class="cols__valor">${formato.format(Math.round(s.total))}</span>
+            <div class="cols__barra" style="height:${Math.max(0, (s.total / max) * 100)}%"></div>
             <span class="cols__mes">${escapar(s.etiqueta)}</span>
           </div>`).join("") + `</div>`;
       })();
-  $("#stats-mensual").innerHTML =
-    `<div class="stats-panel__head">
-       <div>
-         <h3 class="stats-panel__titulo">Ventas por ${esSemana ? "semana" : "mes"}</h3>
-         <p class="stats-panel__sub">Total cobrado, ${esSemana ? "últimas 8 semanas" : "últimos 6 meses"} con datos</p>
-       </div>
-       <div class="stats-toggle" id="stats-toggle">
-         <button data-gran="semana" class="${esSemana ? "activo" : ""}">Semana</button>
-         <button data-gran="mes" class="${esSemana ? "" : "activo"}">Mes</button>
-       </div>
-     </div>` + cuerpo;
+  $(containerId).innerHTML =
+    `<h3 class="stats-panel__titulo">${titulo}</h3>
+     <p class="stats-panel__sub">${sub}</p>` + cuerpo;
+}
+
+// Rendimiento por origen/lote: ranking horizontal por unidades, con la
+// facturación al lado (una sola serie → verde de marca).
+function renderOrigen(lista) {
+  const cuerpo = !lista.length
+    ? `<div class="vacio">Sin ventas con origen cargado.</div>`
+    : (() => {
+        const max = Math.max(...lista.map((o) => o.unidades)) || 1;
+        return `<div class="rank">` + lista.map((o) => `<div class="rank__fila">
+            <span class="rank__nombre" title="${escapar(o.origen)}">${escapar(o.origen)}</span>
+            <span class="rank__valor">${o.unidades} u. · ${formato.format(Math.round(o.revenue))}</span>
+            <div class="rank__track"><div class="rank__barra" style="width:${(o.unidades / max) * 100}%"></div></div>
+          </div>`).join("") + `</div>`;
+      })();
+  $("#stats-origen").innerHTML =
+    `<h3 class="stats-panel__titulo">Rendimiento por origen</h3>
+     <p class="stats-panel__sub">Unidades y facturación por lote/origen (cafés)</p>` + cuerpo;
 }
 
 // Marca el preset de rango activo (los botones son estáticos en el HTML)
@@ -282,14 +404,6 @@ $("#stats-filtros").addEventListener("click", (e) => {
   if (!b || b.dataset.rango === insightsRango) return;
   insightsRango = b.dataset.rango;
   renderInsights();
-});
-
-// Toggle semana/mes del gráfico de ventas (encabezado re-renderizado, delegación)
-$("#stats-mensual").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-gran]");
-  if (!b || b.dataset.gran === insightsGranularidad) return;
-  insightsGranularidad = b.dataset.gran;
-  renderVentasSerie(serieVentas(calcularInsights(pedidosEnRango()).aprobados, insightsGranularidad));
 });
 
 $("#filtros").addEventListener("click", (e) => {

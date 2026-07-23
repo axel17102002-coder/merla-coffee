@@ -21,12 +21,12 @@ const {
 // Lee productos tolerando que las migraciones de costo_kg/costo_unidad/tipo/categoria no se hayan corrido
 async function traerProductos() {
   try {
-    return await sb("productos?select=id,nombre,activo,costo_kg,costo_unidad,tipo,categoria&order=nombre.asc");
+    return await sb("productos?select=id,nombre,activo,costo_kg,costo_unidad,origen,tipo,categoria&order=nombre.asc");
   } catch (err) {
     console.warn("admin-precios: sin columna costo_unidad/categoria todavía:", err.message);
   }
   try {
-    return await sb("productos?select=id,nombre,activo,costo_kg,tipo,categoria&order=nombre.asc");
+    return await sb("productos?select=id,nombre,activo,costo_kg,origen,tipo,categoria&order=nombre.asc");
   } catch (err) {
     console.warn("admin-precios: sin columna categoria todavía:", err.message);
   }
@@ -70,6 +70,7 @@ exports.handler = async (event) => {
             activo: p.activo,
             tipo: "simple",
             categoria: p.categoria === "cafe_bolsa" ? "cafe_bolsa" : "merch",
+            origen: p.origen || null,
             precio: precioSimple,
             costo: costoSimple,
             margen: margenSimple(costoSimple, precioSimple),
@@ -86,6 +87,7 @@ exports.handler = async (event) => {
           nombre: p.nombre,
           activo: p.activo,
           tipo: "cafe",
+          origen: p.origen || null,
           costo_kg: costo,
           costoUnidad: costo != null ? Math.round(costoUnidad(costo, cfg)) : null,
           costoPack: costo != null ? Math.round(costoPack(costo, cfg)) : null,
