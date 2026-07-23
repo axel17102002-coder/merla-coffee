@@ -15,11 +15,16 @@ const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
 const { obtenerCostos } = require("../lib/costos.js");
 const {
   precioPack, precioUnidadDesdeCosto, costoKiloDesdePrecio,
-  costoUnidad, costoPack, margenPack, margenUnidadReal,
+  costoUnidad, costoPack, margenPack, margenUnidadReal, margenSimple,
 } = require("../../public/motor.js");
 
-// Lee productos tolerando que las migraciones de costo_kg/tipo/categoria no se hayan corrido
+// Lee productos tolerando que las migraciones de costo_kg/costo_unidad/tipo/categoria no se hayan corrido
 async function traerProductos() {
+  try {
+    return await sb("productos?select=id,nombre,activo,costo_kg,costo_unidad,tipo,categoria&order=nombre.asc");
+  } catch (err) {
+    console.warn("admin-precios: sin columna costo_unidad/categoria todavía:", err.message);
+  }
   try {
     return await sb("productos?select=id,nombre,activo,costo_kg,tipo,categoria&order=nombre.asc");
   } catch (err) {
@@ -54,15 +59,20 @@ exports.handler = async (event) => {
       const lista = productos.map((p) => {
         const unidad = presentaciones.find((x) => x.producto_id === p.id && x.unidades_stock === 1);
 
-        // Producto simple: sin fórmula, el precio es el que se cargó a mano
+        // Producto simple: sin fórmula. El precio es el que se cargó a mano; el
+        // costo por unidad es opcional y, si está, se muestra el margen.
         if ((p.tipo || "cafe") === "simple") {
+          const precioSimple = unidad ? unidad.precio : null;
+          const costoSimple = p.costo_unidad != null ? Number(p.costo_unidad) : null;
           return {
             id: p.id,
             nombre: p.nombre,
             activo: p.activo,
             tipo: "simple",
             categoria: p.categoria === "cafe_bolsa" ? "cafe_bolsa" : "merch",
-            precio: unidad ? unidad.precio : null,
+            precio: precioSimple,
+            costo: costoSimple,
+            margen: margenSimple(costoSimple, precioSimple),
           };
         }
 
@@ -101,10 +111,21 @@ exports.handler = async (event) => {
       const [producto] = await sb(`productos?id=eq.${encodeURIComponent(producto_id)}&select=id,tipo`).catch(() => [null]);
 
       // ---- Producto simple: sin fórmula, se guarda el precio tal cual ----
+      // El costo por unidad es opcional; si viene, se guarda y se valida que el
+      // precio no quede por debajo (perderías plata), igual que en los cafés.
       if (producto && producto.tipo === "simple") {
         const precio = Math.round(Number(body.precio));
         if (!(precio > 0)) {
           return { statusCode: 400, headers, body: JSON.stringify({ error: "Ingresá un precio mayor a 0" }) };
+        }
+        // costo: number => guardar; 0 o null => borrar (vuelve a "sin costo")
+        const tieneCosto = body.costo !== undefined && body.costo !== null && body.costo !== "";
+        const costo = tieneCosto ? Math.round(Number(body.costo)) : null;
+        if (tieneCosto && !(costo >= 0)) {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: "El costo tiene que ser un número válido" }) };
+        }
+        if (costo > 0 && precio < costo) {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: `Ese precio (${precio}) es menor al costo (${costo}): perderías plata` }) };
         }
         const actualizadas = await sb(
           `presentaciones?producto_id=eq.${encodeURIComponent(producto_id)}&unidades_stock=eq.1`,
@@ -113,7 +134,19 @@ exports.handler = async (event) => {
         if (!actualizadas || !actualizadas.length) {
           return { statusCode: 404, headers, body: JSON.stringify({ error: "El producto no tiene presentación de unidad" }) };
         }
-        return { statusCode: 200, headers, body: JSON.stringify({ precio }) };
+        // Guardar el costo (si la columna no existe todavía, no rompe: se avisa)
+        if (tieneCosto) {
+          try {
+            await sb(`productos?id=eq.${encodeURIComponent(producto_id)}`, {
+              method: "PATCH",
+              body: { costo_unidad: costo > 0 ? costo : null },
+            });
+          } catch (err) {
+            console.warn("admin-precios: no se pudo guardar costo_unidad (¿falta migracion-costo-simple.sql?):", err.message);
+          }
+        }
+        const costoFinal = costo > 0 ? costo : null;
+        return { statusCode: 200, headers, body: JSON.stringify({ precio, costo: costoFinal, margen: margenSimple(costoFinal, precio) }) };
       }
 
       // ---- Café: precio calculado desde el costo del kilo ----

@@ -714,6 +714,13 @@ function editorProducto(p) {
 function editorProductoSimple(p) {
   return `<div class="px-editor">
       <div class="px-paso">
+        <span class="px-paso__label">Costo por unidad <small>(opcional)</small></span>
+        <div class="px-paso__control">
+          <input type="number" min="0" step="1" inputmode="numeric" placeholder="0"
+                 value="${p.costo != null ? p.costo : ""}" data-costo-simple aria-label="Costo por unidad">
+        </div>
+      </div>
+      <div class="px-paso">
         <span class="px-paso__label">Precio de venta</span>
         <div class="px-paso__control">
           <input type="number" min="0" step="1" inputmode="numeric" placeholder="0"
@@ -729,13 +736,14 @@ function editorProductoSimple(p) {
 
 function filaProductoSimple(p) {
   const abierto = p.id === precioAbierto;
+  const margen = p.costo != null && p.precio ? margenSimple(p.costo, p.precio) : null;
   return `<article class="px-prod px-prod--simple${abierto ? " px-prod--abierto" : ""}${p.activo ? "" : " px-prod--inactivo"}" data-producto="${escapar(p.id)}">
       <div class="px-prod__linea">
         <span class="px-prod__nombre">${escapar(p.nombre || p.id)}${p.activo ? "" : ` <small>oculto</small>`}</span>
-        <span class="px-num">—</span>
+        <span class="px-num">${p.costo != null ? formato.format(p.costo) : "—"}</span>
         <span class="px-num px-num--precio">${p.precio != null ? formato.format(p.precio) : "—"}</span>
         <span class="px-num">—</span>
-        <span class="px-margen">—</span>
+        <span class="px-margen">${margen != null ? `<b>${Math.round(margen)}%</b>` : "—"}${badgeMargen(margen)}</span>
         <button class="px-btn-sec px-editar" data-editar="${escapar(p.id)}">${abierto ? "Cerrar" : "Editar"}</button>
       </div>
       ${abierto ? editorProductoSimple(p) : ""}
@@ -768,7 +776,8 @@ function estadoEditorAbierto() {
   if (!fila) return null;
   if (fila.classList.contains("px-prod--simple")) {
     const precio = fila.querySelector("[data-precio-simple]");
-    return precio ? { id: fila.dataset.producto, simple: true, precio: precio.value } : null;
+    const costo = fila.querySelector("[data-costo-simple]");
+    return precio ? { id: fila.dataset.producto, simple: true, precio: precio.value, costo: costo ? costo.value : "" } : null;
   }
   const pack = fila.querySelector("[data-precio-pack]");
   return {
@@ -821,8 +830,11 @@ function renderPrecios() {
   if (abierta.classList.contains("px-prod--simple")) {
     if (estado && estado.simple && estado.id === abierta.dataset.producto) {
       abierta.querySelector("[data-precio-simple]").value = estado.precio;
+      const costo = abierta.querySelector("[data-costo-simple]");
+      if (costo && estado.costo != null) costo.value = estado.costo;
     }
-    return; // el editor simple no tiene desglose en vivo que recalcular
+    refrescarEditorSimple(abierta);
+    return;
   }
 
   if (estado && !estado.simple && estado.id === abierta.dataset.producto) {
@@ -921,21 +933,46 @@ async function guardarPrecio(fila, boton) {
 }
 
 // Guarda el precio de un producto simple: sin costo, sin pack, sin margen
+// Desglose vivo del editor simple: muestra el margen (o avisa si el precio
+// queda por debajo del costo). El costo es opcional: sin costo, no hay margen.
+function refrescarEditorSimple(fila) {
+  const resultado = fila.querySelector("[data-resultado-simple]");
+  if (!resultado) return;
+  const costo = Number(fila.querySelector("[data-costo-simple]")?.value) || 0;
+  const precio = Number(fila.querySelector("[data-precio-simple]").value) || 0;
+  if (!(precio > 0)) { resultado.innerHTML = `<span class="px-nota">Escribí el precio de venta.</span>`; return; }
+  if (!(costo > 0)) { resultado.innerHTML = `<span class="px-nota">Cargá el costo para ver el margen (opcional).</span>`; return; }
+  if (precio < costo) {
+    resultado.innerHTML = `<span class="px-alerta">⚠️ Perdés plata: el precio está por debajo del costo (${formato.format(costo)}).</span>`;
+    return;
+  }
+  const margen = margenSimple(costo, precio);
+  resultado.innerHTML = `Margen real <b>${margen}%</b>${badgeMargen(margen)}`;
+}
+
 async function guardarPrecioSimple(fila, boton) {
   const p = preciosCache.find((x) => x.id === fila.dataset.producto);
   const precio = Number(fila.querySelector("[data-precio-simple]").value) || 0;
+  const costoInput = fila.querySelector("[data-costo-simple]");
+  const costoStr = costoInput ? costoInput.value.trim() : "";
+  const costo = costoStr === "" ? 0 : Number(costoStr) || 0;
   const resultado = fila.querySelector("[data-resultado-simple]");
   if (!(precio > 0)) {
     if (resultado) resultado.innerHTML = `<span class="px-alerta">⚠️ Ingresá un precio mayor a 0.</span>`;
+    return;
+  }
+  if (costo > 0 && precio < costo) {
+    if (resultado) resultado.innerHTML = `<span class="px-alerta">⚠️ El precio está por debajo del costo (${formato.format(costo)}).</span>`;
     return;
   }
   boton.disabled = true;
   try {
     const r = await api("/api/admin-precios", {
       method: "POST",
-      body: JSON.stringify({ producto_id: p.id, precio }),
+      // costo "" borra el costo (vuelve a sin margen); un número lo guarda
+      body: JSON.stringify({ producto_id: p.id, precio, costo: costoStr }),
     });
-    Object.assign(p, { precio: r.precio });
+    Object.assign(p, { precio: r.precio, costo: r.costo });
     precioAbierto = null;
     renderPrecios();
     toast(`${p.nombre}: precio actualizado.`);
@@ -1026,7 +1063,7 @@ $("#precios").addEventListener("click", async (e) => {
 $("#precios").addEventListener("input", (e) => {
   const fila = e.target.closest(".px-prod--abierto");
   if (!fila) return;
-  if (fila.classList.contains("px-prod--simple")) return; // sin desglose en vivo
+  if (fila.classList.contains("px-prod--simple")) { refrescarEditorSimple(fila); return; }
   // El pack sigue al precio de la unidad (con su % OFF, redondeado) hasta que
   // se lo toque a mano; ahí deja de proponerse solo.
   const campoPack = fila.querySelector("[data-precio-pack]");
@@ -1334,8 +1371,11 @@ function aplicarTipoProducto(tipo) {
   const esSimple = tipo === "simple";
   $("#prod-tipo").querySelectorAll("button").forEach((x) => x.classList.toggle("px-chip--activo", x.dataset.tipo === tipo));
   $("#prod-categoria").hidden = !esSimple;
-  $("#prod-costo").hidden = esSimple;
+  // El costo se muestra en ambos: por kilo en café (requerido) y por unidad
+  // en los simples (opcional, para ver el margen).
+  $("#prod-costo").hidden = false;
   $("#prod-costo").required = !esSimple;
+  $("#prod-costo").placeholder = esSimple ? "Costo por unidad (opcional)" : "Costo por kilo";
   $("#prod-precio").hidden = !esSimple;
   $("#prod-stock").placeholder = esSimple ? "Stock (unidades)" : "Stock (bags)";
   $("#prod-preview").textContent = "";
@@ -1361,13 +1401,25 @@ $("#prod-categoria").addEventListener("click", (e) => {
 });
 
 // Vista previa del costo mientras se escribe (el precio final se decide en Precios)
-$("#prod-costo").addEventListener("input", () => {
+// Vista previa según el tipo: café calcula el precio inicial desde el costo del
+// kilo; el simple muestra el margen contra el precio de venta que se tipee.
+function actualizarPreviewCosto() {
   const costo = Number($("#prod-costo").value) || 0;
+  const preview = $("#prod-preview");
+  if (productoTipo === "simple") {
+    const precio = Number($("#prod-precio").value) || 0;
+    if (costo <= 0 || precio <= 0) { preview.textContent = ""; return; }
+    if (precio < costo) { preview.textContent = "⚠️ El precio de venta está por debajo del costo."; return; }
+    preview.textContent = `→ Margen ${margenSimple(costo, precio)}%`;
+    return;
+  }
   const cfg = cfgLocal();
-  if (costo <= 0 || !cfg) { $("#prod-preview").textContent = ""; return; }
+  if (costo <= 0 || !cfg) { preview.textContent = ""; return; }
   const inicial = precioUnidadDesdeCosto(costo, cfg);
-  $("#prod-preview").textContent = `→ Costo por unidad ${formato.format(Math.round(costoUnidad(costo, cfg)))} · precio inicial ${formato.format(inicial)} (después lo ajustás en Precios)`;
-});
+  preview.textContent = `→ Costo por unidad ${formato.format(Math.round(costoUnidad(costo, cfg)))} · precio inicial ${formato.format(inicial)} (después lo ajustás en Precios)`;
+}
+$("#prod-costo").addEventListener("input", actualizarPreviewCosto);
+$("#prod-precio").addEventListener("input", actualizarPreviewCosto);
 
 // La foto se lee como data URL y se sube al crear
 let fotoDataUrl = null;
@@ -1416,6 +1468,7 @@ $("#producto-form").addEventListener("submit", async (e) => {
           categoria: productoCategoria,
           nombre: $("#prod-nombre").value,
           precio: Number($("#prod-precio").value),
+          costo: $("#prod-costo").value.trim(), // opcional; "" = sin costo
           stock: Number($("#prod-stock").value) || 0,
           // Solo se completan si la categoría es "Café en bolsa (1/4)"; en
           // "Tazas y otros" quedan vacíos (se limpian solos al elegir esa categoría)

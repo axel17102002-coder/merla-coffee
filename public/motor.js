@@ -108,6 +108,13 @@ function margenUnidadReal(costoKilo, precioUnidad, cfg) {
   return Math.round((1 - costoUnidad(costoKilo, cfg) / precioUnidad) * 1000) / 10;
 }
 
+// % de margen real de un producto simple: costo cargado a mano vs precio de
+// venta (1 decimal). Null si falta el costo o el precio.
+function margenSimple(costo, precio) {
+  if (!(costo > 0) || !(precio > 0)) return null;
+  return Math.round((1 - costo / precio) * 1000) / 10;
+}
+
 // Redondea a un múltiplo lindo (por defecto, de a $50): 2202 → 2200
 function redondearPrecio(precio, multiplo = 50) {
   const m = Number(multiplo) > 0 ? Number(multiplo) : 50;
@@ -270,6 +277,6 @@ if (typeof module !== "undefined" && module.exports) {
     CONFIG, presentacionesDe, ahorroDe, precioTransferencia, numeroPedido, calcularPedido,
     precioPack, costoCafePorUnidad, costoUnidad, costoPack,
     precioUnidadDesdeCosto, costoKiloDesdePrecio, margenPack,
-    margenUnidadReal, redondearPrecio,
+    margenUnidadReal, margenSimple, redondearPrecio,
   };
 }

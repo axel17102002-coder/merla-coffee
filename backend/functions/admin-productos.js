@@ -84,6 +84,15 @@ exports.handler = async (event) => {
         if (!(precio > 0)) {
           return { statusCode: 400, headers, body: JSON.stringify({ error: "Poné el precio de venta" }) };
         }
+        // Costo por unidad opcional; si viene, no puede superar al precio de venta
+        const tieneCosto = b.costo !== undefined && b.costo !== null && b.costo !== "";
+        const costoUnidad = tieneCosto ? Math.round(Number(b.costo)) : null;
+        if (tieneCosto && !(costoUnidad >= 0)) {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: "El costo tiene que ser un número válido" }) };
+        }
+        if (costoUnidad > 0 && precio < costoUnidad) {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: `El precio (${precio}) es menor al costo (${costoUnidad}): perderías plata` }) };
+        }
         const categoria = b.categoria === "cafe_bolsa" ? "cafe_bolsa" : "merch";
         const fila = {
           id,
@@ -92,6 +101,7 @@ exports.handler = async (event) => {
           stock,
           tipo: "simple",
           categoria,
+          costo_unidad: costoUnidad > 0 ? costoUnidad : null,
           // El café en bolsa es el mismo café que las drip bags en otra
           // presentación: acepta la misma info descriptiva (queda vacía/null
           // en tazas y otros, que no la necesitan).
@@ -109,8 +119,8 @@ exports.handler = async (event) => {
         try {
           [producto] = await crear(fila);
         } catch (err) {
-          console.warn("admin-productos: reintento sin categoria (correr migracion-categoria-productos.sql):", err.message);
-          const { categoria: _categoria, ...sinCategoria } = fila;
+          console.warn("admin-productos: reintento sin costo_unidad/categoria (correr migraciones):", err.message);
+          const { categoria: _categoria, costo_unidad: _costoUnidad, ...sinCategoria } = fila;
           try {
             [producto] = await crear(sinCategoria);
           } catch (err2) {
