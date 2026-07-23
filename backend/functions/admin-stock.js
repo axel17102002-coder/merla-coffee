@@ -2,8 +2,8 @@
 // cuántas drip bags salen de X gramos de café en grano.
 //
 //   GET  → { productos: [{id, nombre, stock}], gramosPorUnidad }
-//   POST { producto_id, gramos | unidades, gramosPorUnidad?, accion: "sumar"|"fijar" }
-//        → { stock, unidades }  (unidades = cuántas bags se calcularon)
+//   POST { producto_id, gramos | unidades, gramosPorUnidad?, accion: "sumar"|"restar"|"fijar" }
+//        → { stock, unidades }  (unidades = cuántas bags se calcularon; restar se topa en 0)
 
 const { sb } = require("../lib/supabase.js");
 const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
@@ -26,7 +26,7 @@ exports.handler = async (event) => {
     if (event.httpMethod === "POST") {
       const body = JSON.parse(event.body || "{}");
       const { producto_id, accion } = body;
-      if (!producto_id || !["sumar", "fijar"].includes(accion)) {
+      if (!producto_id || !["sumar", "restar", "fijar"].includes(accion)) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: "Acción inválida" }) };
       }
 
@@ -41,8 +41,8 @@ exports.handler = async (event) => {
       } else {
         return { statusCode: 400, headers, body: JSON.stringify({ error: "Ingresá los gramos de café (o unidades) a cargar" }) };
       }
-      if (accion === "sumar" && unidades <= 0) {
-        return { statusCode: 400, headers, body: JSON.stringify({ error: "Para sumar, ingresá una cantidad mayor a 0" }) };
+      if ((accion === "sumar" || accion === "restar") && unidades <= 0) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: `Para ${accion}, ingresá una cantidad mayor a 0` }) };
       }
 
       const [producto] = await sb(`productos?id=eq.${encodeURIComponent(producto_id)}&select=id,stock`);
@@ -50,7 +50,10 @@ exports.handler = async (event) => {
         return { statusCode: 404, headers, body: JSON.stringify({ error: "Producto inexistente" }) };
       }
 
-      const stock = accion === "sumar" ? producto.stock + unidades : unidades;
+      // "restar" nunca deja el stock en negativo (se topa en 0)
+      const stock = accion === "sumar" ? producto.stock + unidades
+        : accion === "restar" ? Math.max(0, producto.stock - unidades)
+        : unidades;
       await sb(`productos?id=eq.${encodeURIComponent(producto_id)}`, {
         method: "PATCH",
         body: { stock },

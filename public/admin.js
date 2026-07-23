@@ -357,6 +357,7 @@ function filaProductoStock(p) {
           : `<input type="number" min="0" step="1" inputmode="numeric" placeholder="Gramos de café" data-gramos aria-label="Gramos de café para ${escapar(p.nombre)}">
         <span class="fila__preview" data-preview>= 0 bags</span>`}
         <button data-stock-action="sumar" disabled>Sumar</button>
+        <button class="sec" data-stock-action="restar" disabled>Restar</button>
         <button class="sec" data-stock-action="fijar" disabled>Fijar</button>
         <button class="sec" data-desc-toggle="${escapar(p.id)}" data-desc="${Boolean(p.descontinuado)}" title="Producto sin reposición: la tienda muestra 'Últimas N unidades' en vez del stock normal">${p.descontinuado ? "Reponer" : "Sin reposición"}</button>
         <button class="${p.activo ? "sec" : ""}" data-producto-toggle="${escapar(p.id)}" data-activo="${p.activo}">${p.activo ? "Ocultar" : "Publicar"}</button>
@@ -410,6 +411,7 @@ $("#productos-columnas").addEventListener("input", (e) => {
     fila.querySelector("[data-preview]").textContent = `= ${unidades} bags`;
     const vacio = gramosInput.value.trim() === "";
     fila.querySelector('[data-stock-action="sumar"]').disabled = unidades <= 0;
+    fila.querySelector('[data-stock-action="restar"]').disabled = unidades <= 0;
     fila.querySelector('[data-stock-action="fijar"]').disabled = vacio;
     return;
   }
@@ -417,7 +419,9 @@ $("#productos-columnas").addEventListener("input", (e) => {
   if (unidadesInput) {
     const fila = unidadesInput.closest(".fila");
     const vacio = unidadesInput.value.trim() === "";
-    fila.querySelector('[data-stock-action="sumar"]').disabled = !((Number(unidadesInput.value) || 0) > 0);
+    const positivo = (Number(unidadesInput.value) || 0) > 0;
+    fila.querySelector('[data-stock-action="sumar"]').disabled = !positivo;
+    fila.querySelector('[data-stock-action="restar"]').disabled = !positivo;
     fila.querySelector('[data-stock-action="fijar"]').disabled = vacio;
   }
 });
@@ -492,15 +496,15 @@ $("#productos-columnas").addEventListener("click", async (e) => {
   if (esSimple) {
     unidades = Math.max(0, Math.floor(Number(fila.querySelector("[data-unidades]").value) || 0));
     cuerpo = { producto_id: fila.dataset.producto, unidades, accion };
-    pregunta = accion === "sumar"
-      ? `¿Sumar ${unidades} unidades al stock de ${nombre}?`
+    pregunta = accion === "sumar" ? `¿Sumar ${unidades} unidades al stock de ${nombre}?`
+      : accion === "restar" ? `¿Restar ${unidades} unidades del stock de ${nombre}?`
       : `¿Reemplazar el stock de ${nombre} por ${unidades} unidades?`;
   } else {
     const gramos = Number(fila.querySelector("[data-gramos]").value) || 0;
     unidades = Math.floor(gramos / gramosPorUnidad);
     cuerpo = { producto_id: fila.dataset.producto, gramos, accion };
-    pregunta = accion === "sumar"
-      ? `¿Sumar ${unidades} bags (${gramos} g) al stock de ${nombre}?`
+    pregunta = accion === "sumar" ? `¿Sumar ${unidades} bags (${gramos} g) al stock de ${nombre}?`
+      : accion === "restar" ? `¿Restar ${unidades} bags (${gramos} g) del stock de ${nombre}?`
       : `¿Reemplazar el stock de ${nombre} por ${unidades} bags (${gramos} g)?`;
   }
   if (!confirm(pregunta)) return;
@@ -517,6 +521,7 @@ $("#productos-columnas").addEventListener("click", async (e) => {
     }
     fila.querySelectorAll("button").forEach((b) => (b.disabled = false));
     fila.querySelector('[data-stock-action="sumar"]').disabled = true;
+    fila.querySelector('[data-stock-action="restar"]').disabled = true;
     fila.querySelector('[data-stock-action="fijar"]').disabled = true;
     mensaje("#producto-message", `✅ ${nombre}: stock actualizado a ${r.stock} ${esSimple ? "unidades" : "bags"}`, true);
   } catch (err) {
