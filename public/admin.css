@@ -132,27 +132,22 @@ button:disabled { opacity: .55; cursor: wait; }
 }
 
 /* Insights */
-.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; margin-bottom: 20px; }
-.stat { background: var(--papel); border: 1px solid var(--borde); border-radius: 16px; padding: 18px 20px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 5px 18px #22301f10; }
-.stat__label { color: var(--gris); font-size: .82rem; font-weight: 700; }
-.stat__valor { font-family: "Baloo 2", sans-serif; font-size: 1.6rem; color: var(--verde); }
-.stat__nota { color: var(--gris); font-size: .78rem; }
-.stat--pendiente .stat__valor { color: #705400; }
-.stat--aprobado .stat__valor { color: #2f6931; }
-.stat--rechazado .stat__valor { color: #8d3328; }
 
-.stats-canales { background: var(--papel); border: 1px solid var(--borde); border-radius: 16px; padding: 18px 20px; display: grid; gap: 4px; }
-.stats-canales__titulo { margin: 0 0 10px; font-family: "Baloo 2", sans-serif; color: var(--verde); font-size: .95rem; }
-.canal-fila { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--borde); }
-.canal-fila:last-child { border-bottom: 0; }
-
-/* Dos totales grandes (facturación / contribución), cada uno ancho de 2 cards */
-.stats-hero { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
-.stats-hero-card { background: var(--papel); border: 1px solid var(--borde); border-radius: 16px; padding: 22px 24px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 5px 18px #22301f10; }
-.stats-hero__label { color: var(--gris); font-size: .9rem; font-weight: 700; }
-.stats-hero__valor { font-family: "Baloo 2", sans-serif; font-size: 2.4rem; line-height: 1; color: var(--verde); }
-.stats-hero__nota { color: var(--gris); font-size: .8rem; }
-@media (max-width: 720px) { .stats-hero { grid-template-columns: 1fr; } }
+/* ① Pulso: 4 stat tiles con delta + sparkline */
+.pulso { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
+.pulso__tile { background: var(--papel); border: 1px solid var(--borde); border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 5px 18px #22301f10; }
+.pulso__tile--destacado { border-color: var(--verde); box-shadow: 0 6px 20px #2f4a3622; }
+.pulso__label { color: var(--gris); font-size: .82rem; font-weight: 700; }
+.pulso__fila { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.pulso__valor { font-family: "Baloo 2", sans-serif; font-size: 1.9rem; line-height: 1; color: var(--verde); }
+.pulso__pie { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; }
+.pulso__nota { color: var(--gris); font-size: .76rem; }
+.delta { font-size: .74rem; font-weight: 800; white-space: nowrap; padding: 2px 7px; border-radius: 999px; }
+.delta--bien { background: #eaf3e3; color: #2f6931; }
+.delta--mal { background: #f9e3df; color: #8d3328; }
+.spark { width: 90px; height: 28px; flex-shrink: 0; }
+@media (max-width: 900px) { .pulso { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .pulso { grid-template-columns: 1fr; } }
 
 /* Dos paneles de gráficos lado a lado */
 .stats-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
@@ -177,8 +172,36 @@ button:disabled { opacity: .55; cursor: wait; }
 .cols { display: flex; align-items: flex-end; gap: 8px; height: 150px; padding-top: 6px; }
 .cols__col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; height: 100%; min-width: 0; }
 .cols__valor { font-size: .72rem; font-weight: 700; color: var(--gris); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.cols__barra { width: 100%; max-width: 34px; background: var(--verde); border-radius: 4px 4px 0 0; min-height: 3px; }
 .cols__mes { font-size: .72rem; color: var(--gris); text-transform: capitalize; }
+
+/* ② Tendencia: barra apilada (contribución verde + costo gris), con 2px de aire */
+.cols__stack { width: 100%; max-width: 34px; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; border-radius: 5px 5px 0 0; overflow: hidden; min-height: 3px; }
+.cols__seg { width: 100%; }
+.cols__seg--margen { background: var(--verde); }
+.cols__seg--costo { background: #c9d5c4; }
+.leyenda { display: flex; gap: 16px; margin: 0 0 12px; flex-wrap: wrap; }
+.leyenda__item { display: inline-flex; align-items: center; gap: 6px; font-size: .78rem; color: var(--gris); }
+.leyenda__sw { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+.leyenda__sw--margen { background: var(--verde); }
+.leyenda__sw--costo { background: #c9d5c4; }
+
+/* ③ Clientes: barra partida nuevos/recurrentes */
+.split { display: flex; flex-direction: column; gap: 12px; }
+.split__barra { display: flex; height: 18px; border-radius: 9px; overflow: hidden; background: var(--crema); gap: 2px; }
+.split__parte { height: 100%; min-width: 2px; }
+.split__parte--rec { background: var(--verde); }
+.split__parte--nue { background: #c9d5c4; }
+.split__leyenda { display: flex; gap: 18px; font-size: .84rem; color: var(--gris); flex-wrap: wrap; }
+.split__leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+.split__leyenda b { color: var(--texto); }
+
+/* ⑤ Operación: tira compacta al final */
+.ops { display: flex; flex-wrap: wrap; gap: 12px; }
+.ops__item { background: var(--papel); border: 1px solid var(--borde); border-radius: 12px; padding: 10px 16px; display: flex; align-items: baseline; gap: 8px; }
+.ops__valor { font-family: "Baloo 2", sans-serif; font-size: 1.2rem; color: var(--verde); }
+.ops__item--pendiente .ops__valor { color: #705400; }
+.ops__item--rechazado .ops__valor { color: #8d3328; }
+.ops__label { color: var(--gris); font-size: .8rem; }
 
 /* Secciones Pedidos / Gestión */
 .secciones { display: flex; gap: 8px; margin-bottom: 22px; }

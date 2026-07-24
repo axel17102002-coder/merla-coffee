@@ -65,24 +65,21 @@
             <button data-rango="30-dias">Últimos 30 días</button>
             <button data-rango="este-anio">Este año</button>
           </div>
-          <div class="stats-hero">
-            <div class="stats-hero-card" id="hero-facturacion"></div>
-            <div class="stats-hero-card" id="hero-contribucion"></div>
-          </div>
+          <!-- ① Pulso: 4 métricas con delta + sparkline -->
+          <div class="pulso" id="pulso"></div>
+          <!-- ② Tendencia: un solo gráfico apilado (facturación = margen + costo) -->
+          <div class="stats-panel" id="tendencia"></div>
+          <!-- ③④ Clientes y producto -->
           <div class="stats-grid2">
-            <div class="stats-panel" id="fact-mes"></div>
-            <div class="stats-panel" id="fact-semana"></div>
-          </div>
-          <div class="stats-grid2">
-            <div class="stats-panel" id="cm-mes"></div>
-            <div class="stats-panel" id="cm-semana"></div>
-          </div>
-          <div class="stats" id="stats"></div>
-          <div class="stats-grid2">
+            <div class="stats-panel" id="stats-clientes"></div>
             <div class="stats-panel" id="stats-origen"></div>
-            <div class="stats-panel" id="stats-top-productos"></div>
           </div>
-          <div class="stats-canales" id="stats-canales"></div>
+          <div class="stats-grid2">
+            <div class="stats-panel" id="stats-top-productos"></div>
+            <div class="stats-panel" id="stats-canal"></div>
+          </div>
+          <!-- ⑤ Operación: compacto, consulta ocasional -->
+          <div class="ops" id="ops"></div>
         </div>
 
         <!-- SECCIÓN: Gestión (Productos / Precios / Cupones ) -->

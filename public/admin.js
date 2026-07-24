@@ -221,6 +221,7 @@ function calcularInsights(pedidos) {
 // semana o mes. Ojo: todo se calcula sobre los últimos 200 pedidos que trae el
 // panel, así que un rango más viejo que esa ventana quedaría incompleto.
 let insightsRango = "todo";        // todo | este-mes | 30-dias | este-anio
+let insightsGranularidad = "mes";  // semana | mes (solo el gráfico de tendencia)
 
 // Fecha desde la que empieza el rango (o null = sin límite)
 function inicioDeRango(rango) {
@@ -235,6 +236,68 @@ function pedidosEnRango() {
   const desde = inicioDeRango(insightsRango);
   if (!desde) return pedidosCache;
   return pedidosCache.filter((p) => { const d = new Date(p.creado); return !isNaN(d) && d >= desde; });
+}
+
+// Pedidos del período inmediatamente anterior, del mismo largo que el elegido
+// (para los deltas "vs período anterior"). Null en "Todo": no hay con qué comparar.
+function pedidosPeriodoAnterior() {
+  const desde = inicioDeRango(insightsRango);
+  if (!desde) return null;
+  const dur = Date.now() - desde.getTime();
+  const desdePrev = new Date(desde.getTime() - dur);
+  return pedidosCache.filter((p) => {
+    const d = new Date(p.creado);
+    return !isNaN(d) && d >= desdePrev && d < desde;
+  });
+}
+
+// Variación relativa (%). Null si no hay base para comparar.
+function variacion(actual, anterior) {
+  if (anterior == null || anterior === 0) return null;
+  return Math.round(((actual - anterior) / Math.abs(anterior)) * 100);
+}
+
+// Chip de delta: ▲/▼ + valor. `positivoEsBueno=false` invierte el color (para
+// métricas donde subir es malo). Vacío si no hay dato.
+function chipDelta(valor, { sufijo = "%", positivoEsBueno = true } = {}) {
+  if (valor == null) return "";
+  const sube = valor >= 0;
+  const bien = sube === positivoEsBueno;
+  const flecha = sube ? "▲" : "▼";
+  return `<span class="delta delta--${bien ? "bien" : "mal"}">${flecha} ${Math.abs(valor)}${sufijo}</span>`;
+}
+
+// Sparkline: mini SVG de tendencia (una línea, sin ejes) para el stat tile.
+function sparkline(valores) {
+  const v = valores.filter((x) => Number.isFinite(x));
+  if (v.length < 2) return "";
+  const w = 96, h = 28, pad = 3;
+  const min = Math.min(...v), max = Math.max(...v);
+  const rango = max - min || 1;
+  const puntos = v.map((y, x) => {
+    const px = pad + (x / (v.length - 1)) * (w - pad * 2);
+    const py = pad + (1 - (y - min) / rango) * (h - pad * 2);
+    return `${px.toFixed(1)},${py.toFixed(1)}`;
+  });
+  const ult = puntos[puntos.length - 1].split(",");
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+      <polyline points="${puntos.join(" ")}" fill="none" stroke="var(--verde-claro)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${ult[0]}" cy="${ult[1]}" r="2.6" fill="var(--verde)"/>
+    </svg>`;
+}
+
+// Serie de un valor por semana (últimas N) para las sparklines, sobre toda la
+// cache (la tendencia reciente no depende del filtro de rango).
+function serieSparkline(valorFn, n = 12) {
+  const aprobados = pedidosCache.filter((p) => p.estado === "aprobado");
+  const buckets = {};
+  for (const p of aprobados) {
+    const d = new Date(p.creado);
+    if (isNaN(d)) continue;
+    const clave = inicioSemana(d).toISOString().slice(0, 10);
+    buckets[clave] = (buckets[clave] || 0) + valorFn(p);
+  }
+  return Object.entries(buckets).sort(([a], [b]) => a.localeCompare(b)).slice(-n).map(([, v]) => v);
 }
 
 // Lunes de la semana de una fecha (semana arranca lunes)
@@ -271,70 +334,163 @@ function serieAgrupada(aprobados, granularidad, valorFn) {
 function renderInsights() {
   sincronizarFiltrosInsights();
   const i = calcularInsights(pedidosEnRango());
+  const anteriores = pedidosPeriodoAnterior();
+  const prev = anteriores ? calcularInsights(anteriores) : null;
 
-  // Dos totales grandes: facturación y contribución marginal
-  $("#hero-facturacion").innerHTML = `
-    <span class="stats-hero__label">Facturación</span>
-    <strong class="stats-hero__valor">${formato.format(i.facturacion)}</strong>
-    <span class="stats-hero__nota">Total cobrado en ${i.aprobados.length} pedido${i.aprobados.length === 1 ? "" : "s"} · incluye envío</span>`;
-  const notaCM = i.revSinCosto > 0
-    ? `⚠️ ${formato.format(Math.round(i.revSinCosto))} de productos sin costo cargado (ese margen está inflado)`
-    : "Facturación de productos − costos (café + insumos)";
-  $("#hero-contribucion").innerHTML = `
-    <span class="stats-hero__label">Contribución marginal</span>
-    <strong class="stats-hero__valor">${formato.format(Math.round(i.contribucion))}</strong>
-    <span class="stats-hero__nota">${notaCM}</span>`;
-
-  // Debajo de cada total, el desglose por mes y por semana
-  const fact = (p) => Number(p.total) || 0;
-  const cm = (p) => contribucionPedido(p).margen;
-  renderColumnas("#fact-mes", serieAgrupada(i.aprobados, "mes", fact), "Facturación por mes", "Últimos 6 meses con datos");
-  renderColumnas("#fact-semana", serieAgrupada(i.aprobados, "semana", fact), "Facturación por semana", "Últimas 8 semanas con datos");
-  renderColumnas("#cm-mes", serieAgrupada(i.aprobados, "mes", cm), "Contribución por mes", "Últimos 6 meses con datos");
-  renderColumnas("#cm-semana", serieAgrupada(i.aprobados, "semana", cm), "Contribución por semana", "Últimas 8 semanas con datos");
-
-  // KPIs (la facturación ya es un total grande, así que acá no se repite)
-  $("#stats").innerHTML = `
-    <div class="stat">
-      <span class="stat__label">Ticket promedio</span>
-      <strong class="stat__valor">${formato.format(Math.round(i.ticketPromedio))}</strong>
-    </div>
-    <div class="stat">
-      <span class="stat__label">Recompra</span>
-      <strong class="stat__valor">${i.tasaRecompra != null ? i.tasaRecompra + "%" : "—"}</strong>
-      <span class="stat__nota">${i.repiten}/${i.clientes} cliente${i.clientes === 1 ? "" : "s"} volvieron</span>
-    </div>
-    <div class="stat stat--aprobado">
-      <span class="stat__label">Completados</span>
-      <strong class="stat__valor">${i.aprobados.length}</strong>
-    </div>
-    <div class="stat stat--pendiente">
-      <span class="stat__label">Pendientes</span>
-      <strong class="stat__valor">${i.pendientes.length}</strong>
-      <span class="stat__nota">≈ "carritos" en curso</span>
-    </div>
-    <div class="stat stat--rechazado">
-      <span class="stat__label">Rechazados</span>
-      <strong class="stat__valor">${i.rechazados.length}</strong>
-    </div>
-    <div class="stat">
-      <span class="stat__label">Cupones usados</span>
-      <strong class="stat__valor">${i.conCupon.length}</strong>
-      <span class="stat__nota">${formato.format(i.descuentoTotal)} en descuentos</span>
-    </div>
-  `;
-
+  renderPulso(i, prev);
+  renderTendencia(i.aprobados);
+  renderClientes(i);
   renderOrigen(i.rendimientoOrigen);
   renderTopProductos(i.topProductos);
+  renderCanal(i.porCanal);
+  renderOps(i);
+}
 
-  const canales = Object.entries(i.porCanal);
-  $("#stats-canales").innerHTML = `<h3 class="stats-canales__titulo">Por canal</h3>` +
-    (canales.length
-      ? canales.map(([canal, n]) => `<div class="canal-fila">
-          <span class="canal canal--${escapar(canal)}">${escapar(CANALES[canal] || canal)}</span>
-          <span>${n} pedido${n === 1 ? "" : "s"}</span>
-        </div>`).join("")
-      : `<div class="vacio">Todavía no hay pedidos.</div>`);
+// ① Pulso: las 4 métricas que importan, con delta vs período anterior y una
+// mini-tendencia. Reemplaza los dos hero gigantes y la fila plana de KPIs.
+function renderPulso(i, prev) {
+  const margenPct = i.facturacion > 0 ? Math.round((i.contribucion / i.facturacion) * 100) : null;
+  const dFact = prev ? variacion(i.facturacion, prev.facturacion) : null;
+  const dCM = prev ? variacion(i.contribucion, prev.contribucion) : null;
+  const dPed = prev ? i.aprobados.length - prev.aprobados.length : null;
+  const dRec = prev && i.tasaRecompra != null && prev.tasaRecompra != null ? i.tasaRecompra - prev.tasaRecompra : null;
+
+  const tile = (label, valor, delta, nota, spark, destacado) => `
+    <div class="pulso__tile${destacado ? " pulso__tile--destacado" : ""}">
+      <span class="pulso__label">${label}</span>
+      <div class="pulso__fila"><strong class="pulso__valor">${valor}</strong>${delta}</div>
+      <div class="pulso__pie">${nota ? `<span class="pulso__nota">${nota}</span>` : "<span></span>"}${spark || ""}</div>
+    </div>`;
+
+  $("#pulso").innerHTML =
+    tile("Facturación", formato.format(i.facturacion), chipDelta(dFact),
+      `${i.aprobados.length} pedido${i.aprobados.length === 1 ? "" : "s"}`,
+      sparkline(serieSparkline((p) => Number(p.total) || 0))) +
+    tile("Contribución marginal", formato.format(Math.round(i.contribucion)), chipDelta(dCM),
+      margenPct != null ? `${margenPct}% de margen${i.revSinCosto > 0 ? " · faltan costos" : ""}` : "",
+      sparkline(serieSparkline((p) => contribucionPedido(p).margen))) +
+    tile("Recompra", i.tasaRecompra != null ? i.tasaRecompra + "%" : "—", chipDelta(dRec, { sufijo: " pts" }),
+      `${i.repiten}/${i.clientes} cliente${i.clientes === 1 ? "" : "s"} volvieron`, "", true) +
+    tile("Pedidos", String(i.aprobados.length), chipDelta(dPed, { sufijo: "" }),
+      `ticket ${formato.format(Math.round(i.ticketPromedio))}`,
+      sparkline(serieSparkline(() => 1)));
+}
+
+// ② Tendencia: un solo gráfico. Cada barra es la facturación, partida en
+// contribución (verde) + costo/envío (gris). Una sola escala ($), sin doble eje.
+function renderTendencia(aprobados) {
+  const g = insightsGranularidad;
+  const fact = serieAgrupada(aprobados, g, (p) => Number(p.total) || 0);
+  const cmPorClave = {};
+  for (const s of serieAgrupada(aprobados, g, (p) => contribucionPedido(p).margen)) cmPorClave[s.clave] = s.total;
+  const max = Math.max(...fact.map((s) => s.total), 0) || 1;
+  const H = 150; // alto del área de barras (px)
+  const cuerpo = !fact.length
+    ? `<div class="vacio">Sin datos en este período.</div>`
+    : `<div class="cols">` + fact.map((s) => {
+        const facturacion = s.total;
+        const margen = Math.max(0, cmPorClave[s.clave] || 0);
+        const costo = Math.max(0, facturacion - margen);
+        return `<div class="cols__col" title="${escapar(s.etiqueta)} · facturación ${formato.format(Math.round(facturacion))} · contribución ${formato.format(Math.round(cmPorClave[s.clave] || 0))}">
+            <span class="cols__valor">${formato.format(Math.round(facturacion))}</span>
+            <div class="cols__stack">
+              <div class="cols__seg cols__seg--costo" style="height:${((costo / max) * H).toFixed(1)}px"></div>
+              <div class="cols__seg cols__seg--margen" style="height:${((margen / max) * H).toFixed(1)}px"></div>
+            </div>
+            <span class="cols__mes">${escapar(s.etiqueta)}</span>
+          </div>`;
+      }).join("") + `</div>`;
+  $("#tendencia").innerHTML = `
+    <div class="stats-panel__head">
+      <div>
+        <h3 class="stats-panel__titulo">Facturación y margen en el tiempo</h3>
+        <p class="stats-panel__sub">Cada barra es la facturación; el verde es la contribución marginal</p>
+      </div>
+      <div class="stats-toggle" id="tendencia-toggle">
+        <button data-gran="semana" class="${g === "semana" ? "activo" : ""}">Semana</button>
+        <button data-gran="mes" class="${g === "semana" ? "" : "activo"}">Mes</button>
+      </div>
+    </div>
+    <div class="leyenda">
+      <span class="leyenda__item"><i class="leyenda__sw leyenda__sw--margen"></i>Contribución</span>
+      <span class="leyenda__item"><i class="leyenda__sw leyenda__sw--costo"></i>Costo / envío</span>
+    </div>` + cuerpo;
+}
+
+// Primera compra (fecha) por email en toda la cache: sirve para separar clientes
+// nuevos de recurrentes.
+function primeraCompraPorEmail() {
+  const mapa = {};
+  for (const p of pedidosCache) {
+    if (p.estado !== "aprobado") continue;
+    const email = (p.cliente_email || "").trim().toLowerCase();
+    if (!email) continue;
+    const d = new Date(p.creado);
+    if (isNaN(d)) continue;
+    if (!mapa[email] || d < mapa[email]) mapa[email] = d;
+  }
+  return mapa;
+}
+
+// ③ Clientes: nuevos vs recurrentes en el período (según su primera compra).
+function renderClientes(i) {
+  const primera = primeraCompraPorEmail();
+  const desde = inicioDeRango(insightsRango);
+  const vistos = new Set();
+  let nuevos = 0, recurrentes = 0;
+  for (const p of i.aprobados) {
+    const email = (p.cliente_email || "").trim().toLowerCase();
+    if (!email || vistos.has(email)) continue;
+    vistos.add(email);
+    if (!desde || (primera[email] && primera[email] >= desde)) nuevos++; else recurrentes++;
+  }
+  const total = nuevos + recurrentes;
+  const cuerpo = !total
+    ? `<div class="vacio">Sin clientes con email en este período.</div>`
+    : `<div class="split">
+         <div class="split__barra">
+           <div class="split__parte split__parte--rec" style="width:${(recurrentes / total) * 100}%"></div>
+           <div class="split__parte split__parte--nue" style="width:${(nuevos / total) * 100}%"></div>
+         </div>
+         <div class="split__leyenda">
+           <span><i class="leyenda__sw leyenda__sw--margen"></i>Recurrentes <b>${recurrentes}</b></span>
+           <span><i class="leyenda__sw leyenda__sw--costo"></i>Nuevos <b>${nuevos}</b></span>
+         </div>
+       </div>`;
+  $("#stats-clientes").innerHTML =
+    `<h3 class="stats-panel__titulo">Clientes</h3>
+     <p class="stats-panel__sub">Nuevos vs recurrentes en el período · recompra ${i.tasaRecompra != null ? i.tasaRecompra + "%" : "—"}</p>` + cuerpo;
+}
+
+// ④ Por canal, como ranking (dónde entran los pedidos)
+function renderCanal(porCanal) {
+  const canales = Object.entries(porCanal);
+  const cuerpo = !canales.length
+    ? `<div class="vacio">Todavía no hay pedidos.</div>`
+    : (() => {
+        const max = Math.max(...canales.map(([, n]) => n)) || 1;
+        return `<div class="rank">` + canales.map(([canal, n]) => `<div class="rank__fila">
+            <span class="rank__nombre"><span class="canal canal--${escapar(canal)}">${escapar(CANALES[canal] || canal)}</span></span>
+            <span class="rank__valor">${n} pedido${n === 1 ? "" : "s"}</span>
+            <div class="rank__track"><div class="rank__barra" style="width:${(n / max) * 100}%"></div></div>
+          </div>`).join("") + `</div>`;
+      })();
+  $("#stats-canal").innerHTML =
+    `<h3 class="stats-panel__titulo">Por canal</h3>
+     <p class="stats-panel__sub">Pedidos por canal de compra</p>` + cuerpo;
+}
+
+// ⑤ Operación: consulta ocasional, compacta y al final.
+function renderOps(i) {
+  const item = (valor, label, nota, cls = "") => `
+    <div class="ops__item${cls ? " " + cls : ""}">
+      <strong class="ops__valor">${valor}</strong>
+      <span class="ops__label">${label}${nota ? ` · ${nota}` : ""}</span>
+    </div>`;
+  $("#ops").innerHTML =
+    item(i.pendientes.length, "Pendientes", '≈ "carritos" en curso', "ops__item--pendiente") +
+    item(i.rechazados.length, "Rechazados", "", "ops__item--rechazado") +
+    item(i.conCupon.length, "Cupones usados", `${formato.format(i.descuentoTotal)} en descuentos`);
 }
 
 // Ranking horizontal: la barra más larga fija la escala (100%); una sola serie,
@@ -353,25 +509,6 @@ function renderTopProductos(top) {
   $("#stats-top-productos").innerHTML =
     `<h3 class="stats-panel__titulo">Más vendidos</h3>
      <p class="stats-panel__sub">Unidades en pedidos cobrados</p>` + cuerpo;
-}
-
-// Columnas de una serie: la más alta fija la escala; una sola serie → verde de
-// marca, sin leyenda. La contribución puede ser negativa: la barra se topa en 0
-// pero el valor muestra el número real.
-function renderColumnas(containerId, serie, titulo, sub) {
-  const cuerpo = !serie.length
-    ? `<div class="vacio">Sin datos en este período.</div>`
-    : (() => {
-        const max = Math.max(...serie.map((s) => s.total), 0) || 1;
-        return `<div class="cols">` + serie.map((s) => `<div class="cols__col" title="${escapar(s.etiqueta)}: ${formato.format(Math.round(s.total))}">
-            <span class="cols__valor">${formato.format(Math.round(s.total))}</span>
-            <div class="cols__barra" style="height:${Math.max(0, (s.total / max) * 100)}%"></div>
-            <span class="cols__mes">${escapar(s.etiqueta)}</span>
-          </div>`).join("") + `</div>`;
-      })();
-  $(containerId).innerHTML =
-    `<h3 class="stats-panel__titulo">${titulo}</h3>
-     <p class="stats-panel__sub">${sub}</p>` + cuerpo;
 }
 
 // Rendimiento por origen/lote: ranking horizontal por unidades, con la
@@ -398,12 +535,20 @@ function sincronizarFiltrosInsights() {
     b.classList.toggle("filtro-activo", b.dataset.rango === insightsRango));
 }
 
-// Cambiar el rango de fechas: recalcula tarjetas y gráficos
+// Cambiar el rango de fechas: recalcula todo
 $("#stats-filtros").addEventListener("click", (e) => {
   const b = e.target.closest("[data-rango]");
   if (!b || b.dataset.rango === insightsRango) return;
   insightsRango = b.dataset.rango;
   renderInsights();
+});
+
+// Toggle semana/mes del gráfico de tendencia (encabezado re-renderizado)
+$("#tendencia").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-gran]");
+  if (!b || b.dataset.gran === insightsGranularidad) return;
+  insightsGranularidad = b.dataset.gran;
+  renderTendencia(calcularInsights(pedidosEnRango()).aprobados);
 });
 
 $("#filtros").addEventListener("click", (e) => {
