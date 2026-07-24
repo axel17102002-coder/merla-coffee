@@ -22,6 +22,9 @@ const RESPALDO = {
   pesoDripBagG: 18,
   pesoCafeBolsaG: 270,
   pesoMerchG: 350,
+  // Comisión promedio de Mercado Pago (%). Solo se usa para restarla de la
+  // rentabilidad en los pedidos cobrados por ese medio. 0 = no descontar.
+  comisionMp: 0,
 };
 
 const CLAVES = {
@@ -32,6 +35,7 @@ const CLAVES = {
   peso_drip_bag_g: "pesoDripBagG",
   peso_cafe_bolsa_g: "pesoCafeBolsaG",
   peso_merch_g: "pesoMerchG",
+  comision_mercadopago: "comisionMp",
 };
 
 // Trae los insumos tolerando el esquema viejo (columna `aplica` en vez de

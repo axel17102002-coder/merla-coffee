@@ -105,9 +105,11 @@ async function cargarPedidos() {
 // por pack (ya con insumos); simple: costo por unidad. Más el origen (para el
 // rendimiento por lote). Se cargan una vez, junto con los pedidos.
 let costosPorProducto = null;
+let comisionMpPct = 0; // comisión promedio de Mercado Pago (%), de la config
 async function cargarCostosInsights() {
   try {
-    const { productos } = await api("/api/admin-precios");
+    const { productos, cfg } = await api("/api/admin-precios");
+    comisionMpPct = cfg && Number(cfg.comisionMp) > 0 ? Number(cfg.comisionMp) : 0;
     costosPorProducto = {};
     for (const p of productos) {
       costosPorProducto[p.id] = {
@@ -144,7 +146,10 @@ function contribucionPedido(p) {
     else revSinCosto += rev;
   }
   const ingresoProducto = (Number(p.total) || 0) - (Number(p.envio_costo) || 0);
-  return { margen: ingresoProducto - costo, revSinCosto };
+  // Comisión de Mercado Pago: solo los pedidos cobrados por ese medio. Se cobra
+  // sobre el total (incluye envío), así que se aplica sobre p.total.
+  const comision = p.origen === "mercadopago" ? (Number(p.total) || 0) * (comisionMpPct / 100) : 0;
+  return { margen: ingresoProducto - costo - comision, revSinCosto };
 }
 
 function calcularInsights(pedidos) {
@@ -404,7 +409,7 @@ function renderTendencia(aprobados) {
     <div class="stats-panel__head">
       <div>
         <h3 class="stats-panel__titulo">Facturación y margen en el tiempo</h3>
-        <p class="stats-panel__sub">Cada barra es la facturación; el verde es la contribución marginal</p>
+        <p class="stats-panel__sub">Cada barra es la facturación; el verde es la contribución${comisionMpPct > 0 ? ` (neta de la comisión MP ${comisionMpPct}%)` : ""}</p>
       </div>
       <div class="stats-toggle" id="tendencia-toggle">
         <button data-gran="semana" class="${g === "semana" ? "activo" : ""}">Semana</button>
@@ -1351,6 +1356,7 @@ async function cargarPrecios() {
     renderInsumos();
     $("#cfg-gramos").value = cfgPrecios.gramosPorBag;
     $("#cfg-pack-desc").value = cfgPrecios.packDescuento;
+    $("#cfg-comision-mp").value = cfgPrecios.comisionMp != null ? cfgPrecios.comisionMp : 0;
     $("#cfg-peso-drip").value = cfgPrecios.pesoDripBagG;
     $("#cfg-peso-cafe14").value = cfgPrecios.pesoCafeBolsaG;
     $("#cfg-peso-merch").value = cfgPrecios.pesoMerchG;
@@ -1529,7 +1535,13 @@ async function guardarConfigGlobal(input, fila) {
       ponerEstado(fila, "✓ Guardado", true);
       toast("Packs recalculados con el nuevo descuento.");
     } else {
-      // Claves sin efecto sobre precios (ej. pesos para cotizar el envío): solo se guardan
+      // Claves sin efecto sobre precios (pesos de envío, comisión MP): solo se
+      // guardan. La comisión sí impacta en la contribución de Insights, así que
+      // actualizamos su valor local para que se refleje sin recargar.
+      if (clave === "comision_mercadopago") {
+        cfgPrecios.comisionMp = valor;
+        comisionMpPct = valor;
+      }
       ponerEstado(fila, "✓ Guardado", true);
     }
   } catch (err) {
