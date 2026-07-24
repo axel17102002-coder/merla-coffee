@@ -168,12 +168,18 @@ button:disabled { opacity: .55; cursor: wait; }
 /* Ranking: barras horizontales, una sola serie (verde de marca) */
 .rank { display: grid; gap: 11px; }
 .rank__fila { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; }
-.rank__nombre { font-size: .84rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank__nombre { min-width: 0; font-size: .84rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rank__valor { font-size: .84rem; font-weight: 700; color: var(--texto); font-variant-numeric: tabular-nums; }
 .rank__track { grid-column: 1 / -1; height: 10px; background: var(--crema); border-radius: 5px; overflow: hidden; }
 .rank__barra { height: 100%; background: var(--verde); border-radius: 0 5px 5px 0; min-width: 3px; }
 /* Comisión de MP dentro del ranking de métodos de pago (lo que se va) */
 .rank__costo { color: #a8452f; }
+/* En pantallas chicas los tres números del método de pago no entran al lado
+   del nombre: pasan abajo, alineados a la izquierda */
+@media (max-width: 560px) {
+  #stats-metodos .rank__fila { grid-template-columns: 1fr; }
+  #stats-metodos .rank__valor { text-align: left; }
+}
 .rank__aviso { display: inline-block; width: 15px; height: 15px; line-height: 15px; text-align: center; border-radius: 50%; background: var(--crema); color: var(--gris); font-size: .68rem; font-weight: 800; cursor: help; }
 
 /* Ventas por mes: columnas, una sola serie */
