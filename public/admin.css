@@ -60,11 +60,27 @@ button { cursor: pointer; }
 .canal--mercadopago { background: #d5ecfa; color: #0a5a8a; }
 .canal--whatsapp { background: #d9f2df; color: #1f7a3d; }
 .canal--modo { background: #e6ddf2; color: #5a3a8a; }
-/* Método con que se pagó en MP: lo completa el webhook y se puede corregir */
-.pedido__pago { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-.pedido__metodo { border: 1px solid var(--borde); border-radius: 8px; background: var(--blanco); padding: 3px 6px; font: inherit; font-size: .84rem; color: var(--texto); }
-.pedido__metodo:disabled { opacity: .6; }
-.pedido__metodo-estado { color: var(--gris); font-size: .78rem; }
+/* Método con que se pagó en MP: lo completa el webhook y se puede corregir.
+   El select va como pastilla, con su propio caret (appearance: none) para que
+   no rompa el estilo del panel. */
+.pedido__pago { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.pedido__pago-label { color: var(--gris); font-size: .84rem; }
+.pedido__metodo {
+  appearance: none; -webkit-appearance: none;
+  border: 1px solid var(--borde); border-radius: 999px;
+  background-color: var(--crema);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%232f4a36' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat; background-position: right 11px center; background-size: 9px;
+  padding: 5px 28px 5px 13px;
+  font: inherit; font-size: .8rem; font-weight: 700; color: var(--verde);
+  cursor: pointer; transition: border-color .15s, background-color .15s, box-shadow .15s;
+}
+.pedido__metodo:hover { border-color: var(--verde); background-color: #eae1c9; }
+.pedido__metodo:focus-visible { outline: 0; border-color: var(--verde); box-shadow: 0 0 0 3px #2f4a3626; }
+.pedido__metodo:disabled { cursor: progress; opacity: .55; }
+.pedido__metodo-estado { color: var(--gris); font-size: .76rem; font-weight: 600; opacity: 1; transition: opacity .4s; }
+.pedido__metodo-estado--ok { color: #2f6931; }
+.pedido__metodo-estado--se-va { opacity: 0; }
 .pedido ul { padding: 0; margin: 12px 0; list-style: none; }
 .pedido li { display: flex; justify-content: space-between; gap: 16px; padding: 4px 0; font-size: .92rem; }
 .pedido__meta { display: flex; justify-content: space-between; gap: 12px; align-items: center; border-top: 1px solid var(--borde); padding-top: 12px; }
@@ -139,7 +155,7 @@ button:disabled { opacity: .55; cursor: wait; }
 /* Insights */
 
 /* ① Pulso: 4 stat tiles con delta + sparkline */
-.pulso { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
+.pulso { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
 .pulso__tile { background: var(--papel); border: 1px solid var(--borde); border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 5px 18px #22301f10; }
 .pulso__tile--destacado { border-color: var(--verde); box-shadow: 0 6px 20px #2f4a3622; }
 .pulso__label { color: var(--gris); font-size: .82rem; font-weight: 700; }
@@ -155,7 +171,12 @@ button:disabled { opacity: .55; cursor: wait; }
 @media (max-width: 480px) { .pulso { grid-template-columns: 1fr; } }
 
 /* Dos paneles de gráficos lado a lado */
-.stats-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+.stats-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+/* Ritmo vertical de Insights: misma separación entre todos los bloques (antes
+   cada uno traía su propio margen y el de tendencia quedaba pegado al de abajo) */
+#seccion-insights > .pulso,
+#seccion-insights > .stats-panel,
+#seccion-insights > .stats-grid2 { margin-bottom: 24px; }
 .stats-panel { background: var(--papel); border: 1px solid var(--borde); border-radius: 16px; padding: 18px 20px; }
 .stats-panel__titulo { margin: 0 0 4px; font-family: "Baloo 2", sans-serif; color: var(--verde); font-size: .95rem; }
 .stats-panel__sub { margin: 0 0 14px; color: var(--gris); font-size: .78rem; }

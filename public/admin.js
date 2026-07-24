@@ -42,10 +42,11 @@ function selectorMetodoMp(p) {
   const opciones = [{ clave: "", etiqueta: "Sin especificar" }].concat(METODOS_MP)
     .map((m) => `<option value="${m.clave}"${(p.mp_metodo || "") === m.clave ? " selected" : ""}>${escapar(m.etiqueta)}</option>`)
     .join("");
-  return `<p class="pedido__extra pedido__pago">💳 Pagó con
+  return `<div class="pedido__pago">
+      <span class="pedido__pago-label">💳 Pagó con</span>
       <select class="pedido__metodo" data-metodo data-id="${escapar(p.id)}" aria-label="Método de pago de Mercado Pago">${opciones}</select>
       <span class="pedido__metodo-estado" data-metodo-estado></span>
-    </p>`;
+    </div>`;
 }
 
 // Línea de entrega para la tarjeta del pedido (retiro o dirección de envío)
@@ -245,24 +246,24 @@ function calcularInsights(pedidos) {
     .map(([origen, v]) => ({ origen, ...v }))
     .sort((a, b) => b.unidades - a.unidades);
 
-  // Cómo pagan en Mercado Pago: pedidos, facturación y comisión por método.
-  // Los que no tienen método guardado (pedidos previos a la migración) van
-  // juntos en "sin_dato" y se les aplica la comisión promedio.
-  const porMetodoMp = {};
+  // Cómo pagan, en todos los canales: pedidos, facturación y comisión por medio
+  // de pago. Los de Mercado Pago se abren por método (el que informa MP); los
+  // de WhatsApp son transferencia/depósito y no pagan comisión. Los de MP sin
+  // método guardado van juntos en "sin_dato", con la comisión promedio.
+  const porMedio = {};
   let comisionMpTotal = 0, facturacionMp = 0;
   for (const p of aprobados) {
-    if (p.origen !== "mercadopago") continue;
-    const clave = p.mp_metodo || "sin_dato";
-    if (!porMetodoMp[clave]) porMetodoMp[clave] = { clave, pedidos: 0, facturacion: 0, comision: 0 };
+    const clave = p.origen === "mercadopago" ? (p.mp_metodo || "sin_dato") : (p.origen || "otro");
+    if (!porMedio[clave]) porMedio[clave] = { clave, pedidos: 0, facturacion: 0, comision: 0 };
     const total = Number(p.total) || 0;
     const comision = comisionMpDe(p, cfgComisionMp);
-    porMetodoMp[clave].pedidos++;
-    porMetodoMp[clave].facturacion += total;
-    porMetodoMp[clave].comision += comision;
+    porMedio[clave].pedidos++;
+    porMedio[clave].facturacion += total;
+    porMedio[clave].comision += comision;
     comisionMpTotal += comision;
-    facturacionMp += total;
+    if (p.origen === "mercadopago") facturacionMp += total;
   }
-  const metodosPago = Object.values(porMetodoMp).sort((a, b) => b.facturacion - a.facturacion);
+  const metodosPago = Object.values(porMedio).sort((a, b) => b.facturacion - a.facturacion);
 
   return {
     aprobados, pendientes, rechazados, facturacion, contribucion, revSinCosto,
@@ -537,34 +538,46 @@ function renderCanal(porCanal) {
      <p class="stats-panel__sub">Pedidos por canal de compra</p>` + cuerpo;
 }
 
-// Cómo pagan en Mercado Pago y qué comisión deja cada método. Ranking por
+// Nombre y aclaración de cada medio de pago del panel. Los métodos de MP salen
+// de METODOS_MP; los otros canales cobran de otra forma (WhatsApp = transferencia).
+function medioDePago(clave) {
+  if (clave === "sin_dato") {
+    return { etiqueta: "Sin dato", nota: "Pedidos de Mercado Pago anteriores al registro del método: se les aplica la comisión promedio", dudoso: true };
+  }
+  if (clave === "whatsapp") {
+    return { etiqueta: "Transferencia", nota: "Pedidos coordinados por WhatsApp: transferencia o depósito, sin comisión" };
+  }
+  if (clave === "modo") return { etiqueta: "MODO", nota: "Pedidos cobrados con MODO" };
+  const etiqueta = etiquetaMetodoMp(clave);
+  if (!etiqueta) return { etiqueta: clave, nota: clave };
+  // La etiqueta de "dinero en cuenta" ya dice Mercado Pago: no lo repetimos
+  return { etiqueta, nota: etiqueta.includes("Mercado Pago") ? etiqueta : `Mercado Pago · ${etiqueta}` };
+}
+
+// Cómo pagan, en todos los canales, y qué comisión deja cada medio. Ranking por
 // facturación; la comisión va al lado porque es la razón de ser del panel.
 function renderMetodosPago(i) {
   const lista = i.metodosPago;
   const pctEfectivo = i.facturacionMp > 0 ? (i.comisionMpTotal / i.facturacionMp) * 100 : null;
   const cuerpo = !lista.length
-    ? `<div class="vacio">Sin pedidos cobrados por Mercado Pago en este período.</div>`
+    ? `<div class="vacio">Sin pedidos cobrados en este período.</div>`
     : (() => {
         const max = Math.max(...lista.map((m) => m.facturacion)) || 1;
         return `<div class="rank">` + lista.map((m) => {
-          const sinDato = m.clave === "sin_dato";
-          const etiqueta = sinDato ? "Sin dato" : (etiquetaMetodoMp(m.clave) || m.clave);
+          const { etiqueta, nota, dudoso } = medioDePago(m.clave);
           const pct = m.facturacion > 0 ? (m.comision / m.facturacion) * 100 : 0;
-          const titulo = sinDato
-            ? "Pedidos anteriores al registro del método: se les aplica la comisión promedio"
-            : etiqueta;
           return `<div class="rank__fila">
-            <span class="rank__nombre" title="${escapar(titulo)}">${escapar(etiqueta)}${sinDato ? " <span class=\"rank__aviso\">?</span>" : ""}</span>
+            <span class="rank__nombre" title="${escapar(nota)}">${escapar(etiqueta)}${dudoso ? " <span class=\"rank__aviso\">?</span>" : ""}</span>
             <span class="rank__valor">${m.pedidos} ped. · ${formato.format(Math.round(m.facturacion))}${m.comision > 0 ? ` · <b class="rank__costo">−${formato.format(Math.round(m.comision))}</b> (${pct.toFixed(1)}%)` : ""}</span>
             <div class="rank__track"><div class="rank__barra" style="width:${(m.facturacion / max) * 100}%"></div></div>
           </div>`;
         }).join("") + `</div>`;
       })();
   const sub = !lista.length || !hayComisionMp()
-    ? "Pedidos cobrados por Mercado Pago (cargá las comisiones en Precios para ver cuánto se lleva MP)"
-    : `Comisión del período <b>${formato.format(Math.round(i.comisionMpTotal))}</b> · ${pctEfectivo.toFixed(1)}% efectivo sobre lo cobrado por MP`;
+    ? "Pedidos cobrados por medio de pago (cargá las comisiones en Precios para ver cuánto se lleva Mercado Pago)"
+    : `Comisión de Mercado Pago en el período <b>${formato.format(Math.round(i.comisionMpTotal))}</b> · ${pctEfectivo.toFixed(1)}% de lo cobrado por MP · la transferencia no paga comisión`;
   $("#stats-metodos").innerHTML =
-    `<h3 class="stats-panel__titulo">Cómo pagan en Mercado Pago</h3>
+    `<h3 class="stats-panel__titulo">Cómo pagan</h3>
      <p class="stats-panel__sub">${sub}</p>` + cuerpo;
 }
 
@@ -682,19 +695,27 @@ $("#pedidos").addEventListener("change", async (e) => {
   const estado = select.parentElement.querySelector("[data-metodo-estado]");
   const pedido = pedidosCache.find((p) => p.id === select.dataset.id);
   const anterior = pedido ? pedido.mp_metodo : null;
+  const ponerEstadoMetodo = (texto, ok = false, seVa = false) => {
+    clearTimeout(estado.dataset.timer);
+    estado.textContent = texto;
+    estado.classList.toggle("pedido__metodo-estado--ok", ok);
+    estado.classList.remove("pedido__metodo-estado--se-va");
+    // El "✓ Guardado" se desvanece solo; el error queda hasta el próximo intento
+    if (seVa) estado.dataset.timer = setTimeout(() => estado.classList.add("pedido__metodo-estado--se-va"), 1800);
+  };
   select.disabled = true;
-  estado.textContent = "Guardando…";
+  ponerEstadoMetodo("Guardando…");
   try {
     const r = await api("/api/admin-pedidos", {
       method: "PATCH",
       body: JSON.stringify({ id: select.dataset.id, mp_metodo: select.value }),
     });
     if (pedido) pedido.mp_metodo = r.mp_metodo;
-    estado.textContent = "✓ Guardado";
+    ponerEstadoMetodo("✓ Guardado", true, true);
     renderInsights();
   } catch (err) {
     select.value = anterior || "";
-    estado.textContent = `⚠️ ${err.message}`;
+    ponerEstadoMetodo(`⚠️ ${err.message}`);
   } finally {
     select.disabled = false;
   }
