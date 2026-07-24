@@ -25,6 +25,15 @@ const RESPALDO = {
   // Comisión promedio de Mercado Pago (%). Solo se usa para restarla de la
   // rentabilidad en los pedidos cobrados por ese medio. 0 = no descontar.
   comisionMp: 0,
+  // Comisión por método de pago de MP (%). El pedido guarda con qué método se
+  // pagó (`mp_metodo`); si su % es 0 se usa el promedio de arriba.
+  comisionMpMetodos: {
+    dinero: 0,
+    debito: 0,
+    credito: 0,
+    prepaga: 0,
+    cuotas_sin_tarjeta: 0,
+  },
 };
 
 const CLAVES = {
@@ -36,6 +45,16 @@ const CLAVES = {
   peso_cafe_bolsa_g: "pesoCafeBolsaG",
   peso_merch_g: "pesoMerchG",
   comision_mercadopago: "comisionMp",
+};
+
+// Comisiones por método de MP: van anidadas en cfg.comisionMpMetodos, con la
+// misma clave que guarda `pedidos.mp_metodo` (ver METODOS_MP en motor.js).
+const CLAVES_METODO_MP = {
+  comision_mp_dinero: "dinero",
+  comision_mp_debito: "debito",
+  comision_mp_credito: "credito",
+  comision_mp_prepaga: "prepaga",
+  comision_mp_cuotas_sin_tarjeta: "cuotas_sin_tarjeta",
 };
 
 // Trae los insumos tolerando el esquema viejo (columna `aplica` en vez de
@@ -68,15 +87,26 @@ async function obtenerCostos() {
     const suma = (campo) =>
       Math.round(insumos.reduce((t, i) => t + Number(i.costo || 0) * Number(i[campo] || 0), 0) * 100) / 100;
 
-    const cfg = { ...RESPALDO, fijoUnidad: suma("cant_unidad"), fijoPack: suma("cant_pack") };
+    const cfg = {
+      ...RESPALDO,
+      comisionMpMetodos: { ...RESPALDO.comisionMpMetodos },
+      fijoUnidad: suma("cant_unidad"),
+      fijoPack: suma("cant_pack"),
+    };
     for (const fila of config) {
       const nombre = CLAVES[fila.clave];
       if (nombre) cfg[nombre] = Number(fila.valor);
+      const metodo = CLAVES_METODO_MP[fila.clave];
+      if (metodo) cfg.comisionMpMetodos[metodo] = Number(fila.valor);
     }
     return { cfg, insumos, desdeLaBase: true };
   } catch (err) {
     console.warn("costos: uso los valores de respaldo:", err.message);
-    return { cfg: { ...RESPALDO }, insumos: [], desdeLaBase: false };
+    return {
+      cfg: { ...RESPALDO, comisionMpMetodos: { ...RESPALDO.comisionMpMetodos } },
+      insumos: [],
+      desdeLaBase: false,
+    };
   }
 }
 

@@ -1,8 +1,10 @@
 <!doctype html>
 <html lang="es-AR">
 <head>
-  <link rel="icon" type="image/png" sizes="48x48" href="/img/favicon_v2.png?v=4">
-  <link rel="apple-touch-icon" href="/img/favicon_v2.png?v=4">
+  <link rel="icon" type="image/png" sizes="32x32" href="/img/favicon-32.png?v=5">
+  <link rel="icon" type="image/png" sizes="64x64" href="/img/favicon-64.png?v=5">
+  <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon.png?v=5">
+  <meta name="apple-mobile-web-app-title" content="Merla Admin">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
@@ -244,6 +246,13 @@
                     <span class="px-estado" data-estado></span>
                   </div>
                 </div>
+                <div class="px-config__fila px-config__fila--nota">
+                  <div class="px-config__info">
+                    <strong>Comisión por método de pago</strong>
+                    <span>MP cobra distinto según con qué pagó el cliente. Cada pedido nuevo guarda su método (lo informa la API de MP al acreditarse) y usa el % de acá. 0 = usar el promedio de arriba; los pedidos viejos también usan el promedio.</span>
+                  </div>
+                </div>
+                <div id="cfg-comision-metodos"></div>
               </div>
             </section>
 

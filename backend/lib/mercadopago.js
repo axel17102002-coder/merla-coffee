@@ -2,6 +2,8 @@
 // Solo necesita MP_ACCESS_TOKEN: con token TEST-... opera en sandbox y con
 // APP_USR-... cobra de verdad. Sin SDK: son dos endpoints REST.
 
+const { sb } = require("./supabase.js");
+
 const API = "https://api.mercadopago.com";
 
 function token() {
@@ -54,4 +56,42 @@ function obtenerPagoMp(id) {
   return mp(`/v1/payments/${id}`);
 }
 
-module.exports = { ambienteMp, crearPreferencia, obtenerPagoMp };
+// Con qué medio pagó el cliente, normalizado a las claves de METODOS_MP
+// (motor.js) para poder aplicarle su comisión. La API de MP lo devuelve en
+// `payment_type_id` (y en `payment_method_id` para Mercado Crédito, que viaja
+// como consumer_credits). Lo que no reconocemos cae en "otros" → comisión
+// promedio.
+const TIPOS_MP = {
+  account_money: "dinero",
+  digital_wallet: "dinero",
+  debit_card: "debito",
+  credit_card: "credito",
+  prepaid_card: "prepaga",
+  voucher_card: "prepaga",
+};
+
+function metodoDePagoMp(pago) {
+  if (!pago) return null;
+  const metodo = String(pago.payment_method_id || "");
+  const tipo = String(pago.payment_type_id || "");
+  if (metodo === "consumer_credits" || tipo === "digital_currency") return "cuotas_sin_tarjeta";
+  return TIPOS_MP[tipo] || "otros";
+}
+
+// Deja registrado en el pedido con qué método pagó el cliente, para restarle en
+// Insights la comisión que corresponde. Es informativo y "best effort": si falla,
+// el pedido se aprueba igual y la comisión cae al promedio general.
+async function registrarMetodoDePago(ref, pago) {
+  const metodo = metodoDePagoMp(pago);
+  if (!ref || !metodo) return;
+  try {
+    await sb(`pedidos?modo_id=eq.${encodeURIComponent(ref)}`, {
+      method: "PATCH",
+      body: { mp_metodo: metodo },
+    });
+  } catch (err) {
+    console.warn("mercadopago: no pude guardar el método de pago:", err.message);
+  }
+}
+
+module.exports = { ambienteMp, crearPreferencia, obtenerPagoMp, metodoDePagoMp, registrarMetodoDePago };

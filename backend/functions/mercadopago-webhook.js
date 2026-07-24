@@ -9,7 +9,7 @@
 // pago exista y esté aprobado en la API de MP consultada con nuestro token.
 
 const { sbRpc } = require("../lib/supabase.js");
-const { obtenerPagoMp } = require("../lib/mercadopago.js");
+const { obtenerPagoMp, registrarMetodoDePago } = require("../lib/mercadopago.js");
 const { avisarVentaPorRef } = require("../lib/avisos.js");
 
 exports.handler = async (event) => {
@@ -29,6 +29,7 @@ exports.handler = async (event) => {
       const ref = pago ? pago.external_reference : null;
 
       if (ref && pago.status === "approved") {
+        await registrarMetodoDePago(String(ref), pago);
         const r = await sbRpc("aprobar_pedido", { p_modo_id: String(ref) });
         console.log("mp-webhook aprobado:", id, ref, JSON.stringify(r));
         // Solo avisamos la primera vez (la RPC es idempotente)

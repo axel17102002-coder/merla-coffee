@@ -17,6 +17,8 @@ const zipnova = require("../lib/zipnova.js");
 const CLAVES_VALIDAS = [
   "margen_unidad", "gramos_por_bag", "pack_unidades", "pack_descuento",
   "peso_drip_bag_g", "peso_cafe_bolsa_g", "peso_merch_g", "comision_mercadopago",
+  "comision_mp_dinero", "comision_mp_debito", "comision_mp_credito",
+  "comision_mp_prepaga", "comision_mp_cuotas_sin_tarjeta",
 ];
 
 // Reaplica el margen objetivo a todos los cafés que tengan costo cargado.

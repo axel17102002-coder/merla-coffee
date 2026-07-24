@@ -7,15 +7,27 @@
 const { sb, sbRpc } = require("../lib/supabase.js");
 const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
 
+const CAMPOS = "id,numero,origen,items,total,cupon,descuento_cupon,cliente_email,estado,creado,puntos_ganados,puntos_canjeados,envio,envio_costo";
+
+// `mp_metodo` (el medio con que se pagó en MP, para su comisión) puede no existir
+// todavía: si falta la migración, el panel sigue andando sin esa columna.
+async function traerPedidos() {
+  const orden = "&order=creado.desc&limit=200";
+  try {
+    return await sb(`pedidos?select=${CAMPOS},mp_metodo${orden}`);
+  } catch (err) {
+    console.warn("admin-pedidos: falta mp_metodo (correr migracion-metodo-pago-mp.sql):", err.message);
+    return await sb(`pedidos?select=${CAMPOS}${orden}`);
+  }
+}
+
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
   if (!esAdmin(event)) return respuestaNoAutorizado();
 
   try {
     if (event.httpMethod === "GET") {
-      const pedidos = await sb(
-        "pedidos?select=id,numero,origen,items,total,cupon,descuento_cupon,cliente_email,estado,creado,puntos_ganados,puntos_canjeados,envio,envio_costo&order=creado.desc&limit=200"
-      );
+      const pedidos = await traerPedidos();
       return { statusCode: 200, headers, body: JSON.stringify({ pedidos }) };
     }
 

@@ -28,6 +28,12 @@ function numeroDe(p) {
 }
 const CANALES = { mercadopago: "Mercado Pago", whatsapp: "WhatsApp", modo: "MODO" };
 
+// Etiqueta del método con que se pagó en MP (lo guarda el webhook al acreditarse)
+function etiquetaMetodoMp(clave) {
+  const m = METODOS_MP.find((x) => x.clave === clave);
+  return m ? m.etiqueta : null;
+}
+
 // Línea de entrega para la tarjeta del pedido (retiro o dirección de envío)
 function renderEntrega(envio) {
   if (!envio || !envio.metodo) return "";
@@ -51,6 +57,7 @@ function renderPedidos() {
     const lineas = (p.items || []).map((i) => `<li><span>${escapar(i.qty)}× ${escapar(i.nombre)}</span> <span>${formato.format(i.precio_unitario * i.qty)}</span></li>`).join("");
     const fecha = new Date(p.creado).toLocaleString("es-AR", { dateStyle: "medium", timeStyle: "short" });
     const canal = CANALES[p.origen] || p.origen || "—";
+    const metodoMp = etiquetaMetodoMp(p.mp_metodo);
     const pendienteWsp = p.estado === "pendiente" && p.origen === "whatsapp";
     const cupon = p.cupon ? `<p class="pedido__extra">Cupón ${escapar(p.cupon)}: -${formato.format(p.descuento_cupon || 0)}</p>` : "";
     const puntos = p.cliente_email ? `<p class="pedido__extra">Puntos: +${p.puntos_ganados}${p.puntos_canjeados ? ` · canje -${p.puntos_canjeados}` : ""}</p>` : "";
@@ -61,6 +68,7 @@ function renderPedidos() {
           <span class="pedido__num">${escapar(numeroDe(p))}</span>
           <span class="estado">${escapar(p.estado)}</span>
           <span class="canal canal--${escapar(p.origen)}">${escapar(canal)}</span>
+          ${metodoMp ? `<span class="metodo-mp" title="Método de pago informado por Mercado Pago">${escapar(metodoMp)}</span>` : ""}
         </div>
         <time>${fecha}</time>
       </div>
@@ -105,11 +113,16 @@ async function cargarPedidos() {
 // por pack (ya con insumos); simple: costo por unidad. Más el origen (para el
 // rendimiento por lote). Se cargan una vez, junto con los pedidos.
 let costosPorProducto = null;
-let comisionMpPct = 0; // comisión promedio de Mercado Pago (%), de la config
+// Comisiones de Mercado Pago de la config: el promedio general y el % de cada
+// método de pago (el pedido guarda con cuál se pagó en `mp_metodo`).
+let cfgComisionMp = { comisionMp: 0, comisionMpMetodos: {} };
 async function cargarCostosInsights() {
   try {
     const { productos, cfg } = await api("/api/admin-precios");
-    comisionMpPct = cfg && Number(cfg.comisionMp) > 0 ? Number(cfg.comisionMp) : 0;
+    cfgComisionMp = {
+      comisionMp: cfg && Number(cfg.comisionMp) > 0 ? Number(cfg.comisionMp) : 0,
+      comisionMpMetodos: (cfg && cfg.comisionMpMetodos) || {},
+    };
     costosPorProducto = {};
     for (const p of productos) {
       costosPorProducto[p.id] = {
@@ -121,6 +134,12 @@ async function cargarCostosInsights() {
   } catch {
     costosPorProducto = costosPorProducto || {};
   }
+}
+
+// ¿Hay alguna comisión de MP cargada? (el promedio o la de algún método)
+function hayComisionMp() {
+  const m = cfgComisionMp.comisionMpMetodos || {};
+  return cfgComisionMp.comisionMp > 0 || Object.keys(m).some((k) => Number(m[k]) > 0);
 }
 
 // Contribución marginal de un pedido cobrado: ingreso de productos (total menos
@@ -146,9 +165,9 @@ function contribucionPedido(p) {
     else revSinCosto += rev;
   }
   const ingresoProducto = (Number(p.total) || 0) - (Number(p.envio_costo) || 0);
-  // Comisión de Mercado Pago: solo los pedidos cobrados por ese medio. Se cobra
-  // sobre el total (incluye envío), así que se aplica sobre p.total.
-  const comision = p.origen === "mercadopago" ? (Number(p.total) || 0) * (comisionMpPct / 100) : 0;
+  // Comisión de Mercado Pago: solo los pedidos cobrados por ese medio, con el %
+  // del método con que se pagó (o el promedio si no se sabe). Ver motor.js.
+  const comision = comisionMpDe(p, cfgComisionMp);
   return { margen: ingresoProducto - costo - comision, revSinCosto };
 }
 
@@ -409,7 +428,7 @@ function renderTendencia(aprobados) {
     <div class="stats-panel__head">
       <div>
         <h3 class="stats-panel__titulo">Facturación y margen en el tiempo</h3>
-        <p class="stats-panel__sub">Cada barra es la facturación; el verde es la contribución${comisionMpPct > 0 ? ` (neta de la comisión MP ${comisionMpPct}%)` : ""}</p>
+        <p class="stats-panel__sub">Cada barra es la facturación; el verde es la contribución${hayComisionMp() ? " (neta de la comisión de Mercado Pago)" : ""}</p>
       </div>
       <div class="stats-toggle" id="tendencia-toggle">
         <button data-gran="semana" class="${g === "semana" ? "activo" : ""}">Semana</button>
@@ -1357,6 +1376,7 @@ async function cargarPrecios() {
     $("#cfg-gramos").value = cfgPrecios.gramosPorBag;
     $("#cfg-pack-desc").value = cfgPrecios.packDescuento;
     $("#cfg-comision-mp").value = cfgPrecios.comisionMp != null ? cfgPrecios.comisionMp : 0;
+    renderComisionesMp();
     $("#cfg-peso-drip").value = cfgPrecios.pesoDripBagG;
     $("#cfg-peso-cafe14").value = cfgPrecios.pesoCafeBolsaG;
     $("#cfg-peso-merch").value = cfgPrecios.pesoMerchG;
@@ -1368,6 +1388,23 @@ async function cargarPrecios() {
   } catch (err) {
     mensaje("#precio-message", `⚠️ ${err.message}`);
   }
+}
+
+// Una fila por método de pago de MP (los que tienen su propia clave de config).
+// Se guardan solas, igual que el resto de la configuración.
+function renderComisionesMp() {
+  const porMetodo = cfgPrecios.comisionMpMetodos || {};
+  $("#cfg-comision-metodos").innerHTML = METODOS_MP.filter((m) => m.config).map((m) => {
+    const valor = porMetodo[m.clave] != null ? porMetodo[m.clave] : 0;
+    return `<div class="px-config__fila px-config__fila--metodo">
+        <div class="px-config__info"><strong>${escapar(m.etiqueta)}</strong></div>
+        <div class="px-config__control">
+          <input data-clave="${m.config}" type="number" min="0" max="100" step="0.01" inputmode="decimal" value="${valor}" aria-label="Comisión de MP: ${escapar(m.etiqueta)}">
+          <span class="px-unidad">%</span>
+          <span class="px-estado" data-estado></span>
+        </div>
+      </div>`;
+  }).join("");
 }
 
 // ===== Insumos: tabla con guardado automático =====
@@ -1501,13 +1538,15 @@ $("#insumo-form").addEventListener("submit", async (e) => {
 
 // ===== Configuración global (se guarda sola) =====
 const configPendientes = new Map();
-document.querySelectorAll(".px-config [data-clave]").forEach((input) => {
-  input.addEventListener("input", () => {
-    const fila = input.closest(".px-config__fila");
-    ponerEstado(fila, "Guardando…");
-    clearTimeout(configPendientes.get(input.dataset.clave));
-    configPendientes.set(input.dataset.clave, setTimeout(() => guardarConfigGlobal(input, fila), 800));
-  });
+// Delegado: las comisiones por método de MP se renderizan después (ver
+// renderComisionesMp), así que no alcanza con enganchar los inputs del HTML.
+document.addEventListener("input", (e) => {
+  const input = e.target.closest(".px-config [data-clave]");
+  if (!input) return;
+  const fila = input.closest(".px-config__fila");
+  ponerEstado(fila, "Guardando…");
+  clearTimeout(configPendientes.get(input.dataset.clave));
+  configPendientes.set(input.dataset.clave, setTimeout(() => guardarConfigGlobal(input, fila), 800));
 });
 
 async function guardarConfigGlobal(input, fila) {
@@ -1540,7 +1579,12 @@ async function guardarConfigGlobal(input, fila) {
       // actualizamos su valor local para que se refleje sin recargar.
       if (clave === "comision_mercadopago") {
         cfgPrecios.comisionMp = valor;
-        comisionMpPct = valor;
+        cfgComisionMp.comisionMp = valor;
+      }
+      const metodoMp = METODOS_MP.find((m) => m.config === clave);
+      if (metodoMp) {
+        cfgPrecios.comisionMpMetodos = { ...(cfgPrecios.comisionMpMetodos || {}), [metodoMp.clave]: valor };
+        cfgComisionMp.comisionMpMetodos = { ...cfgComisionMp.comisionMpMetodos, [metodoMp.clave]: valor };
       }
       ponerEstado(fila, "✓ Guardado", true);
     }

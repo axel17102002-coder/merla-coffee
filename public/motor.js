@@ -47,6 +47,39 @@ function numeroPedido(n) {
   return "#" + String(n || 0).padStart(4, "0");
 }
 
+// ===== Comisión de Mercado Pago por método de pago =====
+// MP cobra distinto según con qué pagó el cliente. La clave se guarda en
+// `pedidos.mp_metodo` (la completa el webhook, o a mano desde /admin) y el % de
+// cada método vive en `configuracion` (sensible: nunca acá).
+const METODOS_MP = [
+  { clave: "dinero", etiqueta: "Dinero en Mercado Pago", config: "comision_mp_dinero" },
+  { clave: "debito", etiqueta: "Débito", config: "comision_mp_debito" },
+  { clave: "credito", etiqueta: "Crédito", config: "comision_mp_credito" },
+  { clave: "prepaga", etiqueta: "Prepaga", config: "comision_mp_prepaga" },
+  { clave: "cuotas_sin_tarjeta", etiqueta: "Cuotas sin tarjeta", config: "comision_mp_cuotas_sin_tarjeta" },
+  { clave: "otros", etiqueta: "Otro medio", config: null },
+];
+
+// % de comisión de un método. Si el método no tiene su % cargado (o es 0), cae
+// al promedio general (`comisionMp`). Así los pedidos viejos, los de método
+// desconocido y los métodos sin configurar siguen usando el promedio.
+function comisionMpPorcentaje(metodo, cfg) {
+  const porMetodo = (cfg && cfg.comisionMpMetodos) || {};
+  const propio = metodo ? Number(porMetodo[metodo]) : NaN;
+  if (Number.isFinite(propio) && propio > 0) return propio;
+  const promedio = Number(cfg && cfg.comisionMp);
+  return Number.isFinite(promedio) && promedio > 0 ? promedio : 0;
+}
+
+// Comisión en $ de un pedido. Solo los cobrados por Mercado Pago pagan
+// comisión, y se calcula sobre el total (MP cobra sobre lo cobrado, envío
+// incluido). Los de WhatsApp devuelven 0.
+function comisionMpDe(pedido, cfg) {
+  if (!pedido || pedido.origen !== "mercadopago") return 0;
+  const total = Number(pedido.total) || 0;
+  return (total * comisionMpPorcentaje(pedido.mp_metodo, cfg)) / 100;
+}
+
 // ===== Cadena de precios desde el costo del café =====
 // costo del kilo → costo del café por drip bag → + insumos → precio de venta.
 //
@@ -274,7 +307,8 @@ function calcularPedido(items, opciones, datos) {
 // Export para Node (funciones de Netlify); en el browser quedan como globales.
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    CONFIG, presentacionesDe, ahorroDe, precioTransferencia, numeroPedido, calcularPedido,
+    CONFIG, METODOS_MP, comisionMpPorcentaje, comisionMpDe,
+    presentacionesDe, ahorroDe, precioTransferencia, numeroPedido, calcularPedido,
     precioPack, costoCafePorUnidad, costoUnidad, costoPack,
     precioUnidadDesdeCosto, costoKiloDesdePrecio, margenPack,
     margenUnidadReal, margenSimple, redondearPrecio,
