@@ -1,0 +1,14 @@
+{
+  "name": "Merla Coffee",
+  "short_name": "Merla",
+  "description": "Café de especialidad en drip bags. Envíos a todo el país desde La Plata.",
+  "lang": "es-AR",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#f2ead8",
+  "theme_color": "#f2ead8",
+  "icons": [
+    { "src": "/img/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/img/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
