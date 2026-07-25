@@ -199,8 +199,8 @@ section[id], footer[id] { scroll-margin-top: 90px; }
   letter-spacing: 0.12em;
   font-size: 0.76rem;
   font-weight: 800;
-  color: var(--verde);
-  background: var(--caramelo-suave);
+  color: var(--crema);
+  background: var(--cacao);
   padding: 6px 14px;
   border-radius: 999px;
   margin-bottom: 20px;
@@ -858,14 +858,18 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 .cart .cart-item__name,
 .cart .cart-item__total { color: var(--panel-texto); }
 .cart .cart-item__price { color: var(--panel-tenue); }
-.cart .cart-item__pres { background: var(--panel-alto); border-color: var(--panel-borde); color: var(--panel-tenue); }
-.cart .cart-item__qty button { background: var(--panel-alto); border-color: var(--panel-borde); color: var(--panel-texto); }
+/* En la zona clara, los chips y los +/- van al tono oscuro para despegarse */
+.cart .cart-item__pres { background: var(--panel); border-color: var(--panel-borde); color: var(--panel-tenue); }
+.cart .cart-item__qty button { background: var(--panel); border-color: var(--panel-borde); color: var(--panel-texto); }
 .cart .cart-item__qty button:hover { background: var(--panel-borde); }
 .cart .cart-item__remove,
 .cart .cart__coupon-applied button,
 .cart .points-box__quitar { color: #eda893; }
 
-.cart .cart__foot { background: var(--panel-alto); border-top-color: var(--panel-borde); }
+/* La lista de productos va en el tono claro y la parte de completar datos +
+   pagar en el oscuro: separa las dos mitades del carrito de un vistazo */
+.cart .cart__items { background: var(--panel-alto); }
+.cart .cart__foot { background: var(--panel); border-top-color: var(--panel-borde); }
 .cart .cart__row { color: var(--panel-tenue); }
 .cart .cart__row--discount { color: #93d6a8; }
 .cart .cart__row--total { color: var(--panel-texto); }
