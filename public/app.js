@@ -197,6 +197,7 @@ function renderFiltros() {
     box.hidden = false;
     box.innerHTML = html;
   });
+  marcarDeslizables();
 }
 
 // ===== Render de productos =====
@@ -344,6 +345,7 @@ function construirTabsCategorias(hayCafe14, hayTazas) {
   }
 
   aplicarCategoria(categoriaActiva);
+  marcarDeslizables();
 }
 
 // Muestra el panel de la categoría activa y oculta los demás (sin scrollear)
@@ -367,6 +369,113 @@ function aplicarCategoria(cat) {
 function centrarPill(pill) {
   if (pill) pill.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
 }
+
+// ===== Barras de pills: arrastrar con el mouse =====
+// En touch ya funciona el swipe nativo (overflow-x). Esto agrega el "agarrar y
+// tirar" con el mouse, que si no obliga a usar la rueda o shift+rueda. Va con
+// delegación en document porque las barras se re-renderizan.
+
+// Marca las barras que hoy se desbordan, para mostrar la manito solo ahí
+function marcarDeslizables() {
+  document.querySelectorAll(".cat-tabs, .filtros").forEach((pista) =>
+    pista.classList.toggle("deslizable", pista.scrollWidth > pista.clientWidth + 1)
+  );
+}
+window.addEventListener("resize", marcarDeslizables);
+
+let arrastre = null;
+
+document.addEventListener("pointerdown", (e) => {
+  if (e.pointerType !== "mouse" || e.button !== 0) return;
+  // Agarrar la pill activa mueve la selección, no la barra (ver más abajo)
+  if (e.target.closest(".cat-tab.activo, .filtro.activo")) return;
+  const pista = e.target.closest(".cat-tabs, .filtros");
+  if (!pista || pista.scrollWidth <= pista.clientWidth) return;
+  arrastre = { pista, x0: e.clientX, scroll0: pista.scrollLeft, movido: false };
+});
+
+document.addEventListener("pointermove", (e) => {
+  if (!arrastre) return;
+  const dx = e.clientX - arrastre.x0;
+  // Tolerancia de 4 px: por debajo sigue siendo un click, no un arrastre
+  if (!arrastre.movido && Math.abs(dx) < 4) return;
+  arrastre.movido = true;
+  arrastre.pista.classList.add("arrastrando");
+  arrastre.pista.scrollLeft = arrastre.scroll0 - dx;
+  e.preventDefault();
+}, { passive: false });
+
+function terminarArrastre() {
+  if (!arrastre) return;
+  const { pista, movido } = arrastre;
+  arrastre = null;
+  pista.classList.remove("arrastrando");
+  if (!movido) return;
+  // Si arrastró, nos comemos el click que viene después para no cambiar de
+  // filtro sin querer. El timeout lo saca si ese click nunca llega.
+  const tragarClick = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
+  document.addEventListener("click", tragarClick, { capture: true, once: true });
+  setTimeout(() => document.removeEventListener("click", tragarClick, { capture: true }), 50);
+}
+
+document.addEventListener("pointerup", terminarArrastre);
+document.addEventListener("pointercancel", terminarArrastre);
+
+// ===== Arrastrar la pill verde para cambiar de opción =====
+// La pill activa se agarra y se desliza por la barra: el verde acompaña al
+// puntero (o al dedo) y el filtro se aplica al soltar. Funciona igual que
+// clickear la opción, pero se siente como mover el selector.
+let arrastrePill = null;
+
+// Pill que cae bajo esa x; fuera de los extremos, la más cercana
+function pillEnX(pista, x) {
+  const pills = [...pista.children];
+  let cerca = null, dist = Infinity;
+  for (const p of pills) {
+    const r = p.getBoundingClientRect();
+    if (x >= r.left && x <= r.right) return p;
+    const d = Math.abs(x - (r.left + r.width / 2));
+    if (d < dist) { dist = d; cerca = p; }
+  }
+  return cerca;
+}
+
+document.addEventListener("pointerdown", (e) => {
+  if (e.pointerType === "mouse" && e.button !== 0) return;
+  const pill = e.target.closest(".cat-tab.activo, .filtro.activo");
+  if (!pill || !pill.parentElement) return;
+  arrastrePill = { pista: pill.parentElement, origen: pill, actual: pill, x0: e.clientX, movido: false };
+});
+
+document.addEventListener("pointermove", (e) => {
+  if (!arrastrePill) return;
+  if (!arrastrePill.movido && Math.abs(e.clientX - arrastrePill.x0) < 4) return;
+  arrastrePill.movido = true;
+  arrastrePill.pista.classList.add("arrastrando-pill");
+  e.preventDefault();
+  const destino = pillEnX(arrastrePill.pista, e.clientX);
+  if (destino && destino !== arrastrePill.actual) {
+    arrastrePill.actual.classList.remove("activo");
+    destino.classList.add("activo");
+    arrastrePill.actual = destino;
+  }
+}, { passive: false });
+
+function terminarArrastrePill() {
+  if (!arrastrePill) return;
+  const { pista, origen, actual, movido } = arrastrePill;
+  arrastrePill = null;
+  pista.classList.remove("arrastrando-pill");
+  if (!movido || actual === origen) return;
+  // Dejamos el verde donde estaba y disparamos el click de la opción elegida:
+  // así el cambio pasa por la misma lógica de siempre (filtrar + centrar).
+  actual.classList.remove("activo");
+  origen.classList.add("activo");
+  actual.click();
+}
+
+document.addEventListener("pointerup", terminarArrastrePill);
+document.addEventListener("pointercancel", terminarArrastrePill);
 
 $("#cat-tabs").addEventListener("click", (e) => {
   const b = e.target.closest("[data-categoria]");

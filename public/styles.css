@@ -94,11 +94,16 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 
 .header__logo img { height: 46px; width: auto; }
 
-.header__nav { display: flex; gap: clamp(2px, 1vw, 8px); }
+/* align-items: center para que, cuando el ancho aprieta y algún ítem se parte
+   en dos líneas ("Club / Merla"), los de una línea no se estiren a lo alto: la
+   pastilla del activo/hover queda del alto del texto y no un óvalo enorme.
+   text-align: center centra los que sí se parten. */
+.header__nav { display: flex; align-items: center; gap: clamp(2px, 1vw, 8px); }
 
 .header__nav a {
   color: var(--verde);
   text-decoration: none;
+  text-align: center;
   font-weight: 600;
   font-size: 0.92rem;
   padding: 8px 14px;
@@ -368,6 +373,17 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 }
 .cat-tabs::-webkit-scrollbar, .filtros::-webkit-scrollbar { display: none; } /* Chrome/Safari */
 .cat-tabs[hidden], .filtros[hidden] { display: none; }
+/* Con el mouse también se arrastra (ver app.js). La manito aparece solo cuando
+   la barra se desborda; mientras se arrastra, el scroll deja de ser suave para
+   que siga al puntero sin latencia. */
+.cat-tabs.deslizable, .filtros.deslizable { cursor: grab; }
+.cat-tabs.arrastrando, .filtros.arrastrando { cursor: grabbing; scroll-behavior: auto; user-select: none; }
+.cat-tabs.arrastrando .cat-tab, .filtros.arrastrando .filtro { cursor: grabbing; }
+/* La pill verde se puede agarrar y deslizar para cambiar de opción. En touch,
+   pan-y deja pasar el scroll vertical de la página y nos reserva el horizontal. */
+.cat-tab.activo, .filtro.activo { cursor: grab; touch-action: pan-y; }
+.cat-tabs.arrastrando-pill, .filtros.arrastrando-pill { user-select: none; scroll-behavior: auto; }
+.cat-tabs.arrastrando-pill .cat-tab, .filtros.arrastrando-pill .filtro { cursor: grabbing; }
 .cat-tab, .filtro {
   flex: 0 0 auto;                 /* no se encogen: permiten el deslizado */
   border: 0;
@@ -1069,7 +1085,9 @@ section[id], footer[id] { scroll-margin-top: 90px; }
   }
 
   .header__nav.open { display: flex; }
-  .header__nav a { padding: 12px 24px; border-radius: 0; }
+  /* En el desplegable son filas a lo ancho: el texto va a la izquierda (el
+     centrado de arriba es para cuando las pastillas van en línea) */
+  .header__nav a { padding: 12px 24px; border-radius: 0; text-align: left; }
 
   .benefits { grid-template-columns: 1fr; }
   .announcement { font-size: 0.72rem; }
