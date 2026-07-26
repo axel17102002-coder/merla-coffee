@@ -1,6 +1,7 @@
 // Administración protegida de pedidos (todos los canales).
 //
 //   GET                      → { pedidos: [...] }  (todos, más nuevos primero)
+//   GET ?q=<texto>           → busca por número de pedido o email (contra la base)
 //   POST { accion, id }      → aprobar/rechazar un pedido de WhatsApp
 //   PATCH { id, mp_metodo }  → corrige el método de pago de Mercado Pago
 //   DELETE ?id=<uuid>        → borra un pedido definitivamente
@@ -11,10 +12,29 @@ const { METODOS_MP } = require("../../public/motor.js");
 
 const CAMPOS = "id,numero,origen,items,total,cupon,descuento_cupon,cliente_email,estado,creado,puntos_ganados,puntos_canjeados,envio,envio_costo";
 
+// Filtro de búsqueda por número de pedido o email. La búsqueda va contra la
+// base y no contra los 200 que trae el panel: el pedido que se busca suele ser
+// justamente uno viejo. Se limpian los caracteres que rompen la sintaxis de
+// filtros de PostgREST (comas, paréntesis, comodines).
+function filtroBusqueda(texto) {
+  const limpio = String(texto || "").trim().replace(/[(),*"\\]/g, "").slice(0, 80);
+  if (!limpio) return "";
+
+  // "#0012", "0012" y "12" son el mismo pedido
+  const soloNumero = limpio.replace(/^#/, "").replace(/^0+/, "");
+  const numero = /^\d{1,9}$/.test(soloNumero) ? Number(soloNumero) : null;
+
+  const porEmail = `cliente_email.ilike.*${encodeURIComponent(limpio)}*`;
+  return numero != null
+    ? `&or=(numero.eq.${numero},${porEmail})`
+    : `&${porEmail.replace(".ilike.", "=ilike.")}`;
+}
+
 // `mp_metodo` (el medio con que se pagó en MP, para su comisión) puede no existir
 // todavía: si falta la migración, el panel sigue andando sin esa columna.
-async function traerPedidos() {
-  const orden = "&order=creado.desc&limit=200";
+async function traerPedidos(busqueda) {
+  const filtro = filtroBusqueda(busqueda);
+  const orden = `${filtro}&order=creado.desc&limit=200`;
   try {
     return await sb(`pedidos?select=${CAMPOS},mp_metodo${orden}`);
   } catch (err) {
@@ -29,7 +49,8 @@ exports.handler = async (event) => {
 
   try {
     if (event.httpMethod === "GET") {
-      const pedidos = await traerPedidos();
+      const q = (event.queryStringParameters || {}).q;
+      const pedidos = await traerPedidos(q);
       return { statusCode: 200, headers, body: JSON.stringify({ pedidos }) };
     }
 

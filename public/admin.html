@@ -54,6 +54,13 @@
             <button data-filtro="mercadopago">Mercado Pago</button>
             <button data-filtro="whatsapp">WhatsApp</button>
           </div>
+          <!-- Busca contra la base, no entre los 200 que trae el panel: el que
+               se busca suele ser justamente un pedido viejo. -->
+          <div class="buscador">
+            <input id="buscar-pedido" type="search" inputmode="search" autocomplete="off"
+                   placeholder="Buscar por email o N° de pedido (#0012)" aria-label="Buscar pedidos">
+            <button id="buscar-limpiar" class="buscador__limpiar" hidden aria-label="Limpiar búsqueda">✕</button>
+          </div>
           <p class="panel__hint">Los de WhatsApp se crean pendientes: al aprobar se descuenta el stock y se suman los puntos. Los de Mercado Pago se aprueban solos al cobrar.</p>
           <p class="mensaje" id="panel-message"></p>
           <div class="pedidos" id="pedidos"></div>

@@ -60,12 +60,19 @@ function renderEntrega(envio) {
 // ===== Pedidos =====
 let pedidosCache = [];
 let filtroCanal = "todos";
+// Búsqueda: los resultados viven aparte de pedidosCache para que Insights siga
+// calculando sobre todos los pedidos y no sobre lo que quedó filtrado.
+let busqueda = "";
+let pedidosBusqueda = null; // null = sin búsqueda activa
 
 function renderPedidos() {
   const contenedor = $("#pedidos");
-  const lista = filtroCanal === "todos" ? pedidosCache : pedidosCache.filter((p) => p.origen === filtroCanal);
+  const base = pedidosBusqueda || pedidosCache;
+  const lista = filtroCanal === "todos" ? base : base.filter((p) => p.origen === filtroCanal);
   if (!lista.length) {
-    contenedor.innerHTML = `<div class="vacio">No hay pedidos${filtroCanal === "todos" ? " todavía" : ` de ${CANALES[filtroCanal] || filtroCanal}`}.</div>`;
+    contenedor.innerHTML = pedidosBusqueda
+      ? `<div class="vacio">Ningún pedido coincide con “${escapar(busqueda)}”${filtroCanal === "todos" ? "" : ` en ${CANALES[filtroCanal] || filtroCanal}`}.</div>`
+      : `<div class="vacio">No hay pedidos${filtroCanal === "todos" ? " todavía" : ` de ${CANALES[filtroCanal] || filtroCanal}`}.</div>`;
     return;
   }
   contenedor.innerHTML = lista.map((p) => {
@@ -111,11 +118,61 @@ async function cargarPedidos() {
     renderPedidos();
     renderInsights();
     mensaje("#panel-message", "");
+    if (busqueda) await buscarPedidos(); // una acción no tiene que borrar la búsqueda
   } catch (err) {
     mensaje("#panel-message", `⚠️ ${err.message}`);
     if (/autorizado/i.test(err.message)) cerrarSesion();
   }
 }
+
+// ===== Búsqueda de pedidos (por email o número) =====
+// Va contra la base: buscar entre los 200 que ya están en pantalla serviría de
+// poco, porque el pedido que se busca suele ser viejo.
+async function buscarPedidos() {
+  const texto = busqueda.trim();
+  $("#buscar-limpiar").hidden = !texto;
+
+  if (!texto) {
+    pedidosBusqueda = null;
+    renderPedidos();
+    mensaje("#panel-message", "");
+    return;
+  }
+
+  mensaje("#panel-message", "Buscando…");
+  try {
+    const { pedidos } = await api(`/api/admin-pedidos?q=${encodeURIComponent(texto)}`);
+    pedidosBusqueda = pedidos;
+    renderPedidos();
+    mensaje("#panel-message", pedidos.length
+      ? `${pedidos.length} pedido${pedidos.length === 1 ? "" : "s"} para “${texto}”`
+      : `Sin resultados para “${texto}”`, pedidos.length > 0);
+  } catch (err) {
+    mensaje("#panel-message", `⚠️ ${err.message}`);
+    if (/autorizado/i.test(err.message)) cerrarSesion();
+  }
+}
+
+let buscarTimer = null;
+$("#buscar-pedido").addEventListener("input", (e) => {
+  busqueda = e.target.value;
+  clearTimeout(buscarTimer);
+  buscarTimer = setTimeout(buscarPedidos, 350);
+});
+
+// Enter busca ya, sin esperar el debounce; Escape limpia
+$("#buscar-pedido").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { clearTimeout(buscarTimer); buscarPedidos(); }
+  if (e.key === "Escape") $("#buscar-limpiar").click();
+});
+
+$("#buscar-limpiar").addEventListener("click", () => {
+  $("#buscar-pedido").value = "";
+  busqueda = "";
+  clearTimeout(buscarTimer);
+  buscarPedidos();
+  $("#buscar-pedido").focus();
+});
 
 // ===== Insights =====
 // Sale de los pedidos que ya carga la pestaña Pedidos, más los costos por

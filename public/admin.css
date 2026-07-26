@@ -45,6 +45,22 @@ button { cursor: pointer; }
 .filtros button { border: 1px solid var(--borde); border-radius: 999px; padding: 7px 16px; background: var(--papel); color: var(--texto); font-weight: 600; font-size: .88rem; }
 .filtros button.filtro-activo { background: var(--verde); color: #fff; border-color: var(--verde); }
 
+/* Buscador de pedidos (por email o número) */
+.buscador { position: relative; margin-bottom: 12px; }
+.buscador input {
+  width: 100%; border: 1px solid var(--borde); border-radius: 999px;
+  padding: 10px 40px 10px 16px; font: inherit; font-size: .9rem;
+  background: var(--papel); color: var(--texto);
+}
+.buscador input:focus { outline: 0; border-color: var(--verde); box-shadow: 0 0 0 3px #2f4a3622; }
+.buscador input::-webkit-search-cancel-button { display: none; } /* usamos el nuestro */
+.buscador__limpiar {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  border: 0; background: transparent; color: var(--gris);
+  font-size: .9rem; line-height: 1; padding: 8px 10px; border-radius: 999px; cursor: pointer;
+}
+.buscador__limpiar:hover { background: var(--crema); color: var(--texto); }
+
 /* Pedidos: a pantalla completa entran varios por fila */
 .pedidos { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); align-items: start; }
 .pedido { background: var(--papel); border: 1px solid var(--borde); border-radius: 16px; padding: 20px; box-shadow: 0 5px 18px #22301f10; }
