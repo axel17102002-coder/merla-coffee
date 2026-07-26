@@ -30,6 +30,9 @@ const PAQUETE_CM = { height: 10, width: 20, length: 25 };
 // categoría especial (no es colchón, sanitario, electro, vidrio, etc.).
 const CLASIFICACION_GENERAL = 1;
 
+// Cuánto esperamos la cotización antes de darla por perdida.
+const ESPERA_MAX_MS = 12000;
+
 // Solo mostramos transportistas conocidos: Zipnova conecta con muchos
 // (Chazki, Toparco, Cabify Logistics, etc.) y elegir entre tantos abruma
 // más de lo que ayuda. Comparación case-insensitive y por substring, para
@@ -93,20 +96,36 @@ async function pedirCotizacion({ cred, cp, ciudad, provincia, pesoGramos, valorD
     sort_by: "price",
   };
 
-  const res = await fetch("https://api.zipnova.com.ar/v2/shipments/quote", {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${auth}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify(cuerpo),
-  });
+  // Cortamos nosotros a los 12 s: cuando la cotización de Zipnova se cuelga,
+  // su gateway recién responde 500 (con cuerpo vacío) a los ~30 s, y el
+  // cliente se queda mirando el spinner todo ese tiempo para nada.
+  const corte = AbortSignal.timeout ? AbortSignal.timeout(ESPERA_MAX_MS) : undefined;
+  let res;
+  try {
+    res = await fetch("https://api.zipnova.com.ar/v2/shipments/quote", {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${auth}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(cuerpo),
+      signal: corte,
+    });
+  } catch (e) {
+    const err = new Error("cotizacion_sin_respuesta");
+    err.sinRespuesta = true;
+    err.causa = e.name === "TimeoutError" ? `no respondió en ${ESPERA_MAX_MS / 1000}s` : e.message;
+    throw err;
+  }
+
   const data = await res.json().catch(() => null);
   if (!res.ok || !data) {
     const err = new Error("cotizacion_fallida");
     err.status = res.status;
     err.data = data;
+    // 5xx = problema del lado de Zipnova, no de la dirección que cargó el cliente
+    err.sinRespuesta = res.status >= 500;
     throw err;
   }
   return (data.all_results || data.results || []).filter((o) => o && o.selectable !== false && o.amounts);
@@ -125,8 +144,15 @@ async function cotizarOpciones({ cp, ciudad, provincia, pesoGramos, valorDeclara
   try {
     crudas = await pedirCotizacion({ cred, cp, ciudad, provincia, pesoGramos, valorDeclarado });
   } catch (err) {
-    console.error("zipnova: la cotización falló:", err.status, JSON.stringify(err.data || err.message));
-    return { ok: false, error: "No pudimos calcular el envío para esa dirección." };
+    console.error("zipnova: la cotización falló:", err.status || "", err.causa || JSON.stringify(err.data || err.message));
+    // Distinguimos las dos causas: si el servicio no responde, mandar al
+    // cliente a revisar su dirección lo hace perder el tiempo.
+    return {
+      ok: false,
+      error: err.sinRespuesta
+        ? "El cálculo de envío no está respondiendo. Probá de nuevo en unos minutos, o elegí retiro y coordinamos el envío por WhatsApp."
+        : "No pudimos calcular el envío para esa dirección.",
+    };
   }
 
   if (!crudas.length) {
