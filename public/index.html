@@ -136,8 +136,13 @@
 </head>
 <body>
 
-  <div class="announcement">
-    <p>☕ Pack x5 con 10% OFF &nbsp;·&nbsp; Sumá puntos con Club Merla &nbsp;·&nbsp; Envíos a todo el país</p>
+  <!-- Los mensajes rotan solos (ver app.js). Se apilan en la misma celda de
+       grilla: la barra mide lo que el más alto y no salta al cambiar. Para
+       agregar o sacar avisos, alcanza con tocar estos <p>. -->
+  <div class="announcement" id="announcement">
+    <p class="announcement__item activo">☕ Pack x5 con 10% OFF</p>
+    <p class="announcement__item">⭐ Sumá puntos con Club Merla</p>
+    <p class="announcement__item">📦 Envíos a todo el país</p>
   </div>
 
   <header class="header" id="inicio">

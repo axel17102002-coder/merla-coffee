@@ -1485,6 +1485,43 @@ function observarReveals() {
   });
 }
 
+// ===== Barra de avisos: carrusel =====
+// Los avisos de arriba se turnan solos: en el celular los tres juntos no
+// entraban en una línea. Se frena con el puntero encima y con la pestaña en
+// segundo plano (si no, al volver se ve el salto de todos los turnos perdidos).
+(() => {
+  const barra = document.getElementById("announcement");
+  if (!barra) return;
+  const avisos = [...barra.querySelectorAll(".announcement__item")];
+  if (avisos.length < 2) return;
+
+  const ESPERA = 4500;
+  const SALIDA = 450; // igual que la transición del CSS
+  let actual = 0, temporizador = null, pausado = false;
+
+  function pasarA(siguiente) {
+    const sale = avisos[actual];
+    sale.classList.remove("activo");
+    sale.classList.add("saliendo");
+    setTimeout(() => sale.classList.remove("saliendo"), SALIDA);
+    actual = siguiente;
+    avisos[actual].classList.add("activo");
+  }
+
+  function programar() {
+    clearTimeout(temporizador);
+    temporizador = setTimeout(() => {
+      if (!pausado && !document.hidden) pasarA((actual + 1) % avisos.length);
+      programar();
+    }, ESPERA);
+  }
+
+  barra.addEventListener("pointerenter", () => { pausado = true; });
+  barra.addEventListener("pointerleave", () => { pausado = false; });
+  document.addEventListener("visibilitychange", programar);
+  programar();
+})();
+
 // ===== Eventos =====
 document.addEventListener("click", (e) => {
   // Filtro por región
