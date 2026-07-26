@@ -1118,13 +1118,12 @@ async function actualizarCotizacionEnvio(items) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || "No pudimos calcular el envío");
     envioQuote = { clave, firma, opciones: data.opciones || [], cargando: false, error: null };
+    // Se preselecciona la opción más barata (las opciones vienen ordenadas por
+    // precio), pero NUNCA la sucursal: elegir por él dónde va el paquete es
+    // pedirle que descubra el error cuando ya no está.
     const primera = envioQuote.opciones[0];
-    if (primera) {
-      envioOpcionElegida = primera.clave;
-      if (primera.tipo === "sucursal" && primera.sucursales && primera.sucursales.length) {
-        envioSucursalElegida = primera.sucursales[0].id;
-      }
-    }
+    if (primera) envioOpcionElegida = primera.clave;
+    envioSucursalElegida = null;
   } catch (err) {
     envioQuote = { clave, firma, opciones: [], cargando: false, error: err.message };
   }
@@ -1165,6 +1164,7 @@ function actualizarEnvioCostoEstado(items) {
 
   el.textContent = "📦 Elegí cómo recibirlo:";
   cont.hidden = false;
+  // (la lista de sucursales se arma en listaSucursales, más abajo)
   cont.innerHTML = envioQuote.opciones.map((o) => {
     const marcada = o.clave === envioOpcionElegida;
     const icono = o.tipo === "sucursal" ? "🏤" : "🚚";
@@ -1176,28 +1176,63 @@ function actualizarEnvioCostoEstado(items) {
         </span>
         <span class="envio-opcion__precio">${formatear(o.precio)}</span>
       </label>`;
-    if (marcada && o.tipo === "sucursal" && o.sucursales && o.sucursales.length) {
-      html += `<select class="envio-sucursal-select" id="envio-sucursal-select">
-          ${o.sucursales.map((s) =>
-            `<option value="${s.id}" ${s.id === envioSucursalElegida ? "selected" : ""}>${s.descripcion || s.direccion}</option>`
-          ).join("")}
-        </select>`;
-    }
     return html;
   }).join("");
 
   const op = opcionElegida();
   $("#envio-direccion").hidden = Boolean(op && op.tipo === "sucursal");
+
+  const caja = $("#envio-sucursales");
+  const conSucursales = op && op.tipo === "sucursal" && op.sucursales && op.sucursales.length;
+  caja.hidden = !conSucursales;
+  caja.innerHTML = conSucursales ? listaSucursales(op.sucursales) : "";
 }
+// Las sucursales van como tarjetas y no como <select>: son pocas (hasta 8) y
+// cada una necesita dos renglones (nombre y dirección). Metidas en un <select>
+// quedaban en una línea recortada, y encima la primera se elegía sola: el
+// cliente podía terminar pagando un envío a una sucursal que nunca miró. Acá
+// no hay ninguna marcada hasta que elige.
+function listaSucursales(sucursales) {
+  const filas = sucursales.map((s) => {
+    const nombre = s.descripcion || s.direccion || "Sucursal";
+    const detalle = [s.descripcion ? s.direccion : "", s.localidad, s.cp && `CP ${s.cp}`]
+      .filter(Boolean).join(" · ");
+    const marcada = s.id === envioSucursalElegida;
+    return `<label class="sucursal${marcada ? " sucursal--activa" : ""}">
+        <input type="radio" name="envio-sucursal" value="${escaparAttr(s.id)}" ${marcada ? "checked" : ""}>
+        <span class="sucursal__datos">
+          <span class="sucursal__nombre">${escaparHtml(nombre)}</span>
+          ${detalle ? `<span class="sucursal__detalle">${escaparHtml(detalle)}</span>` : ""}
+        </span>
+      </label>`;
+  }).join("");
+
+  const falta = !envioSucursalElegida;
+  return `<div class="sucursales">
+      <p class="sucursales__titulo${falta ? " sucursales__titulo--falta" : ""}">
+        ${falta ? "🏤 Elegí dónde retirarlo" : "🏤 Retirás el pedido en"}
+      </p>
+      ${filas}
+    </div>`;
+}
+
+function escaparHtml(v) {
+  return String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c]));
+}
+const escaparAttr = escaparHtml;
+
 $("#envio-opciones").addEventListener("change", (e) => {
-  if (e.target.name === "envio-opcion") {
-    envioOpcionElegida = e.target.value;
-    const op = opcionElegida();
-    envioSucursalElegida = op && op.sucursales && op.sucursales.length ? op.sucursales[0].id : null;
-    renderCarrito();
-  } else if (e.target.id === "envio-sucursal-select") {
-    envioSucursalElegida = e.target.value;
-  }
+  if (e.target.name !== "envio-opcion") return;
+  envioOpcionElegida = e.target.value;
+  // A propósito no se preelige sucursal: que la elija el cliente
+  envioSucursalElegida = null;
+  renderCarrito();
+});
+
+$("#envio-sucursales").addEventListener("change", (e) => {
+  if (e.target.name !== "envio-sucursal") return;
+  envioSucursalElegida = e.target.value;
+  renderCarrito();
 });
 ["#envio-cp", "#envio-ciudad", "#envio-provincia"].forEach((sel) => {
   $(sel).addEventListener("input", () => {

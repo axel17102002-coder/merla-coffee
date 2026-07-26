@@ -55,6 +55,22 @@ function grupoOpcion(o) {
   return `${o.carrier && o.carrier.id}:${o.service_type && o.service_type.code}`;
 }
 
+// Un punto de retiro de Zipnova → lo que necesita el carrito para elegir. Los
+// campos de `location` no siempre vienen todos, así que se arma con lo que haya.
+function normalizarSucursal(p) {
+  const loc = p.location || {};
+  const direccion = [loc.street, loc.street_number].filter(Boolean).join(" ");
+  const localidad = [loc.city, loc.state].filter(Boolean).join(", ");
+  return {
+    id: p.point_id,
+    descripcion: p.description || "",
+    direccion,
+    localidad,
+    cp: loc.zipcode || "",
+    horarios: p.opening_hours || p.schedule || "",
+  };
+}
+
 // Un resultado de Zipnova → la forma que usa el resto de la app. Las
 // sucursales (service_type.code === "pickup_point") traen su propia lista de
 // puntos cercanos al destino; a domicilio no tiene sucursales.
@@ -66,14 +82,10 @@ function normalizarOpcion(o, indice) {
     tipo: esSucursal ? "sucursal" : "domicilio",
     transportista: (o.carrier && o.carrier.name) || "Transportista",
     precio: Math.round(o.amounts.price_incl_tax),
-    sucursales: esSucursal
-      ? (o.pickup_points || []).slice(0, 5).map((p) => ({
-          id: p.point_id,
-          descripcion: p.description || "",
-          direccion: [p.location && p.location.street, p.location && p.location.street_number]
-            .filter(Boolean).join(" "),
-        }))
-      : null,
+    // Se mandan la dirección y la localidad además del nombre: en el carrito
+    // el cliente tiene que poder distinguir dos sucursales del mismo
+    // transportista sin adivinar cuál le queda cerca.
+    sucursales: esSucursal ? (o.pickup_points || []).slice(0, 8).map(normalizarSucursal) : null,
   };
 }
 

@@ -931,12 +931,21 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 /* Campos de texto: fondo elevado y texto crema */
 .cart .cart__email input,
 .cart .cart__coupon input,
-.cart .entrega__form input,
-.cart .envio-sucursal-select {
+.cart .entrega__form input {
   background: var(--panel-alto);
   border-color: var(--panel-borde);
   color: var(--panel-texto);
 }
+
+/* Sucursales dentro del carrito oscuro */
+.cart .sucursales__titulo { color: var(--panel-texto); }
+.cart .sucursales__titulo--falta { color: var(--panel-calido); }
+.cart .sucursal { background: var(--panel-alto); border-color: var(--panel-borde); }
+.cart .sucursal:hover { border-color: var(--panel-calido); }
+.cart .sucursal--activa { background: #55402f; border-color: var(--panel-calido); }
+.cart .sucursal input { accent-color: var(--panel-calido); }
+.cart .sucursal__nombre { color: var(--panel-texto); }
+.cart .sucursal__detalle { color: var(--panel-tenue); }
 .cart .cart__email input::placeholder,
 .cart .cart__coupon input::placeholder,
 .cart .entrega__form input::placeholder { color: #a1907c; }
@@ -1513,11 +1522,25 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 .envio-opcion__texto { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .envio-opcion:has(input:checked) .envio-opcion__label { font-weight: 700; }
 .envio-opcion__precio { white-space: nowrap; flex-shrink: 0; font-weight: 700; }
-.envio-sucursal-select {
-  width: 100%; border: 1.5px solid var(--crema-borde); border-radius: 12px;
-  padding: 9px 14px; font-family: var(--fuente-texto); font-size: 0.86rem;
-  background: var(--crema-suave); color: var(--tinta); margin-top: 4px;
+/* Sucursales del transportista: tarjetas con nombre y dirección, sangradas
+   bajo la opción de envío a la que pertenecen. Antes era un <select> de una
+   línea, donde no se veía la dirección ni se podían comparar. */
+.sucursales { display: grid; gap: 6px; margin: 6px 0 2px 14px; }
+.sucursales__titulo { font-size: 0.8rem; font-weight: 700; color: var(--verde); margin: 2px 0; }
+.sucursales__titulo--falta { color: var(--caramelo); }
+.sucursal {
+  display: flex; align-items: flex-start; gap: 10px;
+  border: 1.5px solid var(--crema-borde); border-radius: 12px; padding: 9px 12px;
+  cursor: pointer; background: var(--crema-suave);
 }
+.sucursal:hover { border-color: var(--verde); }
+.sucursal--activa { border-color: var(--verde); background: #eef3ec; }
+/* el radio hereda width:100% del formulario de entrega: acá tiene que ser chico */
+.sucursal input { width: auto; margin-top: 2px; accent-color: var(--verde); flex-shrink: 0; }
+.sucursal__datos { display: grid; gap: 2px; min-width: 0; }
+.sucursal__nombre { font-size: 0.85rem; font-weight: 600; color: var(--tinta); }
+.sucursal--activa .sucursal__nombre { font-weight: 800; }
+.sucursal__detalle { font-size: 0.78rem; color: #66705f; }
 
 @media (max-width: 720px) {
   .club { grid-template-columns: 1fr; }

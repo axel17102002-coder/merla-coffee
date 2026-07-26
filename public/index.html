@@ -378,6 +378,9 @@
           </div>
           <p class="entrega__aviso" id="envio-costo-estado">📦 Ingresá tu código postal, ciudad y provincia para ver las opciones de envío.</p>
           <div class="entrega__opciones" id="envio-opciones" hidden></div>
+          <!-- Las sucursales van fuera del contenedor de opciones: ese tiene
+               scroll propio (max-height) y adentro las dos listas se tapaban -->
+          <div id="envio-sucursales" hidden></div>
           <input id="envio-direccion" placeholder="Dirección (calle y número)" autocomplete="street-address">
           <input id="envio-notas" placeholder="Notas (piso, depto, referencia)" autocomplete="off">
         </div>
