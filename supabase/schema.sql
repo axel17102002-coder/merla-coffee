@@ -73,6 +73,7 @@ create table if not exists pedidos (
   envio_costo integer not null default 0, -- cotizado con Zipnova; 0 si es retiro
   origen text not null default 'mercadopago' check (origen in ('modo', 'whatsapp', 'mercadopago')),
   mp_metodo text,                    -- método con que se pagó en MP (dinero/debito/credito/prepaga/cuotas_sin_tarjeta/otros), para su comisión
+  recordatorio_enviado timestamptz,  -- cuándo se mandó el mail de carrito abandonado (para no repetirlo)
   estado text not null default 'pendiente'
     check (estado in ('pendiente', 'aprobado', 'rechazado')),
   creado timestamptz not null default now(),
@@ -90,6 +91,7 @@ alter table pedidos add constraint pedidos_origen_check check (origen in ('modo'
 alter table pedidos add column if not exists numero integer;
 alter table pedidos add column if not exists envio jsonb;
 alter table pedidos add column if not exists mp_metodo text;
+alter table pedidos add column if not exists recordatorio_enviado timestamptz;
 
 -- Números de pedido secuenciales (#0001). Backfill por orden de creación + secuencia.
 with ordenados as (

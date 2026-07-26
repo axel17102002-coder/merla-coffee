@@ -111,4 +111,20 @@ function mailConfirmacionCliente(pedido) {
   };
 }
 
-module.exports = { mailAvisoAdmin, mailConfirmacionCliente };
+// Recordatorio de carrito abandonado: el pedido quedó pendiente y el cron lo
+// va a borrar. Sin precios de más ni urgencias falsas: el detalle de lo que
+// eligió y un botón para volver.
+function mailCarritoAbandonado(pedido) {
+  return {
+    asunto: `¿Seguimos con tu pedido? ☕`,
+    html: envoltorio(
+      "Te quedó un café a medio camino",
+      `<p style="margin:0 0 14px;color:${GRIS};">Empezaste un pedido en Merla Coffee y quedó sin confirmar. Te dejamos lo que habías elegido, por si querés retomarlo:</p>
+       ${resumen(pedido)}
+       <p style="margin:18px 0 0;color:${GRIS};">Si ya no te interesa, ignorá este mail: el pedido se cancela solo.</p>
+       <p style="margin:18px 0 0;"><a href="https://merla-coffee.merlacoffee.workers.dev/#cafes" style="background:${VERDE};color:#fff;text-decoration:none;padding:11px 18px;border-radius:9px;font-weight:bold;display:inline-block;">Volver a la tienda</a></p>`
+    ),
+  };
+}
+
+module.exports = { mailAvisoAdmin, mailConfirmacionCliente, mailCarritoAbandonado };

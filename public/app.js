@@ -124,6 +124,7 @@ async function cargarTienda() {
     renderFiltros();
     renderProductos();
     renderCarrito();
+    datosEstructuradosProductos(); // para que Google muestre precio y stock
     abrirProductoDeURL(); // deep-link ?producto=<id> (lo usan los feeds de ads)
   } catch (err) {
     console.error("No se pudo cargar la tienda:", err);
@@ -313,6 +314,59 @@ function renderProductos() {
   }
   construirTabsCategorias(cafe14.length > 0, merch.length > 0);
   observarReveals();
+}
+
+// ===== Datos estructurados de producto (schema.org) =====
+// El <head> ya declara la tienda (Store); esto agrega los productos con precio
+// y disponibilidad, que es lo que Google necesita para mostrarlos en los
+// resultados. Va por JS porque el catálogo es dinámico: se arma una vez, al
+// cargar la tienda, con el precio de la presentación de unidad.
+function datosEstructuradosProductos() {
+  const base = location.origin;
+  const absoluta = (url) =>
+    !url ? undefined : /^https?:\/\//i.test(url) ? url : `${base}/${String(url).replace(/^\//, "")}`;
+
+  const productos = (DATOS.productos || []).filter((p) => presentacionesDe(p).length);
+  if (!productos.length) return;
+
+  const lista = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    itemListElement: productos.map((p, i) => {
+      const pres = presentacionesDe(p);
+      const unidad = pres.find((x) => x.unidades_stock === 1) || pres[0];
+      return {
+        "@type": "ListItem",
+        position: i + 1,
+        item: {
+          "@type": "Product",
+          name: p.nombre,
+          description: p.descripcion || (p.notas || []).join(", ") || p.nombre,
+          image: absoluta(p.imagen),
+          brand: { "@type": "Brand", name: "Merla Coffee" },
+          url: `${base}/?producto=${encodeURIComponent(p.id)}`,
+          offers: {
+            "@type": "Offer",
+            price: unidad.precio,
+            priceCurrency: "ARS",
+            availability: p.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+            url: `${base}/?producto=${encodeURIComponent(p.id)}`,
+          },
+        },
+      };
+    }),
+  };
+
+  // textContent (no innerHTML): el contenido no se re-parsea como HTML, así que
+  // un nombre con "<" no puede romper el script.
+  let tag = document.getElementById("ld-productos");
+  if (!tag) {
+    tag = document.createElement("script");
+    tag.type = "application/ld+json";
+    tag.id = "ld-productos";
+    document.head.appendChild(tag);
+  }
+  tag.textContent = JSON.stringify(lista);
 }
 
 // Selector de categorías tipo pestañas (como el panel de admin): al cambiar,

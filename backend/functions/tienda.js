@@ -6,9 +6,21 @@ const { obtenerCatalogo } = require("../lib/supabase.js");
 const { ambienteMp } = require("../lib/mercadopago.js");
 const { CONFIG } = require("../../public/motor.js");
 
+// `obtenerCatalogo()` trae la fila entera de productos (la usan también el
+// checkout y el panel, que sí necesitan los costos). Acá sale al navegador:
+// con costo_kg a la vista, y las fórmulas de motor.js siendo públicas,
+// cualquiera calcula el margen exacto de cada café.
+const CAMPOS_SENSIBLES = ["costo_kg", "costo"];
+
+function sinCostos(producto) {
+  const limpio = { ...producto };
+  for (const campo of CAMPOS_SENSIBLES) delete limpio[campo];
+  return limpio;
+}
+
 exports.handler = async () => {
   try {
-    const productos = await obtenerCatalogo();
+    const productos = (await obtenerCatalogo()).map(sinCostos);
     return {
       statusCode: 200,
       headers: {

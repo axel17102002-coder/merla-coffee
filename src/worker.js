@@ -3,7 +3,7 @@
 // demás lo sirve como archivo estático desde public/.
 
 import { adaptar } from "./adaptador.js";
-import { limpiarPedidosPendientes } from "../backend/lib/mantenimiento.js";
+import { limpiarPedidosPendientes, recordarCarritosAbandonados } from "../backend/lib/mantenimiento.js";
 
 import { handler as tienda } from "../backend/functions/tienda.js";
 import { handler as validarCupon } from "../backend/functions/validar-cupon.js";
@@ -67,6 +67,14 @@ export default {
 
   async scheduled(event, env, ctx) {
     cargarEnv(env);
+    // Primero el recordatorio y después la limpieza: al revés, los pedidos que
+    // están justo en el borde de las 48 h se borrarían antes de avisarles.
+    try {
+      const recordados = await recordarCarritosAbandonados();
+      if (recordados) console.log(`scheduled: ${recordados} recordatorios de carrito abandonado enviados`);
+    } catch (err) {
+      console.error("scheduled (recordatorios):", err);
+    }
     try {
       const borrados = await limpiarPedidosPendientes();
       console.log(`scheduled: ${borrados} pedidos pendientes vencidos eliminados`);

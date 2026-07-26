@@ -8,6 +8,7 @@
 // doypack y los stickers, 1 y 1.
 
 const { sb } = require("./supabase.js");
+const { costoUnidad, costoPack } = require("../../public/motor.js");
 
 // Valores de respaldo por si la migración todavía no se corrió. Son los que
 // tenía el código antes, así los precios no cambian mientras tanto.
@@ -110,4 +111,51 @@ async function obtenerCostos() {
   }
 }
 
-module.exports = { obtenerCostos, RESPALDO };
+// ===== Costo congelado en el pedido =====
+// Lo que nos costó a nosotros cada línea, calculado al confirmar la compra y
+// guardado en el pedido. Sin esto, la contribución marginal de Insights usa
+// los costos de HOY para ventas de hace meses: si sube el café, el margen
+// histórico se distorsiona hacia atrás.
+function costoDeLinea(producto, presentacion, qty, cfg) {
+  if (!producto || !presentacion) return null;
+  const cantidad = Number(qty) || 0;
+  const unidades = (Number(presentacion.unidades_stock) || 0) * cantidad;
+
+  if (producto.tipo === "simple") {
+    return producto.costo != null ? Math.round(Number(producto.costo) * unidades) : null;
+  }
+  if (producto.costo_kg == null) return null;
+  // El pack no es "5 unidades sueltas": tiene sus propios insumos (doypack,
+  // stickers), así que su costo se calcula por pack, no por bag.
+  return presentacion.unidades_stock > 1
+    ? Math.round(costoPack(Number(producto.costo_kg), cfg) * cantidad)
+    : Math.round(costoUnidad(Number(producto.costo_kg), cfg) * unidades);
+}
+
+// Las líneas del pedido (motor.js) → los items que se guardan en la base, ya
+// con su costo. Lo usan los dos checkouts (Mercado Pago y WhatsApp).
+async function itemsConCosto(lineas, productos) {
+  let cfg = null;
+  try {
+    ({ cfg } = await obtenerCostos());
+  } catch (err) {
+    console.warn("costos: guardo el pedido sin costo por línea:", err.message);
+  }
+  return (lineas || []).map((l) => {
+    const producto = productos.find((p) => p.id === l.producto_id);
+    const presentacion = producto && (producto.presentaciones || []).find((x) => x.id === l.presentacion_id);
+    return {
+      producto_id: l.producto_id,
+      presentacion_id: l.presentacion_id,
+      nombre: `${l.nombre} - ${l.presentacionNombre}`,
+      qty: l.qty,
+      unidades: l.unidades,
+      precio_unitario: l.precioUnitario,
+      // null si el producto no tiene costo cargado: Insights lo cuenta como
+      // facturación sin costo conocido, igual que antes.
+      costo_linea: cfg ? costoDeLinea(producto, presentacion, l.qty, cfg) : null,
+    };
+  });
+}
+
+module.exports = { obtenerCostos, RESPALDO, costoDeLinea, itemsConCosto };

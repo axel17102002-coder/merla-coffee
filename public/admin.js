@@ -158,8 +158,11 @@ function hayComisionMp() {
 // Contribución marginal de un pedido cobrado: ingreso de productos (total menos
 // envío, que es un pass-through al correo) menos el costo de los productos.
 // `revSinCosto` = facturación de líneas sin costo cargado (ese margen queda
-// inflado, porque cuenta como si no costara nada). Usa los costos ACTUALES, no
-// los del momento de la venta (no se guardan históricos).
+// inflado, porque cuenta como si no costara nada).
+//
+// Cada línea guarda `costo_linea`: lo que costó el día de la venta. Los pedidos
+// anteriores a ese cambio no lo tienen y caen en los costos de HOY — su margen
+// se mueve si cambian los costos, pero es lo único que se puede reconstruir.
 function contribucionPedido(p) {
   const costos = costosPorProducto || {};
   let costo = 0, revSinCosto = 0;
@@ -169,8 +172,8 @@ function contribucionPedido(p) {
     const qty = Number(it.qty) || 0;
     const rev = (Number(it.precio_unitario) || 0) * qty;
     const esPack = qty > 0 && unidades / qty > 1;
-    let lc = null;
-    if (c) {
+    let lc = it.costo_linea != null ? Number(it.costo_linea) : null;
+    if (lc == null && c) {
       if (esPack && c.costoPack != null) lc = c.costoPack * qty;
       else if (c.costoUnidad != null) lc = c.costoUnidad * unidades;
     }

@@ -12,6 +12,7 @@ const { ambienteMp, crearPreferencia } = require("../lib/mercadopago.js");
 const { CONFIG, calcularPedido } = require("../../public/motor.js");
 const { sanitizarEnvio } = require("../lib/entrega.js");
 const { resolverEnvioCosto } = require("../lib/envio-costo.js");
+const { itemsConCosto } = require("../lib/costos.js");
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json" };
@@ -97,14 +98,7 @@ exports.handler = async (event) => {
       external_intention_id: externalId,
       modo_id: externalId,
       origen: "mercadopago",
-      items: pedido.lineas.map((l) => ({
-        producto_id: l.producto_id,
-        presentacion_id: l.presentacion_id,
-        nombre: `${l.nombre} - ${l.presentacionNombre}`,
-        qty: l.qty,
-        unidades: l.unidades,
-        precio_unitario: l.precioUnitario,
-      })),
+      items: await itemsConCosto(pedido.lineas, productos),
       subtotal: pedido.subtotal,
       descuento_cantidad: pedido.descuentoCantidad,
       cupon: pedido.cupon,
