@@ -78,20 +78,35 @@ function metodoDePagoMp(pago) {
   return TIPOS_MP[tipo] || "otros";
 }
 
-// Deja registrado en el pedido con qué método pagó el cliente, para restarle en
-// Insights la comisión que corresponde. Es informativo y "best effort": si falla,
-// el pedido se aprueba igual y la comisión cae al promedio general.
-async function registrarMetodoDePago(ref, pago) {
+// Deja registrado en el pedido con qué método pagó el cliente (para restarle en
+// Insights la comisión correcta) y el id del pago en MP (para poder cruzar el
+// pedido con el panel de Mercado Pago: auditar un cobro, seguir un contracargo
+// o rehacer el método si quedó mal). Es "best effort": si falla, el pedido se
+// aprueba igual.
+async function registrarPagoMp(ref, pago) {
+  if (!ref || !pago) return;
+  const cambios = {};
   const metodo = metodoDePagoMp(pago);
-  if (!ref || !metodo) return;
+  if (metodo) cambios.mp_metodo = metodo;
+  if (pago.id != null) cambios.mp_pago_id = String(pago.id);
+  if (!Object.keys(cambios).length) return;
+
   try {
-    await sb(`pedidos?modo_id=eq.${encodeURIComponent(ref)}`, {
-      method: "PATCH",
-      body: { mp_metodo: metodo },
-    });
+    await sb(`pedidos?modo_id=eq.${encodeURIComponent(ref)}`, { method: "PATCH", body: cambios });
   } catch (err) {
-    console.warn("mercadopago: no pude guardar el método de pago:", err.message);
+    // Si falta la migración de mp_pago_id, al menos guardamos el método
+    console.warn("mercadopago: no pude guardar los datos del pago:", err.message);
+    if (cambios.mp_pago_id && cambios.mp_metodo) {
+      try {
+        await sb(`pedidos?modo_id=eq.${encodeURIComponent(ref)}`, {
+          method: "PATCH",
+          body: { mp_metodo: cambios.mp_metodo },
+        });
+      } catch (err2) {
+        console.warn("mercadopago: tampoco pude guardar el método:", err2.message);
+      }
+    }
   }
 }
 
-module.exports = { ambienteMp, crearPreferencia, obtenerPagoMp, metodoDePagoMp, registrarMetodoDePago };
+module.exports = { ambienteMp, crearPreferencia, obtenerPagoMp, metodoDePagoMp, registrarPagoMp };

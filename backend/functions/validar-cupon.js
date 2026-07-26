@@ -4,12 +4,29 @@
 // igualmente lo re-valida todo en modo-checkout.
 
 const { obtenerCupon, cuponYaUsado } = require("../lib/supabase.js");
+const { permitir, ipDe } = require("../lib/limite.js");
+
+// Intentos por IP y por minuto. Hay cupones ocultos (no se listan en ningún
+// lado), y este endpoint responde distinto con un código válido: sin tope,
+// probar diccionarios hasta encontrarlos es cuestión de tiempo. Un cliente de
+// verdad prueba dos o tres códigos, no veinte.
+const MAX_POR_MINUTO = 12;
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json" };
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, headers, body: JSON.stringify({ error: "Método no permitido" }) };
   }
+
+  const tope = permitir(`cupon:${ipDe(event)}`, { max: MAX_POR_MINUTO, ventanaMs: 60000 });
+  if (!tope.ok) {
+    return {
+      statusCode: 429,
+      headers: { ...headers, "Retry-After": String(tope.esperaSegundos) },
+      body: JSON.stringify({ error: "Demasiados intentos. Probá de nuevo en un minuto." }),
+    };
+  }
+
   try {
     const { codigo, email } = JSON.parse(event.body || "{}");
     const cupon = await obtenerCupon(codigo);

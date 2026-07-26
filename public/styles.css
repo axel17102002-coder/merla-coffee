@@ -638,7 +638,11 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 .about__text p { margin-bottom: 14px; color: #4a5744; }
 .about__text p strong { color: var(--verde); }
 
-.about__img { position: relative; }
+/* La proporción va en el contenedor, no en el <img>: así la caja tiene tamaño
+   aunque la foto todavía no haya cargado. Si dependiera de la imagen, con
+   loading="lazy" la caja medía 0, nunca entraba en pantalla y la foto no se
+   cargaba nunca. */
+.about__img { position: relative; aspect-ratio: 4 / 5; }
 
 .about__img::before {
   content: "";
@@ -652,9 +656,9 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 
 .about__img img {
   width: 100%;
+  height: 100%;
   border-radius: var(--radio);
   box-shadow: var(--sombra);
-  aspect-ratio: 4 / 5;
   object-fit: cover;
 }
 

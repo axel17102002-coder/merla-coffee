@@ -2,6 +2,7 @@
 //
 //   GET                      → { pedidos: [...] }  (todos, más nuevos primero)
 //   GET ?q=<texto>           → busca por número de pedido o email (contra la base)
+//   GET ?limite=<n>          → cuántos traer (200 por defecto, 2000 máximo)
 //   POST { accion, id }      → aprobar/rechazar un pedido de WhatsApp
 //   PATCH { id, mp_metodo }  → corrige el método de pago de Mercado Pago
 //   DELETE ?id=<uuid>        → borra un pedido definitivamente
@@ -30,11 +31,23 @@ function filtroBusqueda(texto) {
     : `&${porEmail.replace(".ilike.", "=ilike.")}`;
 }
 
+// Cuántos pedidos trae por defecto la lista, y el techo que puede pedir
+// Insights (que necesita la serie completa para no calcular sobre una ventana
+// recortada sin avisar).
+const LIMITE_DEFECTO = 200;
+const LIMITE_MAXIMO = 2000;
+
+function limitePedido(valor) {
+  const n = Number.parseInt(valor, 10);
+  if (!Number.isInteger(n) || n < 1) return LIMITE_DEFECTO;
+  return Math.min(n, LIMITE_MAXIMO);
+}
+
 // `mp_metodo` (el medio con que se pagó en MP, para su comisión) puede no existir
 // todavía: si falta la migración, el panel sigue andando sin esa columna.
-async function traerPedidos(busqueda) {
+async function traerPedidos(busqueda, limite) {
   const filtro = filtroBusqueda(busqueda);
-  const orden = `${filtro}&order=creado.desc&limit=200`;
+  const orden = `${filtro}&order=creado.desc&limit=${limite}`;
   try {
     return await sb(`pedidos?select=${CAMPOS},mp_metodo${orden}`);
   } catch (err) {
@@ -49,9 +62,16 @@ exports.handler = async (event) => {
 
   try {
     if (event.httpMethod === "GET") {
-      const q = (event.queryStringParameters || {}).q;
-      const pedidos = await traerPedidos(q);
-      return { statusCode: 200, headers, body: JSON.stringify({ pedidos }) };
+      const { q, limite: limitePedido_ } = event.queryStringParameters || {};
+      const limite = limitePedido(limitePedido_);
+      const pedidos = await traerPedidos(q, limite);
+      // `truncado` = hay más pedidos de los que entraron: Insights lo avisa en
+      // vez de mostrar un total incompleto como si fuera el definitivo.
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ pedidos, limite, truncado: pedidos.length >= limite }),
+      };
     }
 
     if (event.httpMethod === "POST") {

@@ -18,3 +18,7 @@ node_modules
 # `wrangler deploy`, así que lo mejor es tenerlos fuera de public/.
 public/img/*.JPG
 public/img/*.jpeg
+# OJO: en macOS git ignora mayúsculas/minúsculas, así que *.JPG de arriba
+# también matchea *.jpg. Las versiones optimizadas para la web llevan el sufijo
+# _web y se listan acá para que sí entren al repo.
+!public/img/*_web.jpg

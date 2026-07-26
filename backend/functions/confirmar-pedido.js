@@ -6,7 +6,7 @@
 
 const { sbRpc } = require("../lib/supabase.js");
 const { obtenerPago } = require("../lib/modo.js");
-const { obtenerPagoMp, registrarMetodoDePago } = require("../lib/mercadopago.js");
+const { obtenerPagoMp, registrarPagoMp } = require("../lib/mercadopago.js");
 const { avisarVentaPorRef } = require("../lib/avisos.js");
 
 exports.handler = async (event) => {
@@ -27,7 +27,7 @@ exports.handler = async (event) => {
           body: JSON.stringify({ error: "El pago todavía no figura aprobado en Mercado Pago" }),
         };
       }
-      await registrarMetodoDePago(String(pago.external_reference), pago);
+      await registrarPagoMp(String(pago.external_reference), pago);
       const r = await sbRpc("aprobar_pedido", { p_modo_id: String(pago.external_reference) });
       // Solo avisamos la primera vez (si el webhook ya lo procesó, no repetimos)
       if (r && r.ok && !r.ya_procesado) await avisarVentaPorRef(String(pago.external_reference));

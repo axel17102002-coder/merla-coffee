@@ -74,6 +74,7 @@ create table if not exists pedidos (
   origen text not null default 'mercadopago' check (origen in ('modo', 'whatsapp', 'mercadopago')),
   mp_metodo text,                    -- método con que se pagó en MP (dinero/debito/credito/prepaga/cuotas_sin_tarjeta/otros), para su comisión
   recordatorio_enviado timestamptz,  -- cuándo se mandó el mail de carrito abandonado (para no repetirlo)
+  mp_pago_id text,                   -- payment_id de Mercado Pago, para cruzar con su panel
   estado text not null default 'pendiente'
     check (estado in ('pendiente', 'aprobado', 'rechazado')),
   creado timestamptz not null default now(),
@@ -92,6 +93,7 @@ alter table pedidos add column if not exists numero integer;
 alter table pedidos add column if not exists envio jsonb;
 alter table pedidos add column if not exists mp_metodo text;
 alter table pedidos add column if not exists recordatorio_enviado timestamptz;
+alter table pedidos add column if not exists mp_pago_id text;
 
 -- Números de pedido secuenciales (#0001). Backfill por orden de creación + secuencia.
 with ordenados as (

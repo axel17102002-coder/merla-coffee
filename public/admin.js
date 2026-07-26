@@ -174,6 +174,32 @@ $("#buscar-limpiar").addEventListener("click", () => {
   $("#buscar-pedido").focus();
 });
 
+// ===== Insights: su propio conjunto de pedidos =====
+// La lista de Pedidos trae 200 (rápida de abrir). Insights necesita más: con
+// un rango largo, calcular sobre 200 daba un número incompleto sin avisar.
+// Se cargan hasta 2000 al entrar a la pestaña, una sola vez.
+const LIMITE_INSIGHTS = 2000;
+let pedidosInsights = null;   // null = todavía no se cargaron
+let insightsTruncado = false; // hay más pedidos de los que entraron
+
+// Sobre qué pedidos calcula Insights (hasta que carguen los suyos, los 200
+// de la lista: es mejor mostrar algo que una pantalla vacía).
+function pedidosParaInsights() {
+  return pedidosInsights || pedidosCache;
+}
+
+async function cargarPedidosInsights({ forzar = false } = {}) {
+  if (pedidosInsights && !forzar) return;
+  try {
+    const data = await api(`/api/admin-pedidos?limite=${LIMITE_INSIGHTS}`);
+    pedidosInsights = data.pedidos;
+    insightsTruncado = !!data.truncado;
+    renderInsights();
+  } catch (err) {
+    mensaje("#panel-message", `⚠️ ${err.message}`);
+  }
+}
+
 // ===== Insights =====
 // Sale de los pedidos que ya carga la pestaña Pedidos, más los costos por
 // producto (admin-precios) para la contribución marginal. "Pendientes" es lo
@@ -334,9 +360,9 @@ function calcularInsights(pedidos) {
 }
 
 // ===== Filtro de rango y granularidad =====
-// El filtro achica pedidosCache a un período; la serie de ventas se agrupa por
-// semana o mes. Ojo: todo se calcula sobre los últimos 200 pedidos que trae el
-// panel, así que un rango más viejo que esa ventana quedaría incompleto.
+// El filtro achica el conjunto de Insights a un período; la serie de ventas se
+// agrupa por semana o mes. Si el rango excede lo que se pudo cargar, el panel
+// lo avisa (ver insightsTruncado) en vez de mostrar un total incompleto.
 let insightsRango = "todo";        // todo | este-mes | 30-dias | este-anio
 let insightsGranularidad = "mes";  // semana | mes (solo el gráfico de tendencia)
 
@@ -351,8 +377,9 @@ function inicioDeRango(rango) {
 
 function pedidosEnRango() {
   const desde = inicioDeRango(insightsRango);
-  if (!desde) return pedidosCache;
-  return pedidosCache.filter((p) => { const d = new Date(p.creado); return !isNaN(d) && d >= desde; });
+  const todos = pedidosParaInsights();
+  if (!desde) return todos;
+  return todos.filter((p) => { const d = new Date(p.creado); return !isNaN(d) && d >= desde; });
 }
 
 // Pedidos del período inmediatamente anterior, del mismo largo que el elegido
@@ -362,7 +389,7 @@ function pedidosPeriodoAnterior() {
   if (!desde) return null;
   const dur = Date.now() - desde.getTime();
   const desdePrev = new Date(desde.getTime() - dur);
-  return pedidosCache.filter((p) => {
+  return pedidosParaInsights().filter((p) => {
     const d = new Date(p.creado);
     return !isNaN(d) && d >= desdePrev && d < desde;
   });
@@ -406,7 +433,7 @@ function sparkline(valores) {
 // Serie de un valor por semana (últimas N) para las sparklines, sobre toda la
 // cache (la tendencia reciente no depende del filtro de rango).
 function serieSparkline(valorFn, n = 12) {
-  const aprobados = pedidosCache.filter((p) => p.estado === "aprobado");
+  const aprobados = pedidosParaInsights().filter((p) => p.estado === "aprobado");
   const buckets = {};
   for (const p of aprobados) {
     const d = new Date(p.creado);
@@ -450,6 +477,7 @@ function serieAgrupada(aprobados, granularidad, valorFn) {
 
 function renderInsights() {
   sincronizarFiltrosInsights();
+  avisarVentanaIncompleta();
   const i = calcularInsights(pedidosEnRango());
   const anteriores = pedidosPeriodoAnterior();
   const prev = anteriores ? calcularInsights(anteriores) : null;
@@ -462,6 +490,22 @@ function renderInsights() {
   renderCanal(i.porCanal);
   renderMetodosPago(i);
   renderOps(i);
+}
+
+// Si se llenó el tope de pedidos que se pueden traer, el cálculo deja afuera
+// los más viejos: hay que decirlo, no mostrar un total incompleto como si
+// fuera el definitivo. También avisa mientras Insights usa los 200 de la lista.
+function avisarVentanaIncompleta() {
+  const aviso = $("#stats-ventana");
+  if (!aviso) return;
+  const cargando = !pedidosInsights;
+  const texto = insightsTruncado
+    ? `⚠️ El cálculo toma los ${pedidosParaInsights().length} pedidos más recientes: si tu rango incluye pedidos anteriores, quedan afuera.`
+    : cargando
+      ? "Cargando el histórico completo…"
+      : "";
+  aviso.textContent = texto;
+  aviso.hidden = !texto;
 }
 
 // ① Pulso: las 4 métricas que importan, con delta vs período anterior y una
@@ -539,7 +583,7 @@ function renderTendencia(aprobados) {
 // nuevos de recurrentes.
 function primeraCompraPorEmail() {
   const mapa = {};
-  for (const p of pedidosCache) {
+  for (const p of pedidosParaInsights()) {
     if (p.estado !== "aprobado") continue;
     const email = (p.cliente_email || "").trim().toLowerCase();
     if (!email) continue;
@@ -753,7 +797,13 @@ $("#pedidos").addEventListener("change", async (e) => {
   const select = e.target.closest("[data-metodo]");
   if (!select) return;
   const estado = select.parentElement.querySelector("[data-metodo-estado]");
-  const pedido = pedidosCache.find((p) => p.id === select.dataset.id);
+  // El mismo pedido puede estar en la lista y en el conjunto de Insights: se
+  // actualizan los dos para que la comisión se recalcule con el método nuevo.
+  const copias = [pedidosCache, pedidosInsights, pedidosBusqueda]
+    .filter(Boolean)
+    .map((lista) => lista.find((p) => p.id === select.dataset.id))
+    .filter(Boolean);
+  const pedido = copias[0];
   const anterior = pedido ? pedido.mp_metodo : null;
   const ponerEstadoMetodo = (texto, ok = false, seVa = false) => {
     clearTimeout(estado.dataset.timer);
@@ -770,7 +820,7 @@ $("#pedidos").addEventListener("change", async (e) => {
       method: "PATCH",
       body: JSON.stringify({ id: select.dataset.id, mp_metodo: select.value }),
     });
-    if (pedido) pedido.mp_metodo = r.mp_metodo;
+    for (const copia of copias) copia.mp_metodo = r.mp_metodo;
     ponerEstadoMetodo("✓ Guardado", true, true);
     renderInsights();
   } catch (err) {
@@ -791,6 +841,8 @@ $("#secciones").addEventListener("click", (e) => {
   $("#seccion-pedidos").hidden = b.dataset.seccion !== "pedidos";
   $("#seccion-insights").hidden = b.dataset.seccion !== "insights";
   $("#seccion-gestion").hidden = b.dataset.seccion !== "gestion";
+  // Insights trabaja con más pedidos que la lista: se traen al abrir la pestaña
+  if (b.dataset.seccion === "insights") cargarPedidosInsights();
 });
 // ===== Productos y stock (unificados) =====
 // Una sola lista: cada producto muestra su estado y su stock, con la carga
