@@ -1608,10 +1608,66 @@ async function cargarPrecios() {
       : "⚠️ Sin conectar: faltan ZIPNOVA_TOKEN, ZIPNOVA_SECRET y/o ZIPNOVA_ACCOUNT_ID en las variables de entorno. Mientras tanto, el envío a domicilio no se puede cobrar.",
       dataConfig.zipnovaDisponible);
     mensaje("#precio-message", dataConfig.desdeLaBase ? "" : "⚠️ Falta correr supabase/migracion-insumos.sql: mientras tanto se usan los valores anteriores y los insumos no se pueden editar.");
+    cargarTransportistas(); // no frena la carga de Precios si falla
   } catch (err) {
     mensaje("#precio-message", `⚠️ ${err.message}`);
   }
 }
+
+// ===== Transportistas habilitados =====
+// Se prenden y apagan de a uno; el cambio impacta en el carrito en cuanto
+// vence el caché del backend (5 minutos).
+let transportistasCache = [];
+
+async function cargarTransportistas() {
+  const caja = $("#transportistas");
+  caja.innerHTML = `<p class="px-config__vacio">Cargando transportistas…</p>`;
+  try {
+    const { transportistas } = await api("/api/admin-transportistas");
+    transportistasCache = transportistas;
+    renderTransportistas();
+  } catch (err) {
+    caja.innerHTML = `<p class="px-config__vacio">⚠️ ${escapar(err.message)}</p>`;
+  }
+}
+
+function renderTransportistas() {
+  const caja = $("#transportistas");
+  if (!transportistasCache.length) {
+    caja.innerHTML = `<p class="px-config__vacio">Todavía no hay transportistas: aparecen solos con la primera cotización de envío.</p>`;
+    return;
+  }
+  const prendidos = transportistasCache.filter((t) => t.activo).length;
+  caja.innerHTML = transportistasCache.map((t) => {
+    const visto = t.visto ? new Date(t.visto) : null;
+    const cuando = visto && !isNaN(visto) ? visto.toLocaleDateString("es-AR", { day: "numeric", month: "short" }) : "";
+    return `<label class="transportista${t.activo ? " transportista--activo" : ""}">
+        <input type="checkbox" data-transportista="${escapar(t.nombre)}" ${t.activo ? "checked" : ""}>
+        <span class="transportista__nombre">${escapar(t.nombre)}</span>
+        ${cuando ? `<span class="transportista__visto">visto ${escapar(cuando)}</span>` : ""}
+      </label>`;
+  }).join("") +
+    `<p class="px-config__vacio">${prendidos} prendido${prendidos === 1 ? "" : "s"} de ${transportistasCache.length}${prendidos === 0 ? " · sin ninguno, el envío a domicilio no se puede cobrar" : ""}</p>`;
+}
+
+$("#transportistas").addEventListener("change", async (e) => {
+  const check = e.target.closest("[data-transportista]");
+  if (!check) return;
+  const nombre = check.dataset.transportista;
+  const activo = check.checked;
+  check.disabled = true;
+  try {
+    await api("/api/admin-transportistas", { method: "PATCH", body: JSON.stringify({ nombre, activo }) });
+    const fila = transportistasCache.find((t) => t.nombre === nombre);
+    if (fila) fila.activo = activo;
+    renderTransportistas();
+    toast(`${activo ? "✅" : "🚫"} ${nombre} ${activo ? "se muestra" : "queda oculto"} en el carrito`);
+  } catch (err) {
+    check.checked = !activo;
+    check.disabled = false;
+    toast(`⚠️ ${err.message}`);
+  }
+});
 
 // Una fila por método de pago de MP (los que tienen su propia clave de config).
 // Se guardan solas, igual que el resto de la configuración.
