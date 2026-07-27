@@ -105,6 +105,8 @@
           <!-- Eliminamos tab-stock y dejamos productos como principal -->
           <button id="tab-productos" class="tab-activo">Productos y Stock</button>
           <button id="tab-precios">Precios</button>
+          <button id="tab-envio">🚚 Envío</button>
+          <button id="tab-mercadopago">💳 Mercado Pago</button>
           <button id="tab-cupones">Cupones</button>
         </div>
 
@@ -249,28 +251,13 @@
                     <span class="px-estado" data-estado></span>
                   </div>
                 </div>
-                <div class="px-config__fila">
-                  <div class="px-config__info">
-                    <strong>Comisión de Mercado Pago</strong>
-                    <span>% promedio que cobra MP. Se resta de la contribución marginal solo en los pedidos pagados con Mercado Pago. 0 = no descontar.</span>
-                  </div>
-                  <div class="px-config__control">
-                    <input id="cfg-comision-mp" data-clave="comision_mercadopago" type="number" min="0" max="100" step="0.01" inputmode="decimal" aria-label="Comisión de Mercado Pago">
-                    <span class="px-unidad">%</span>
-                    <span class="px-estado" data-estado></span>
-                  </div>
-                </div>
-                <div class="px-config__fila px-config__fila--nota">
-                  <div class="px-config__info">
-                    <strong>Comisión por método de pago</strong>
-                    <span>MP cobra distinto según con qué pagó el cliente. Cada pedido nuevo guarda su método (lo informa la API de MP al acreditarse) y usa el % de acá. 0 = usar el promedio de arriba; los pedidos viejos también usan el promedio.</span>
-                  </div>
-                </div>
-                <div id="cfg-comision-metodos"></div>
               </div>
             </section>
 
-            <!-- Envío: cotización con Zipnova -->
+          </div>
+
+          <!-- VISTA: Envío (cotización con Zipnova, transportistas y pesos) -->
+          <div id="vista-envio" hidden>
             <section class="px-seccion">
               <header class="px-cabecera">
                 <div>
@@ -326,6 +313,39 @@
                     <span class="px-estado" data-estado></span>
                   </div>
                 </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- VISTA: Mercado Pago (comisiones que se restan en Insights) -->
+          <div id="vista-mercadopago" hidden>
+            <section class="px-seccion">
+              <header class="px-cabecera">
+                <div>
+                  <h3 class="px-titulo">💳 Mercado Pago</h3>
+                  <p class="px-desc">Lo que cobra MP por cobrar. Solo se usa para restarlo de la contribución marginal en Insights: no cambia ningún precio de venta. Se guarda solo al cambiarlo.</p>
+                </div>
+              </header>
+              <p class="mensaje" id="mp-estado"></p>
+              <div class="px-config">
+                <div class="px-config__fila">
+                  <div class="px-config__info">
+                    <strong>Comisión promedio</strong>
+                    <span>El % que se aplica cuando no se sabe con qué método pagó el cliente: los pedidos anteriores al registro del método y los medios sin % propio. 0 = no descontar nada.</span>
+                  </div>
+                  <div class="px-config__control">
+                    <input id="cfg-comision-mp" data-clave="comision_mercadopago" type="number" min="0" max="100" step="0.01" inputmode="decimal" aria-label="Comisión promedio de Mercado Pago">
+                    <span class="px-unidad">%</span>
+                    <span class="px-estado" data-estado></span>
+                  </div>
+                </div>
+                <div class="px-config__fila px-config__fila--nota">
+                  <div class="px-config__info">
+                    <strong>Comisión por método de pago</strong>
+                    <span>MP cobra distinto según con qué pagó el cliente. Cada pedido nuevo guarda su método (lo informa la API de MP al acreditarse) y usa el % de acá. 0 = usar el promedio de arriba.</span>
+                  </div>
+                </div>
+                <div id="cfg-comision-metodos"></div>
               </div>
             </section>
           </div>

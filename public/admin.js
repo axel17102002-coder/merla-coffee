@@ -980,7 +980,7 @@ $("#productos-columnas").addEventListener("click", async (e) => {
     borrar.disabled = true;
     try {
       await api(`/api/admin-productos?id=${encodeURIComponent(borrar.dataset.productoEliminar)}`, { method: "DELETE" });
-      TABS["tab-precios"].cargado = false; // que Precios deje de mostrarlo
+      invalidarPrecios(); // que Precios deje de mostrarlo
       await cargarProductos();
       mensaje("#producto-message", `✅ "${nombre}" eliminado.`, true);
     } catch (err) {
@@ -1600,6 +1600,13 @@ async function cargarPrecios() {
     $("#cfg-pack-desc").value = cfgPrecios.packDescuento;
     $("#cfg-comision-mp").value = cfgPrecios.comisionMp != null ? cfgPrecios.comisionMp : 0;
     renderComisionesMp();
+    const metodosCargados = Object.values(cfgPrecios.comisionMpMetodos || {}).filter((v) => Number(v) > 0).length;
+    const hayPromedio = Number(cfgPrecios.comisionMp) > 0;
+    mensaje("#mp-estado",
+      hayPromedio || metodosCargados
+        ? `✅ ${metodosCargados} método${metodosCargados === 1 ? "" : "s"} con comisión propia${hayPromedio ? `, promedio ${cfgPrecios.comisionMp}%` : ""}.`
+        : "⚠️ Sin comisiones cargadas: Insights muestra la contribución sin descontar lo que se lleva Mercado Pago.",
+      hayPromedio || metodosCargados > 0);
     $("#cfg-peso-drip").value = cfgPrecios.pesoDripBagG;
     $("#cfg-peso-cafe14").value = cfgPrecios.pesoCafeBolsaG;
     $("#cfg-peso-merch").value = cfgPrecios.pesoMerchG;
@@ -2101,7 +2108,7 @@ $("#producto-form").addEventListener("submit", async (e) => {
     $("#prod-categoria").querySelectorAll("button").forEach((x) => x.classList.toggle("px-chip--activo", x.dataset.categoria === "cafe_bolsa"));
     $("#prod-thumb").hidden = true;
     fotoDataUrl = null;
-    TABS["tab-precios"].cargado = false; // que Precios muestre el producto nuevo
+    invalidarPrecios(); // que Precios muestre el producto nuevo
     cargarProductos();
   } catch (err) {
     mensaje("#producto-message", `⚠️ ${err.message}`);
@@ -2111,11 +2118,27 @@ $("#producto-form").addEventListener("submit", async (e) => {
 });
 
 // ===== Tabs de gestión =====
+// Precios, Envío y Mercado Pago se alimentan de los mismos dos endpoints
+// (admin-precios + admin-config), así que comparten `cargarPrecios`, que llena
+// los campos de las tres vistas (están en el DOM aunque la pestaña esté oculta).
+// `grupo`: las que comparten datos se cargan una sola vez entre las tres.
 const TABS = {
   "tab-productos": { vista: "vista-productos", cargar: cargarProductos, cargado: false },
-  "tab-precios": { vista: "vista-precios", cargar: cargarPrecios, cargado: false },
+  "tab-precios": { vista: "vista-precios", cargar: cargarPrecios, grupo: "config", cargado: false },
+  "tab-envio": { vista: "vista-envio", cargar: cargarPrecios, grupo: "config", cargado: false },
+  "tab-mercadopago": { vista: "vista-mercadopago", cargar: cargarPrecios, grupo: "config", cargado: false },
   "tab-cupones": { vista: "vista-cupones", cargar: cargarCupones, cargado: false },
 };
+
+// Marca (o desmarca) todas las pestañas de un grupo de una vez
+function marcarGrupo(grupo, cargado) {
+  for (const t of Object.values(TABS)) if (t.grupo === grupo) t.cargado = cargado;
+}
+
+// Un cambio de producto o de costos invalida las tres vistas de configuración
+function invalidarPrecios() {
+  marcarGrupo("config", false);
+}
 
 function activarTab(tabId) {
   for (const [id, t] of Object.entries(TABS)) {
@@ -2124,7 +2147,10 @@ function activarTab(tabId) {
     $("#" + t.vista).hidden = !activa;
   }
   const t = TABS[tabId];
-  if (!t.cargado) { t.cargar(); t.cargado = true; }
+  if (!t.cargado) {
+    t.cargar();
+    if (t.grupo) marcarGrupo(t.grupo, true); else t.cargado = true;
+  }
 }
 
 Object.keys(TABS).forEach((id) => $("#" + id).addEventListener("click", () => activarTab(id)));
