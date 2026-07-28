@@ -377,6 +377,9 @@
             <input id="envio-telefono" placeholder="Teléfono" autocomplete="tel" inputmode="tel">
           </div>
           <p class="entrega__aviso" id="envio-costo-estado">📦 Ingresá tu código postal, ciudad y provincia para ver las opciones de envío.</p>
+          <!-- Paso 1: a domicilio o a sucursal. Recién después se muestran los
+               transportistas de esa modalidad, para no mezclar las dos listas. -->
+          <div class="modalidades" id="envio-modalidad" hidden></div>
           <div class="entrega__opciones" id="envio-opciones" hidden></div>
           <!-- Las sucursales van fuera del contenedor de opciones: ese tiene
                scroll propio (max-height) y adentro las dos listas se tapaban -->

@@ -71,6 +71,15 @@ let saldoPuntos = null; // saldo conocido del email actual (null = sin consultar
 let envioQuote = { clave: "", firma: "", opciones: [], cargando: false, error: null };
 let envioOpcionElegida = null; // clave de la opción elegida (carrier+servicio)
 let envioSucursalElegida = null; // id de la sucursal, solo si la opción es tipo 'sucursal'
+// A domicilio o a sucursal: se elige ANTES de ver transportistas, para no
+// mezclar las dos listas. Si el destino solo tiene una modalidad, se asigna
+// sola y no se le pregunta al cliente algo que no es una decisión real.
+let envioModalidad = null;
+
+// Qué modalidades trajo la última cotización (puede haber una sola)
+function tiposDeQuote() {
+  return new Set(envioQuote.opciones.map((o) => o.tipo));
+}
 
 const $ = (sel) => document.querySelector(sel);
 /**
@@ -574,9 +583,14 @@ function estadoPedido() {
 
   const envioCosto = envioCostoActual(items);
   if (envioCosto == null) {
-    const pendiente = envioQuote.cargando
-      ? "Calculando el costo de envío…"
-      : envioQuote.error || "Ingresá tu código postal para calcular el envío";
+    // El aviso tiene que decir qué falta AHORA: con la cotización ya hecha, lo
+    // que falta es elegir modalidad o correo, no el código postal.
+    let pendiente;
+    if (envioQuote.cargando) pendiente = "Calculando el costo de envío…";
+    else if (envioQuote.error) pendiente = envioQuote.error;
+    else if (envioQuote.opciones.length && !envioModalidad) pendiente = "Elegí si lo querés a domicilio o a sucursal";
+    else if (envioQuote.opciones.length) pendiente = "Elegí con qué correo lo enviamos";
+    else pendiente = "Ingresá tu código postal para calcular el envío";
     return { items, calc: null, error: null, pendiente };
   }
 
@@ -820,6 +834,7 @@ function vaciarCarrito() {
   envioQuote = { clave: "", firma: "", opciones: [], cargando: false, error: null };
   envioOpcionElegida = null;
   envioSucursalElegida = null;
+  envioModalidad = null;
   renderCarrito();
 }
 
@@ -1044,6 +1059,7 @@ function validarEntrega() {
   if (!e.nombre) return "Ingresá tu nombre para el envío";
   if (!e.ciudad || !e.provincia || !e.cp) return "Ingresá tu ciudad, provincia y código postal";
   if (!e.telefono) return "Ingresá un teléfono de contacto";
+  if (!envioModalidad) return "Elegí si el envío es a domicilio o a sucursal";
   if (!e.opcionGrupo) return "Elegí una opción de envío";
   if (e.opcionTipo === "domicilio" && !e.direccion) return "Ingresá la dirección de envío";
   if (e.opcionTipo === "sucursal" && !e.sucursal) return "Elegí la sucursal donde retirar el pedido";
@@ -1108,6 +1124,7 @@ async function actualizarCotizacionEnvio(items) {
   envioQuote = { clave, firma, opciones: [], cargando: true, error: null };
   envioOpcionElegida = null;
   envioSucursalElegida = null;
+  envioModalidad = null;
   renderCarrito();
   try {
     const res = await fetch("/api/cotizar-envio", {
@@ -1118,12 +1135,13 @@ async function actualizarCotizacionEnvio(items) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || "No pudimos calcular el envío");
     envioQuote = { clave, firma, opciones: data.opciones || [], cargando: false, error: null };
-    // Se preselecciona la opción más barata (las opciones vienen ordenadas por
-    // precio), pero NUNCA la sucursal: elegir por él dónde va el paquete es
-    // pedirle que descubra el error cuando ya no está.
-    const primera = envioQuote.opciones[0];
-    if (primera) envioOpcionElegida = primera.clave;
+    envioOpcionElegida = null;
     envioSucursalElegida = null;
+    // Si el destino tiene una sola modalidad, se elige sola: preguntar entre
+    // una única opción es hacerle dar un paso de más al cliente.
+    const tipos = [...tiposDeQuote()];
+    envioModalidad = tipos.length === 1 ? tipos[0] : null;
+    if (envioModalidad) preseleccionarMasBarata();
   } catch (err) {
     envioQuote = { clave, firma, opciones: [], cargando: false, error: err.message };
   }
@@ -1138,54 +1156,113 @@ function actualizarEnvioCostoEstado(items) {
   const destino = destinoEnvio();
   const vigente = cotizacionVigente(items);
 
+  // Mientras no haya una cotización usable no se muestra nada de los dos pasos:
+  // si no, quedan tarjetas de una cotización vieja debajo del aviso.
+  const limpiar = (aviso) => {
+    el.textContent = aviso;
+    for (const id of ["#envio-modalidad", "#envio-opciones", "#envio-sucursales"]) {
+      $(id).hidden = true;
+      $(id).innerHTML = "";
+    }
+    $("#envio-direccion").hidden = false; // el campo de dirección vuelve por defecto
+  };
+
   if (!destino.cp || !destino.ciudad || !destino.provincia) {
-    el.textContent = "📦 Ingresá tu código postal, ciudad y provincia para ver las opciones de envío.";
-    cont.hidden = true;
-    cont.innerHTML = "";
+    limpiar("📦 Ingresá tu código postal, ciudad y provincia para ver las opciones de envío.");
     return;
   }
   if (envioQuote.cargando) {
-    el.textContent = "📦 Buscando opciones de envío…";
-    cont.hidden = true;
+    limpiar("📦 Buscando opciones de envío…");
     return;
   }
   if (vigente && envioQuote.error) {
-    el.textContent = `⚠️ ${envioQuote.error}`;
-    cont.hidden = true;
-    cont.innerHTML = "";
+    limpiar(`⚠️ ${envioQuote.error}`);
     return;
   }
   if (!vigente || !envioQuote.opciones.length) {
-    el.textContent = "📦 Ingresá tu código postal, ciudad y provincia para ver las opciones de envío.";
-    cont.hidden = true;
-    cont.innerHTML = "";
+    limpiar("📦 Ingresá tu código postal, ciudad y provincia para ver las opciones de envío.");
     return;
   }
 
-  el.textContent = "📦 Elegí cómo recibirlo:";
+  // Paso 1: a domicilio o a sucursal. Paso 2: el transportista de esa
+  // modalidad. Antes iban las dos listas mezcladas y ordenadas por precio, y
+  // había que leer el ícono de cada fila para saber qué era cada cosa.
+  const tipos = tiposDeQuote();
+  const modalidades = $("#envio-modalidad");
+  const hayQueElegir = tipos.size > 1;
+
+  modalidades.hidden = !hayQueElegir;
+  modalidades.innerHTML = hayQueElegir ? tarjetasModalidad() : "";
+
+  if (!envioModalidad) {
+    el.textContent = "📦 ¿Cómo querés recibirlo?";
+    cont.hidden = true;
+    cont.innerHTML = "";
+    $("#envio-direccion").hidden = true;
+    $("#envio-sucursales").hidden = true;
+    return;
+  }
+
+  const deLaModalidad = envioQuote.opciones.filter((o) => o.tipo === envioModalidad);
+  // El aviso de arriba rotula el paso 1 (las tarjetas de modalidad); el rótulo
+  // de los correos va pegado a su propia lista, si no parece que nombra a las
+  // tarjetas que tiene encima.
+  el.textContent = hayQueElegir ? "📦 ¿Cómo querés recibirlo?" : "📦 Elegí el correo:";
   cont.hidden = false;
-  // (la lista de sucursales se arma en listaSucursales, más abajo)
-  cont.innerHTML = envioQuote.opciones.map((o) => {
+  cont.innerHTML = (hayQueElegir ? `<p class="envio-opciones__titulo">${envioModalidad === "sucursal" ? "🏤" : "🚚"} Elegí el correo</p>` : "") +
+    deLaModalidad.map((o) => {
     const marcada = o.clave === envioOpcionElegida;
-    const icono = o.tipo === "sucursal" ? "🏤" : "🚚";
-    const etiqueta = o.tipo === "sucursal" ? "A sucursal" : "A domicilio";
-    let html = `<label class="envio-opcion">
+    return `<label class="envio-opcion">
         <span class="envio-opcion__label">
           <input type="radio" name="envio-opcion" value="${o.clave}" ${marcada ? "checked" : ""}>
-          <span class="envio-opcion__texto">${icono} ${etiqueta} — ${o.transportista}</span>
+          <span class="envio-opcion__texto">${escaparHtml(o.transportista)}</span>
         </span>
         <span class="envio-opcion__precio">${formatear(o.precio)}</span>
       </label>`;
-    return html;
   }).join("");
 
   const op = opcionElegida();
-  $("#envio-direccion").hidden = Boolean(op && op.tipo === "sucursal");
+  // La dirección solo hace falta si va a domicilio: a sucursal el paquete va al
+  // punto de retiro, no a la casa del cliente. Las notas siguen sirviendo en
+  // los dos casos, pero "piso, depto" no aplica a una sucursal.
+  $("#envio-direccion").hidden = envioModalidad !== "domicilio";
+  $("#envio-notas").placeholder = envioModalidad === "sucursal"
+    ? "Notas para el envío (opcional)"
+    : "Notas (piso, depto, referencia)";
 
   const caja = $("#envio-sucursales");
   const conSucursales = op && op.tipo === "sucursal" && op.sucursales && op.sucursales.length;
   caja.hidden = !conSucursales;
   caja.innerHTML = conSucursales ? listaSucursales(op.sucursales) : "";
+}
+
+// Las dos tarjetas del paso 1, con el precio más barato de cada modalidad para
+// que se puedan comparar sin tener que abrir las dos.
+function tarjetasModalidad() {
+  return ["domicilio", "sucursal"].map((tipo) => {
+    const deEse = envioQuote.opciones.filter((o) => o.tipo === tipo);
+    if (!deEse.length) return "";
+    const desde = Math.min(...deEse.map((o) => o.precio));
+    const activa = envioModalidad === tipo;
+    const icono = tipo === "sucursal" ? "🏤" : "🚚";
+    const titulo = tipo === "sucursal" ? "A sucursal" : "A domicilio";
+    const detalle = tipo === "sucursal" ? "Lo retirás vos" : "Te lo llevan";
+    return `<label class="modalidad${activa ? " modalidad--activa" : ""}">
+        <input type="radio" name="envio-modalidad" value="${tipo}" ${activa ? "checked" : ""}>
+        <span class="modalidad__datos">
+          <span class="modalidad__titulo">${icono} ${titulo}</span>
+          <span class="modalidad__detalle">${detalle} · desde ${formatear(desde)}</span>
+        </span>
+      </label>`;
+  }).join("");
+}
+
+// Deja marcada la opción más barata de la modalidad elegida (vienen ordenadas
+// por precio). La sucursal puntual NUNCA se preselecciona.
+function preseleccionarMasBarata() {
+  const primera = envioQuote.opciones.find((o) => o.tipo === envioModalidad);
+  envioOpcionElegida = primera ? primera.clave : null;
+  envioSucursalElegida = null;
 }
 // Las sucursales van como tarjetas y no como <select>: son pocas (hasta 8) y
 // cada una necesita dos renglones (nombre y dirección). Metidas en un <select>
@@ -1220,6 +1297,13 @@ function escaparHtml(v) {
   return String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c]));
 }
 const escaparAttr = escaparHtml;
+
+$("#envio-modalidad").addEventListener("change", (e) => {
+  if (e.target.name !== "envio-modalidad") return;
+  envioModalidad = e.target.value;
+  preseleccionarMasBarata();
+  renderCarrito();
+});
 
 $("#envio-opciones").addEventListener("change", (e) => {
   if (e.target.name !== "envio-opcion") return;

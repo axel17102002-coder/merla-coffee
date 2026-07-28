@@ -937,6 +937,16 @@ section[id], footer[id] { scroll-margin-top: 90px; }
   color: var(--panel-texto);
 }
 
+.cart .envio-opciones__titulo { color: var(--panel-texto); }
+
+/* Modalidad (domicilio / sucursal) dentro del carrito oscuro */
+.cart .modalidad { background: var(--panel-alto); border-color: var(--panel-borde); }
+.cart .modalidad:hover { border-color: var(--panel-calido); }
+.cart .modalidad--activa { background: #55402f; border-color: var(--panel-calido); }
+.cart .modalidad input { accent-color: var(--panel-calido); }
+.cart .modalidad__titulo { color: var(--panel-texto); }
+.cart .modalidad__detalle { color: var(--panel-tenue); }
+
 /* Sucursales dentro del carrito oscuro */
 .cart .sucursales__titulo { color: var(--panel-texto); }
 .cart .sucursales__titulo--falta { color: var(--panel-calido); }
@@ -1507,8 +1517,9 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 .entrega__form input:focus { outline: 2px solid var(--caramelo); border-color: var(--caramelo); }
 .entrega__aviso { font-size: 0.78rem; color: var(--caramelo); font-weight: 600; margin: 2px 0 0; }
 
-/* Opciones de envío (a domicilio / a sucursal, por transportista) */
+/* Opciones de envío (los correos de la modalidad elegida) */
 .entrega__opciones { display: grid; gap: 6px; max-height: 260px; overflow-y: auto; padding-right: 2px; }
+.envio-opciones__titulo { font-size: 0.8rem; font-weight: 700; color: var(--verde); margin: 2px 0; }
 .envio-opcion {
   display: flex; align-items: center; gap: 10px;
   border: 1.5px solid var(--crema-borde); border-radius: 12px; padding: 10px 12px;
@@ -1522,6 +1533,23 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 .envio-opcion__texto { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .envio-opcion:has(input:checked) .envio-opcion__label { font-weight: 700; }
 .envio-opcion__precio { white-space: nowrap; flex-shrink: 0; font-weight: 700; }
+/* Paso 1 del envío: a domicilio o a sucursal. Dos tarjetas grandes, con el
+   precio más barato de cada una para poder comparar sin abrirlas. */
+.modalidades { display: flex; gap: 8px; margin-bottom: 4px; }
+.modalidad {
+  flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 9px;
+  border: 1.5px solid var(--crema-borde); border-radius: 12px; padding: 10px 12px;
+  cursor: pointer; background: var(--crema-suave);
+}
+.modalidad:hover { border-color: var(--verde); }
+.modalidad--activa { border-color: var(--verde); background: #eef3ec; }
+/* el radio hereda width:100% del formulario de entrega: acá tiene que ser chico */
+.modalidad input { width: auto; margin-top: 2px; accent-color: var(--verde); flex-shrink: 0; }
+.modalidad__datos { display: grid; gap: 2px; min-width: 0; }
+.modalidad__titulo { font-size: 0.86rem; font-weight: 600; color: var(--tinta); }
+.modalidad--activa .modalidad__titulo { font-weight: 800; }
+.modalidad__detalle { font-size: 0.76rem; color: #66705f; }
+
 /* Sucursales del transportista: tarjetas con nombre y dirección, sangradas
    bajo la opción de envío a la que pertenecen. Antes era un <select> de una
    línea, donde no se veía la dirección ni se podían comparar. */
