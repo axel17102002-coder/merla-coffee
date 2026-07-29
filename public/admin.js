@@ -1610,10 +1610,20 @@ async function cargarPrecios() {
     $("#cfg-peso-drip").value = cfgPrecios.pesoDripBagG;
     $("#cfg-peso-cafe14").value = cfgPrecios.pesoCafeBolsaG;
     $("#cfg-peso-merch").value = cfgPrecios.pesoMerchG;
-    mensaje("#zipnova-estado", dataConfig.zipnovaDisponible
-      ? "✅ Conectado: el envío a domicilio cotiza en vivo."
-      : "⚠️ Sin conectar: faltan ZIPNOVA_TOKEN, ZIPNOVA_SECRET y/o ZIPNOVA_ACCOUNT_ID en las variables de entorno. Mientras tanto, el envío a domicilio no se puede cobrar.",
-      dataConfig.zipnovaDisponible);
+    // Estado de cada proveedor de tarifas: se puede tener uno, el otro o los
+    // dos (las opciones se mezclan ordenadas por precio en el carrito).
+    const prov = dataConfig.proveedoresEnvio || { zipnova: dataConfig.zipnovaDisponible, andreani: false };
+    const conectados = Object.entries(prov).filter(([, ok]) => ok).map(([n]) => n);
+    const faltan = {
+      zipnova: "ZIPNOVA_TOKEN, ZIPNOVA_SECRET y ZIPNOVA_ACCOUNT_ID",
+      andreani: "ANDREANI_USUARIO, ANDREANI_PASSWORD, ANDREANI_CLIENTE, ANDREANI_SUCURSAL_ORIGEN y algún ANDREANI_CONTRATO_*",
+    };
+    const sinConectar = Object.entries(prov).filter(([, ok]) => !ok).map(([n]) => `${n} (faltan ${faltan[n]})`);
+    mensaje("#zipnova-estado",
+      conectados.length
+        ? `✅ Cotizando con ${conectados.join(" y ")}.${sinConectar.length ? ` Sin conectar: ${sinConectar.join("; ")}.` : ""}`
+        : `⚠️ Sin ningún proveedor conectado: el envío a domicilio no se puede cobrar. Falta configurar ${sinConectar.join("; ")}.`,
+      conectados.length > 0);
     mensaje("#precio-message", dataConfig.desdeLaBase ? "" : "⚠️ Falta correr supabase/migracion-insumos.sql: mientras tanto se usan los valores anteriores y los insumos no se pueden editar.");
     cargarTransportistas(); // no frena la carga de Precios si falla
   } catch (err) {

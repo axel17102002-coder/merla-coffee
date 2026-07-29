@@ -9,7 +9,7 @@
 // envío a domicilio queda deshabilitado (avisa con un mensaje claro) hasta
 // que se carguen las credenciales, igual que Brevo con los mails.
 
-const { sb } = require("./supabase.js");
+const { filtrarOpciones } = require("./transportistas.js");
 
 function credenciales() {
   const token = process.env.ZIPNOVA_TOKEN;
@@ -35,62 +35,8 @@ const CLASIFICACION_GENERAL = 1;
 // Cuánto esperamos la cotización antes de darla por perdida.
 const ESPERA_MAX_MS = 12000;
 
-// Qué transportistas ve el cliente. Zipnova conecta con muchos (Chazki,
-// Toparco, Cabify Logistics, Andesmar…) y mostrarlos todos abruma, así que se
-// eligen a mano desde /admin → Precios → Envío (tabla `transportistas`).
-//
-// Si la tabla todavía no existe (migración sin correr) o la consulta falla, se
-// usa esta lista: los tres que se mostraban desde siempre.
-const RESPALDO_PERMITIDOS = ["andreani", "correo argentino", "oca"];
-
-// La lista se cachea en memoria: una cotización no puede pagar una consulta
-// extra a la base, y esto cambia una vez cada varios meses.
-const CACHE_MS = 5 * 60 * 1000;
-let cacheTransportistas = { hasta: 0, activos: null, conocidos: new Set() };
-
-async function transportistasActivos() {
-  if (cacheTransportistas.activos && cacheTransportistas.hasta > Date.now()) {
-    return cacheTransportistas;
-  }
-  try {
-    const filas = await sb("transportistas?select=nombre,activo");
-    cacheTransportistas = {
-      hasta: Date.now() + CACHE_MS,
-      activos: filas.filter((t) => t.activo).map((t) => t.nombre.toLowerCase()),
-      conocidos: new Set(filas.map((t) => t.nombre.toLowerCase())),
-    };
-  } catch (err) {
-    console.warn("zipnova: sin tabla de transportistas (correr migracion-transportistas.sql):", err.message);
-    cacheTransportistas = { hasta: Date.now() + CACHE_MS, activos: RESPALDO_PERMITIDOS, conocidos: new Set(RESPALDO_PERMITIDOS) };
-  }
-  return cacheTransportistas;
-}
-
-// Comparación por substring y sin distinguir mayúsculas, para tolerar variantes
-// del mismo nombre ("Correo Argentino S.A.").
-function permitido(nombre, activos) {
-  const n = (nombre || "").toLowerCase();
-  return activos.some((t) => n.includes(t) || t.includes(n));
-}
-
-// Un transportista que Zipnova devuelve y no teníamos fichado se guarda
-// APAGADO: aparece en el panel para prenderlo, pero nunca se muestra solo en
-// la tienda. Es "best effort" y no frena la cotización.
-async function ficharDesconocidos(nombres, conocidos) {
-  const nuevos = [...new Set(nombres.filter((n) => n && !conocidos.has(n.toLowerCase())))];
-  if (!nuevos.length) return;
-  try {
-    await sb("transportistas", {
-      method: "POST",
-      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-      body: nuevos.map((nombre) => ({ nombre, activo: false, visto: new Date().toISOString() })),
-    });
-    for (const n of nuevos) conocidos.add(n.toLowerCase());
-    console.log("zipnova: transportistas nuevos fichados (apagados):", nuevos.join(", "));
-  } catch (err) {
-    console.warn("zipnova: no pude fichar transportistas nuevos:", err.message);
-  }
-}
+// El filtro de transportistas prendidos/apagados vive en transportistas.js:
+// lo comparten Zipnova y las APIs directas (ver envio-costo.js).
 
 // Zipnova puede devolver el mismo carrier+servicio dos veces con precios
 // distintos (tarifas/condiciones que no se diferencian en estos campos), así
@@ -219,14 +165,9 @@ async function cotizarOpciones({ cp, ciudad, provincia, pesoGramos, valorDeclara
     return { ok: false, error: "No hay opciones de envío disponibles para esa dirección." };
   }
 
-  const todas = crudas.map(normalizarOpcion);
-  const { activos, conocidos } = await transportistasActivos();
-  // Los que aparecen por primera vez quedan fichados para poder prenderlos
-  // desde el panel (no se espera a que termine: no cambia esta respuesta).
-  ficharDesconocidos(todas.map((o) => o.transportista), conocidos);
-
-  const opciones = todas
-    .filter((o) => permitido(o.transportista, activos))
+  // El filtro de prendidos/apagados y el fichado de los nuevos son comunes a
+  // todos los proveedores (ver transportistas.js).
+  const opciones = (await filtrarOpciones(crudas.map(normalizarOpcion)))
     .sort((a, b) => a.precio - b.precio);
   if (!opciones.length) {
     return { ok: false, error: "No hay opciones de envío disponibles para esa dirección." };

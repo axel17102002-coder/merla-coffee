@@ -114,21 +114,44 @@ Configuración (una sola vez):
 
 Sin `BREVO_API_KEY` no se rompe nada: los mails simplemente no se envían y queda el aviso en los logs.
 
-## Envío (Zipnova)
+## Envío (Zipnova y/o Andreani)
 
-El envío a domicilio se cotiza **en vivo** con [Zipnova](https://www.zipnova.com/ar/productos/envios) según el peso estimado de lo que se compra, y ese costo se suma al total que se cobra (Mercado Pago o WhatsApp): nunca se confía en un monto mandado por el navegador, se vuelve a calcular en el servidor al pagar.
+El envío se cotiza **en vivo** según el peso estimado de lo que se compra, y ese costo se suma al total que se cobra (Mercado Pago o WhatsApp): nunca se confía en un monto mandado por el navegador, se vuelve a calcular en el servidor al pagar.
+
+Hay **dos proveedores de tarifas** y se pueden usar juntos:
+
+| | Qué es | Credenciales |
+|---|---|---|
+| **Zipnova** | Agregador: una integración, muchos transportistas (OCA, Correo Argentino, Andesmar, Chazki…) | Autoservicio |
+| **Andreani** | Directo al transportista, sin el margen del agregador | Las da su equipo comercial con el contrato |
+
+Si están los dos configurados, se cotizan **en paralelo** y las opciones se mezclan en una sola lista ordenada por precio — al cliente le da igual de dónde sale la tarifa. Si uno falla o está caído, el otro igual responde. Qué transportistas se muestran se elige en `/admin` → Precios → Envío, y ese interruptor aplica a los dos proveedores por igual.
 
 - **Peso estimado**: cada tipo de producto (drip bag, café en bolsa de 1/4, tazas/otros) tiene un peso configurable en `/admin` → Precios → Envío. Se usa `peso × unidades del carrito` para cotizar.
 - **Retiro** no cotiza nada: el envío solo entra en juego cuando el cliente elige "Envío a domicilio" y carga su código postal.
 - **Sin credenciales** no se rompe nada: el envío a domicilio queda deshabilitado con un aviso claro (retiro y WhatsApp sin envío siguen funcionando).
 
-Configuración (una sola vez):
+### Configurar Zipnova
 
 1. Creá una cuenta en [Zipnova](https://www.zipnova.com/ar/productos/envios) y pedí tus credenciales de integración por **API con autenticación Basic** (token + secret de una cuenta propia; no hace falta el flujo OAuth, que es para apps multi-cuenta).
 2. Cargá `ZIPNOVA_TOKEN`, `ZIPNOVA_SECRET` y `ZIPNOVA_ACCOUNT_ID` en `.env`/`.dev.vars` (local) y como **Secrets** en Cloudflare → Settings → Variables and Secrets.
-3. En `/admin` → Precios → Envío vas a ver "✅ Conectado" cuando las tres variables estén cargadas.
 
 Docs de la API: https://docs.zipnova.com/envios/recursos-api/envios/cotizar-envios
+
+### Configurar Andreani
+
+1. Registrá la cuenta de negocio en [Andreani](https://www.andreani.com/) y pedile a tu ejecutivo comercial las **credenciales de API** y los **números de contrato**. Ojo: Andreani asigna un contrato distinto por modalidad (uno para entrega a domicilio y otro para entrega en sucursal); podés tener uno solo.
+2. Cargá en `.env`/`.dev.vars` y como Secrets en Cloudflare:
+   - `ANDREANI_USUARIO`, `ANDREANI_PASSWORD` — para el login que devuelve el token
+   - `ANDREANI_CLIENTE` — tu número de cliente
+   - `ANDREANI_SUCURSAL_ORIGEN` — desde dónde se despacha
+   - `ANDREANI_CONTRATO_DOMICILIO` y/o `ANDREANI_CONTRATO_SUCURSAL`
+   - `ANDREANI_AMBIENTE=qa` mientras probás (apunta a `apisqa.andreani.com`); vacío = producción
+3. **Probá primero en QA**: pedí un envío de prueba desde el carrito con un CP real y mirá en los logs de `wrangler dev` que la cotización vuelva con precio. Recién ahí sacá `ANDREANI_AMBIENTE`.
+
+Endpoints que usa la integración (`backend/lib/andreani.js`): `GET /login` (Basic → token en el header `x-authorization-token`), `GET /v1/tarifas` (cotización) y `GET /v2/sucursales` (puntos de retiro).
+
+En `/admin` → Precios → Envío el aviso de arriba dice con qué proveedores está cotizando y cuáles quedan sin conectar.
 
 ## Notas
 

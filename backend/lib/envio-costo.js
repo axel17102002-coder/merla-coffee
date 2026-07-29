@@ -1,10 +1,32 @@
-// Resuelve las opciones de envío (a domicilio y a sucursal) para un pedido,
-// cotizando con Zipnova. Nunca se confía en un monto mandado por el
-// navegador: el checkout vuelve a cotizar y busca la opción elegida antes
-// de cobrar.
+// Resuelve las opciones de envío (a domicilio y a sucursal) para un pedido.
+// Cotiza en PARALELO contra todos los proveedores configurados y devuelve una
+// sola lista ordenada por precio: al cliente le da igual de dónde salga la
+// tarifa. Nunca se confía en un monto mandado por el navegador: el checkout
+// vuelve a cotizar y busca la opción elegida antes de cobrar.
 
 const zipnova = require("./zipnova.js");
+const andreani = require("./andreani.js");
 const { obtenerCostos } = require("./costos.js");
+
+// Cada proveedor expone la misma interfaz: disponible(), cotizarOpciones() y
+// precioDeOpcion(). El `grupo` de cada opción arranca con el id del proveedor
+// ("andreani:…"), que es como el checkout sabe a quién volver a preguntarle.
+const PROVEEDORES = {
+  zipnova,
+  andreani,
+};
+
+// Zipnova es el proveedor histórico y sus grupos no llevan prefijo: un carrito
+// abierto antes de este cambio manda un grupo viejo, y tiene que seguir
+// funcionando.
+function proveedorDe(grupo) {
+  const id = String(grupo || "").split(":")[0];
+  return PROVEEDORES[id] ? { id, mod: PROVEEDORES[id] } : { id: "zipnova", mod: zipnova };
+}
+
+function proveedoresActivos() {
+  return Object.entries(PROVEEDORES).filter(([, mod]) => mod.disponible());
+}
 
 // Peso estimado de una línea del pedido, según qué tipo de producto es esa
 // presentación: drip bag, café en bolsa de 1/4, o tazas/otros.
@@ -39,10 +61,31 @@ async function listarOpcionesEnvio(items, productos, destino, valorDeclarado) {
   }
   const { cfg } = await obtenerCostos();
   const peso = pesoTotalGramos(items, productos, cfg);
-  return zipnova.cotizarOpciones({
-    cp: destino.cp, ciudad: destino.ciudad, provincia: destino.provincia,
-    pesoGramos: peso, valorDeclarado,
+  const activos = proveedoresActivos();
+  if (!activos.length) {
+    return { ok: false, error: "El envío no está disponible en este momento. Probá con retiro o escribinos por WhatsApp." };
+  }
+
+  const consulta = { cp: destino.cp, ciudad: destino.ciudad, provincia: destino.provincia, pesoGramos: peso, valorDeclarado };
+  const resultados = await Promise.allSettled(activos.map(([, mod]) => mod.cotizarOpciones(consulta)));
+
+  // Un proveedor caído no puede dejar sin envío al cliente si el otro contestó
+  const opciones = [];
+  const errores = [];
+  resultados.forEach((r, i) => {
+    const nombre = activos[i][0];
+    if (r.status === "fulfilled" && r.value.ok) opciones.push(...r.value.opciones);
+    else {
+      const motivo = r.status === "fulfilled" ? r.value.error : r.reason && r.reason.message;
+      console.warn(`envio: ${nombre} no cotizó:`, motivo);
+      errores.push(motivo);
+    }
   });
+
+  if (!opciones.length) {
+    return { ok: false, error: errores[0] || "No hay opciones de envío disponibles para esa dirección." };
+  }
+  return { ok: true, opciones: opciones.sort((a, b) => a.precio - b.precio) };
 }
 
 // envio: el objeto ya sanitizado por sanitizarEnvio() — { metodo:'envio', cp,
@@ -61,7 +104,9 @@ async function resolverEnvioCosto(items, productos, envio, valorDeclarado) {
 
   const { cfg } = await obtenerCostos();
   const peso = pesoTotalGramos(items, productos, cfg);
-  const resultado = await zipnova.precioDeOpcion({
+  // Se le vuelve a preguntar al MISMO proveedor que dio la opción elegida
+  const { mod } = proveedorDe(envio.opcionGrupo);
+  const resultado = await mod.precioDeOpcion({
     grupo: envio.opcionGrupo,
     cp: envio.cp, ciudad: envio.ciudad, provincia: envio.provincia,
     pesoGramos: peso, valorDeclarado,
@@ -70,4 +115,4 @@ async function resolverEnvioCosto(items, productos, envio, valorDeclarado) {
   return { ok: true, costo: resultado.opcion.precio, opcion: resultado.opcion };
 }
 
-module.exports = { listarOpcionesEnvio, resolverEnvioCosto, pesoTotalGramos };
+module.exports = { listarOpcionesEnvio, resolverEnvioCosto, pesoTotalGramos, proveedorDe };

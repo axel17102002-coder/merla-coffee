@@ -13,6 +13,7 @@ const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
 const { obtenerCostos } = require("../lib/costos.js");
 const { precioPack, precioUnidadDesdeCosto } = require("../../public/motor.js");
 const zipnova = require("../lib/zipnova.js");
+const andreani = require("../lib/andreani.js");
 
 const CLAVES_VALIDAS = [
   "margen_unidad", "gramos_por_bag", "pack_unidades", "pack_descuento",
@@ -62,6 +63,12 @@ exports.handler = async (event) => {
           desdeLaBase, // false = falta correr la migración (se usan los valores viejos)
           totales: { unidad: cfg.fijoUnidad, pack: cfg.fijoPack },
           zipnovaDisponible: zipnova.disponible(),
+          // Cada proveedor de envío por separado: se puede tener uno, el otro
+          // o los dos, y las tarifas se mezclan ordenadas por precio.
+          proveedoresEnvio: {
+            zipnova: zipnova.disponible(),
+            andreani: andreani.disponible(),
+          },
         }),
       };
     }
