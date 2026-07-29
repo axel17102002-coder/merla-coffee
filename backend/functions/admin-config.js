@@ -14,6 +14,7 @@ const { obtenerCostos } = require("../lib/costos.js");
 const { precioPack, precioUnidadDesdeCosto } = require("../../public/motor.js");
 const zipnova = require("../lib/zipnova.js");
 const andreani = require("../lib/andreani.js");
+const paqar = require("../lib/paqar.js");
 
 const CLAVES_VALIDAS = [
   "margen_unidad", "gramos_por_bag", "pack_unidades", "pack_descuento",
@@ -68,6 +69,7 @@ exports.handler = async (event) => {
           proveedoresEnvio: {
             zipnova: zipnova.disponible(),
             andreani: andreani.disponible(),
+            paqar: paqar.disponible(),
           },
         }),
       };

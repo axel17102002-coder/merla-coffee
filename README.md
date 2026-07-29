@@ -118,12 +118,13 @@ Sin `BREVO_API_KEY` no se rompe nada: los mails simplemente no se envían y qued
 
 El envío se cotiza **en vivo** según el peso estimado de lo que se compra, y ese costo se suma al total que se cobra (Mercado Pago o WhatsApp): nunca se confía en un monto mandado por el navegador, se vuelve a calcular en el servidor al pagar.
 
-Hay **dos proveedores de tarifas** y se pueden usar juntos:
+Hay **tres proveedores de tarifas** y se pueden usar juntos:
 
 | | Qué es | Credenciales |
 |---|---|---|
 | **Zipnova** | Agregador: una integración, muchos transportistas (OCA, Correo Argentino, Andesmar, Chazki…) | Autoservicio |
 | **Andreani** | Directo al transportista, sin el margen del agregador | Las da su equipo comercial con el contrato |
+| **paq.ar** (MiCorreo) | Correo Argentino directo. En la prueba que hicimos salió **la mitad** que la opción más barata del agregador | Se piden por el formulario de contacto de Correo Argentino |
 
 Si están los dos configurados, se cotizan **en paralelo** y las opciones se mezclan en una sola lista ordenada por precio — al cliente le da igual de dónde sale la tarifa. Si uno falla o está caído, el otro igual responde. Qué transportistas se muestran se elige en `/admin` → Precios → Envío, y ese interruptor aplica a los dos proveedores por igual.
 
@@ -150,6 +151,18 @@ Docs de la API: https://docs.zipnova.com/envios/recursos-api/envios/cotizar-envi
 3. **Probá primero en QA**: pedí un envío de prueba desde el carrito con un CP real y mirá en los logs de `wrangler dev` que la cotización vuelva con precio. Recién ahí sacá `ANDREANI_AMBIENTE`.
 
 Endpoints que usa la integración (`backend/lib/andreani.js`): `GET /login` (Basic → token en el header `x-authorization-token`), `GET /v1/tarifas` (cotización) y `GET /v2/sucursales` (puntos de retiro).
+
+### Configurar paq.ar (MiCorreo)
+
+Es Correo Argentino directo, sin el margen del agregador. Referencia de lo que se puede ahorrar: La Plata → Córdoba, 4 kg, valor declarado $15.000 cotizó **$7.025** (Clásico) contra **$14.091** de la opción más barata que daba Zipnova para el mismo envío.
+
+1. Pedí las credenciales por el **formulario de contacto** de [Correo Argentino](https://www.correoargentino.com.ar/MiCorreo/public/primeros-pasos). Ojo: las de TEST y las de PRODUCCIÓN son distintas, pedí las dos.
+2. Cargá `PAQAR_USER_TOKEN`, `PAQAR_PASSWORD_TOKEN`, `PAQAR_CUSTOMER_ID` y `PAQAR_CP_ORIGEN` (1900 = La Plata).
+3. Probá con `PAQAR_AMBIENTE=test` antes de sacarlo a producción.
+
+Endpoints que usa la integración (`backend/lib/paqar.js`): `POST /token` (Basic → JWT), `POST /rates` (cotización; sin `deliveredType` devuelve domicilio y sucursal juntos) y `GET /agencies?provinceCode=` (sucursales, por código de provincia — la traducción desde el nombre está en `CODIGOS_PROVINCIA`).
+
+Las tarifas de paq.ar vienen por servicio (Clásico, Expreso, Hoy), así que el carrito muestra el nombre del servicio y el plazo debajo del transportista: si no, serían dos filas iguales de "Correo Argentino" con distinto precio.
 
 En `/admin` → Precios → Envío el aviso de arriba dice con qué proveedores está cotizando y cuáles quedan sin conectar.
 

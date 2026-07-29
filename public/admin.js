@@ -1612,11 +1612,12 @@ async function cargarPrecios() {
     $("#cfg-peso-merch").value = cfgPrecios.pesoMerchG;
     // Estado de cada proveedor de tarifas: se puede tener uno, el otro o los
     // dos (las opciones se mezclan ordenadas por precio en el carrito).
-    const prov = dataConfig.proveedoresEnvio || { zipnova: dataConfig.zipnovaDisponible, andreani: false };
+    const prov = dataConfig.proveedoresEnvio || { zipnova: dataConfig.zipnovaDisponible, andreani: false, paqar: false };
     const conectados = Object.entries(prov).filter(([, ok]) => ok).map(([n]) => n);
     const faltan = {
       zipnova: "ZIPNOVA_TOKEN, ZIPNOVA_SECRET y ZIPNOVA_ACCOUNT_ID",
       andreani: "ANDREANI_USUARIO, ANDREANI_PASSWORD, ANDREANI_CLIENTE, ANDREANI_SUCURSAL_ORIGEN y algún ANDREANI_CONTRATO_*",
+      paqar: "PAQAR_USER_TOKEN, PAQAR_PASSWORD_TOKEN, PAQAR_CUSTOMER_ID y PAQAR_CP_ORIGEN",
     };
     const sinConectar = Object.entries(prov).filter(([, ok]) => !ok).map(([n]) => `${n} (faltan ${faltan[n]})`);
     mensaje("#zipnova-estado",

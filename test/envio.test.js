@@ -86,3 +86,56 @@ test("sin transportistas prendidos no pasa ninguno", () => {
   assert.equal(permitido("Andreani", []), false);
   assert.equal(permitido("Andreani", undefined), false);
 });
+
+// ===== paq.ar (MiCorreo) =====
+
+const paqar = require("../backend/lib/paqar.js");
+
+test("cada servicio de paq.ar es una opción propia, con su plazo", () => {
+  const o = paqar.normalizarTarifa({
+    deliveredType: "D", productType: "CP", productName: "PAQ.AR Clásico",
+    price: 7025.6, deliveryTimeMin: 2, deliveryTimeMax: 5,
+  });
+  assert.equal(o.tipo, "domicilio");
+  assert.equal(o.transportista, "Correo Argentino"); // respeta el interruptor del panel
+  assert.equal(o.servicio, "PAQ.AR Clásico");
+  assert.equal(o.precio, 7026);
+  assert.equal(o.plazo, "2 a 5 días hábiles");
+  assert.equal(o.grupo, "paqar:D:CP");
+});
+
+test("la entrega en sucursal se marca como tal", () => {
+  const o = paqar.normalizarTarifa({ deliveredType: "S", productType: "CS", price: 6100 });
+  assert.equal(o.tipo, "sucursal");
+  assert.equal(o.grupo, "paqar:S:CS");
+});
+
+test("una tarifa sin precio no se ofrece", () => {
+  assert.equal(paqar.normalizarTarifa({ deliveredType: "D", price: 0 }), null);
+  assert.equal(paqar.normalizarTarifa({ deliveredType: "D", price: "no es un número" }), null);
+});
+
+test("el grupo de paq.ar se re-cotiza contra paq.ar", () => {
+  assert.equal(proveedorDe("paqar:D:CP").id, "paqar");
+});
+
+test("el cuerpo de la cotización lleva origen, destino y el bulto en gramos", () => {
+  const cred = { customerId: "123", cpOrigen: "1900" };
+  const b = paqar.cuerpoTarifa({ cred, cpDestino: "5000", pesoGramos: 900 });
+  assert.equal(b.customerId, "123");
+  assert.equal(b.postalCodeOrigin, "1900");
+  assert.equal(b.postalCodeDestination, "5000");
+  assert.equal(b.dimensions[0].weight, 900);
+  assert.equal(b.dimensions[0].quantity, 1);
+  // Sin deliveredType: pide domicilio y sucursal en una sola llamada
+  assert.equal(b.deliveredType, undefined);
+});
+
+test("las provincias se traducen al código que pide la API, con o sin tildes", () => {
+  assert.equal(paqar.codigoProvincia("Córdoba"), "X");
+  assert.equal(paqar.codigoProvincia("cordoba"), "X");
+  assert.equal(paqar.codigoProvincia("CABA"), "C");
+  assert.equal(paqar.codigoProvincia("Ciudad Autónoma de Buenos Aires"), "C");
+  assert.equal(paqar.codigoProvincia("Tierra del Fuego"), "V");
+  assert.equal(paqar.codigoProvincia("No existe"), null); // sin código no se piden sucursales
+});

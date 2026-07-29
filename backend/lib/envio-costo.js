@@ -6,6 +6,7 @@
 
 const zipnova = require("./zipnova.js");
 const andreani = require("./andreani.js");
+const paqar = require("./paqar.js");
 const { obtenerCostos } = require("./costos.js");
 
 // Cada proveedor expone la misma interfaz: disponible(), cotizarOpciones() y
@@ -14,6 +15,7 @@ const { obtenerCostos } = require("./costos.js");
 const PROVEEDORES = {
   zipnova,
   andreani,
+  paqar,
 };
 
 // Zipnova es el proveedor histórico y sus grupos no llevan prefijo: un carrito

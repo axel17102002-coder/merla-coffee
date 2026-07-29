@@ -981,6 +981,7 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 .cart .envio-opcion:has(input:checked) { background: #55402f; border-color: var(--panel-calido); }
 .cart .entrega__op input,
 .cart .envio-opcion input { accent-color: var(--panel-calido); }
+.cart .envio-opcion__servicio { color: var(--panel-tenue); }
 
 /* ===== Modal producto ===== */
 .modal {
@@ -1530,7 +1531,10 @@ section[id], footer[id] { scroll-margin-top: 90px; }
    acá el radio tiene que quedar chico para dejarle lugar al texto */
 .envio-opcion input { width: auto; accent-color: var(--verde); flex-shrink: 0; }
 .envio-opcion__label { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
-.envio-opcion__texto { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.envio-opcion__texto { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
+.envio-opcion__texto > :not(.envio-opcion__servicio) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Nombre del servicio y plazo, para distinguir dos filas del mismo correo */
+.envio-opcion__servicio { font-size: 0.74rem; color: #66705f; font-weight: 400; }
 .envio-opcion:has(input:checked) .envio-opcion__label { font-weight: 700; }
 .envio-opcion__precio { white-space: nowrap; flex-shrink: 0; font-weight: 700; }
 /* Paso 1 del envío: a domicilio o a sucursal. Dos tarjetas grandes, con el

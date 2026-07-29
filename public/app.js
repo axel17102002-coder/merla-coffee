@@ -1212,10 +1212,17 @@ function actualizarEnvioCostoEstado(items) {
   cont.innerHTML = (hayQueElegir ? `<p class="envio-opciones__titulo">${envioModalidad === "sucursal" ? "🏤" : "🚚"} Elegí el correo</p>` : "") +
     deLaModalidad.map((o) => {
     const marcada = o.clave === envioOpcionElegida;
+    // Un mismo correo puede traer varios servicios (paq.ar da Clásico y
+    // Expreso): sin el nombre y el plazo, son dos filas iguales con distinto
+    // precio y no se entiende por qué una sale más.
+    const detalle = [o.servicio, o.plazo].filter(Boolean).join(" · ");
     return `<label class="envio-opcion">
         <span class="envio-opcion__label">
           <input type="radio" name="envio-opcion" value="${o.clave}" ${marcada ? "checked" : ""}>
-          <span class="envio-opcion__texto">${escaparHtml(o.transportista)}</span>
+          <span class="envio-opcion__texto">
+            ${escaparHtml(o.transportista)}
+            ${detalle ? `<span class="envio-opcion__servicio">${escaparHtml(detalle)}</span>` : ""}
+          </span>
         </span>
         <span class="envio-opcion__precio">${formatear(o.precio)}</span>
       </label>`;
