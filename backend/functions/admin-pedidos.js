@@ -12,7 +12,7 @@
 const { sb, sbRpc, obtenerCatalogo } = require("../lib/supabase.js");
 const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
 const { itemsConCosto } = require("../lib/costos.js");
-const { METODOS_MP, ORIGENES_MANUALES } = require("../../public/motor.js");
+const { CONFIG, METODOS_MP, ORIGENES_MANUALES } = require("../../public/motor.js");
 
 const CAMPOS = "id,numero,origen,items,total,cupon,descuento_cupon,cliente_email,estado,creado,puntos_ganados,puntos_canjeados,envio,envio_costo";
 
@@ -61,7 +61,8 @@ async function traerPedidos(busqueda, limite) {
 
 // Pedido cargado a mano (venta mayorista o directa). Es el único lugar donde el
 // precio no sale del motor: lo fija el admin autenticado porque es un precio
-// negociado. No suma puntos Club Merla. Devuelve { statusCode, cuerpo }.
+// negociado. Suma puntos Club Merla si tiene email, como en la tienda: se
+// acreditan al marcarlo cobrado. Devuelve { statusCode, cuerpo }.
 async function crearPedidoManual(body) {
   const falla = (statusCode, error) => ({ statusCode, cuerpo: { error } });
 
@@ -120,7 +121,7 @@ async function crearPedidoManual(body) {
         items: await itemsConCosto(lineas, productos),
         subtotal: total,
         total,
-        puntos_ganados: 0,
+        puntos_ganados: email ? Math.floor(total / 100) * CONFIG.fidelidad.puntosPorCien : 0,
         cliente_email: email || null,
         envio: { metodo: body.metodo === "envio" ? "envio" : "retiro", nombre, ...(notas ? { notas } : {}) },
       },

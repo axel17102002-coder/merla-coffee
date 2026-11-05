@@ -86,7 +86,7 @@ function renderPedidos() {
       ? `<p class="pedido__extra">Cliente: ${escapar(envioManual.nombre)}${envioManual.metodo === "retiro" && envioManual.notas ? ` · ${escapar(envioManual.notas)}` : ""}</p>`
       : "";
     const cupon = p.cupon ? `<p class="pedido__extra">Cupón ${escapar(p.cupon)}: -${formato.format(p.descuento_cupon || 0)}</p>` : "";
-    const puntos = p.cliente_email && !esManual ? `<p class="pedido__extra">Puntos: +${p.puntos_ganados}${p.puntos_canjeados ? ` · canje -${p.puntos_canjeados}` : ""}</p>` : "";
+    const puntos = p.cliente_email ? `<p class="pedido__extra">Puntos: +${p.puntos_ganados}${p.puntos_canjeados ? ` · canje -${p.puntos_canjeados}` : ""}</p>` : "";
     const entrega = renderEntrega(p.envio);
     return `<article class="pedido pedido--${escapar(p.estado)}">
       <div class="pedido__top">
