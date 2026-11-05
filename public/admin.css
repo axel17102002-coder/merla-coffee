@@ -446,13 +446,8 @@ button:disabled { opacity: .55; cursor: wait; }
 .fila__editor-grilla { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 8px; }
 .fila__editor .mensaje:empty { display: none; }
 
-/* Botones de cada producto en celular: alineados y del mismo alto */
+/* Pedidos en celular: Eliminar y Enviar en el mismo renglón */
 @media (max-width: 560px) {
-  .fila__form { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
-  .fila__form input { width: 100%; min-width: 0; grid-column: span 4; }
-  .fila__form input[data-unidades] { grid-column: 1 / -1; }
-  .fila__form .fila__preview { grid-column: span 2; min-width: 0; }
-  .fila__form button { grid-column: span 2; min-height: 40px; padding: 8px 6px; font-size: .84rem; white-space: nowrap; }
-  .fila__form [data-desc-toggle], .fila__form [data-producto-toggle] { grid-column: span 4; }
-  .fila__editor .entrega__row button { padding: 10px 8px; font-size: .88rem; white-space: nowrap; }
+  .pedido__actions { gap: 6px; }
+  .pedido__actions button { flex: 1 1 auto; padding: 9px 8px; font-size: .84rem; white-space: nowrap; }
 }
