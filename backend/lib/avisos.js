@@ -2,9 +2,23 @@
 // Todo acá es "best effort": si un mail falla, se loguea y la venta sigue su
 // curso. Nunca lanza.
 
-const { sb } = require("./supabase.js");
+const { sb, obtenerPuntos } = require("./supabase.js");
 const { enviarMail, config } = require("./brevo.js");
 const { mailAvisoAdmin, mailConfirmacionCliente } = require("./mails.js");
+
+// Confirmación con el saldo de puntos al momento de enviarla (por eso va después
+// de aprobar el pedido). Si no se puede leer el saldo, el mail sale igual sin él.
+async function confirmacionConSaldo(pedido) {
+  let saldo = null;
+  if (pedido.estado === "aprobado") {
+    try {
+      saldo = await obtenerPuntos(pedido.cliente_email);
+    } catch (err) {
+      console.warn("avisos: mail sin saldo de puntos:", err.message);
+    }
+  }
+  return mailConfirmacionCliente(pedido, saldo);
+}
 
 // Busca el pedido, avisa al admin y —si se pide— le manda la confirmación al
 // cliente. Los que llaman ya se aseguran de hacerlo una sola vez por pedido
@@ -19,7 +33,7 @@ async function avisar(filtro, { confirmarCliente = false } = {}) {
     await enviarMail({ para: config().admin, asunto: admin.asunto, html: admin.html });
 
     if (confirmarCliente && pedido.cliente_email) {
-      const cliente = mailConfirmacionCliente(pedido);
+      const cliente = await confirmacionConSaldo(pedido);
       await enviarMail({ para: pedido.cliente_email, asunto: cliente.asunto, html: cliente.html });
     }
     return true;
@@ -39,4 +53,4 @@ function avisarVentaPorRef(ref) {
   return avisar(`modo_id=eq.${encodeURIComponent(ref)}`, { confirmarCliente: true });
 }
 
-module.exports = { avisarAdminPorId, avisarVentaPorRef };
+module.exports = { avisarAdminPorId, avisarVentaPorRef, confirmacionConSaldo };

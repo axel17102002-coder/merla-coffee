@@ -1,7 +1,7 @@
 // Plantillas de los mails de Merla Coffee (HTML inline: los clientes de correo
 // no cargan hojas de estilo externas).
 
-const { numeroPedido } = require("../../public/motor.js");
+const { CONFIG, numeroPedido } = require("../../public/motor.js");
 
 const VERDE = "#2f4a36";
 const CREMA = "#f2ead8";
@@ -93,11 +93,34 @@ function mailAvisoAdmin(pedido) {
   };
 }
 
-// Confirmación para el cliente
-function mailConfirmacionCliente(pedido) {
-  const puntos = pedido.puntos_ganados
-    ? `<p style="margin:14px 0 0;color:${GRIS};">⭐ Sumaste <strong style="color:${VERDE};">${pedido.puntos_ganados} puntos</strong> del Club Merla con esta compra.</p>`
+// Bloque Club Merla. Los puntos se acreditan al cobrar: en un pedido pendiente
+// todavía no están en el saldo. `saldo` = null si no se pudo leer o no aplica.
+function bloquePuntos(pedido, saldo) {
+  const ganados = Number(pedido.puntos_ganados) || 0;
+  const n = (v) => Number(v).toLocaleString("es-AR");
+  const fuerte = (t) => `<strong style="color:${VERDE};">${t}</strong>`;
+  const { canjePuntos, canjeDescuento } = CONFIG.fidelidad;
+
+  const lineas = [];
+  if (pedido.estado === "pendiente") {
+    if (ganados) lineas.push(`⭐ Vas a sumar ${fuerte(`${n(ganados)} puntos`)} al confirmarse el pago.`);
+  } else {
+    if (ganados) lineas.push(`⭐ Sumaste ${fuerte(`${n(ganados)} puntos`)}.`);
+    if (saldo != null && (ganados || saldo > 0)) {
+      lineas.push(`Tu saldo: ${fuerte(`${n(saldo)} puntos`)}.`);
+      lineas.push(saldo >= canjePuntos
+        ? `¡Ya podés canjear ${fuerte(pesos(canjeDescuento))} de descuento en tu próxima compra!`
+        : `Sumá más ${n(canjePuntos - saldo)} para canjear ${pesos(canjeDescuento)} de descuento.`);
+    }
+  }
+  return lineas.length
+    ? `<p style="margin:14px 0 0;color:${GRIS};">${lineas.join("<br>")}</p>`
     : "";
+}
+
+// Confirmación para el cliente
+function mailConfirmacionCliente(pedido, saldo = null) {
+  const puntos = bloquePuntos(pedido, saldo);
   return {
     asunto: `Tu pedido ${numeroPedido(pedido.numero)} en Merla Coffee ☕`,
     html: envoltorio(
