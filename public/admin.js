@@ -1068,10 +1068,42 @@ function filaProductoStock(p) {
         <button class="sec" data-stock-action="restar" disabled>Restar</button>
         <button class="sec" data-stock-action="fijar" disabled>Fijar</button>
         <button class="sec" data-desc-toggle="${escapar(p.id)}" data-desc="${Boolean(p.descontinuado)}" title="Producto sin reposición: la tienda muestra 'Últimas N unidades' en vez del stock normal">${p.descontinuado ? "Reponer" : "Sin reposición"}</button>
+        <button class="sec" data-producto-editar="${escapar(p.id)}">Editar</button>
         <button class="${p.activo ? "sec" : ""}" data-producto-toggle="${escapar(p.id)}" data-activo="${p.activo}">${p.activo ? "Ocultar" : "Publicar"}</button>
         <button class="px-borrar" data-producto-eliminar="${escapar(p.id)}" title="Eliminar producto" aria-label="Eliminar ${escapar(p.nombre)}">🗑</button>
       </div>
     </article>`;
+}
+
+// Formulario para corregir los datos de un producto, abierto dentro de su fila.
+// Stock, precios y publicación se manejan aparte: acá no se tocan.
+function formularioDatosProducto(p) {
+  const campo = (clave, etiqueta, max) => `<label class="pm__campo">${etiqueta}
+      <input data-ed="${clave}" maxlength="${max}" value="${escapar(p[clave])}"></label>`;
+  // Las tazas y otros no llevan los datos del café
+  const llevaDatosDeCafe = p.tipo !== "simple" || p.categoria === "cafe_bolsa";
+  return `<form class="cupon-form fila__editor" data-editor="${escapar(p.id)}">
+      <label class="pm__campo">Nombre
+        <input data-ed="nombre" maxlength="60" required value="${escapar(p.nombre)}"></label>
+      ${llevaDatosDeCafe ? `<div class="fila__editor-grilla">
+        ${campo("origen", "Origen", 60)}${campo("region", "Región", 80)}
+        ${campo("variedad", "Variedad", 80)}${campo("proceso", "Proceso", 60)}
+        ${campo("tostador", "Tostador", 60)}${campo("sca", "Puntaje SCA", 10)}
+      </div>
+      ${campo("notas", "Notas separadas por ;", 200)}` : ""}
+      <label class="pm__campo">Descripción
+        <textarea data-ed="descripcion" maxlength="600" rows="3">${escapar(p.descripcion)}</textarea></label>
+      <label class="prod-foto">
+        <span>📷 ${p.imagen ? "Cambiar la foto" : "Agregar una foto"}</span>
+        <input data-ed-foto type="file" accept="image/webp,image/jpeg,image/png,image/avif" aria-label="Foto de ${escapar(p.nombre)}">
+      </label>
+      <img class="prod-thumb" data-ed-thumb src="${escapar(p.imagen)}" alt=""${p.imagen ? "" : " hidden"}>
+      <p class="mensaje" data-ed-mensaje></p>
+      <div class="entrega__row">
+        <button type="button" class="pm__cancelar" data-editor-cerrar>Cancelar</button>
+        <button type="submit">Guardar cambios</button>
+      </div>
+    </form>`;
 }
 
 function listaOVacio(productos, vacioTexto) {
@@ -1079,9 +1111,12 @@ function listaOVacio(productos, vacioTexto) {
 }
 
 // Se agrupan en tres bloques: drip bags (café), café en bolsa 1/4 y tazas/otros
+let productosPorId = new Map();
+
 function renderProductos(productos) {
   $("#stock-gpu").textContent = gramosPorUnidad;
   const lista = productos || [];
+  productosPorId = new Map(lista.map((p) => [p.id, p]));
   const cafes = lista.filter((p) => p.tipo !== "simple");
   const cafe14 = lista.filter((p) => p.tipo === "simple" && p.categoria === "cafe_bolsa");
   const merch = lista.filter((p) => p.tipo === "simple" && p.categoria !== "cafe_bolsa");
@@ -1134,7 +1169,72 @@ $("#productos-columnas").addEventListener("input", (e) => {
   }
 });
 
+function leerComoDataUrl(archivo) {
+  return new Promise((resolver, rechazar) => {
+    const lector = new FileReader();
+    lector.onload = () => resolver(lector.result);
+    lector.onerror = () => rechazar(new Error("No se pudo leer la foto"));
+    lector.readAsDataURL(archivo);
+  });
+}
+
+// Vista previa de la foto nueva en el editor
+$("#productos-columnas").addEventListener("change", (e) => {
+  const foto = e.target.closest("[data-ed-foto]");
+  if (!foto || !foto.files[0]) return;
+  const miniatura = foto.closest("[data-editor]").querySelector("[data-ed-thumb]");
+  miniatura.src = URL.createObjectURL(foto.files[0]);
+  miniatura.hidden = false;
+});
+
+// Guardar los datos editados de un producto
+$("#productos-columnas").addEventListener("submit", async (e) => {
+  const form = e.target.closest("[data-editor]");
+  if (!form) return;
+  e.preventDefault();
+  const boton = form.querySelector("button[type=submit]");
+  const aviso = form.querySelector("[data-ed-mensaje]");
+  const id = form.dataset.editor;
+  boton.disabled = true;
+  try {
+    const cuerpo = { id };
+    form.querySelectorAll("[data-ed]").forEach((c) => { cuerpo[c.dataset.ed] = c.value; });
+    const archivo = form.querySelector("[data-ed-foto]").files[0];
+    if (archivo) {
+      if (archivo.size > 5 * 1024 * 1024) throw new Error("La foto supera los 5 MB");
+      aviso.textContent = "Subiendo la foto…";
+      const dataUrl = await leerComoDataUrl(archivo);
+      const r = await api("/api/admin-imagen", {
+        method: "POST",
+        body: JSON.stringify({ nombre: cuerpo.nombre, dataUrl }),
+      });
+      cuerpo.imagen = r.url;
+    }
+    aviso.textContent = "Guardando…";
+    await api("/api/admin-productos", { method: "PATCH", body: JSON.stringify(cuerpo) });
+    invalidarPrecios(); // Precios también muestra el nombre
+    await cargarProductos();
+    const fila = $("#productos-columnas").querySelector(`[data-producto="${CSS.escape(id)}"]`);
+    if (fila) fila.querySelector(".fila__dato").insertAdjacentHTML("beforeend", " · <b>✅ Guardado</b>");
+  } catch (err) {
+    aviso.textContent = `⚠️ ${err.message}`;
+    boton.disabled = false;
+  }
+});
+
 $("#productos-columnas").addEventListener("click", async (e) => {
+  // Abrir / cerrar el editor de datos
+  const editar = e.target.closest("[data-producto-editar]");
+  const cerrar = e.target.closest("[data-editor-cerrar]");
+  if (editar || cerrar) {
+    const fila = (editar || cerrar).closest(".fila");
+    const abierto = fila.querySelector("[data-editor]");
+    if (abierto) abierto.remove();
+    else fila.insertAdjacentHTML("beforeend", formularioDatosProducto(productosPorId.get(editar.dataset.productoEditar)));
+    fila.classList.toggle("fila--editando", !abierto);
+    return;
+  }
+
   // Publicar / ocultar
   const toggle = e.target.closest("[data-producto-toggle]");
   if (toggle) {

@@ -439,3 +439,9 @@ button:disabled { opacity: .55; cursor: wait; }
 @media (max-width: 560px) {
   .panel__tabs button { flex: 1 1 30%; }
 }
+
+/* Editor de datos de un producto, dentro de su fila */
+.fila--editando { opacity: 1; }
+.fila__editor { flex: none; width: 100%; min-width: 0; margin: 0; background: var(--crema); grid-template-columns: minmax(0, 1fr); }
+.fila__editor-grilla { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 8px; }
+.fila__editor .mensaje:empty { display: none; }

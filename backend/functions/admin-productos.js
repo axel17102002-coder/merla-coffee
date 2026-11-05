@@ -12,7 +12,7 @@
 //
 //   GET                              → { productos: [...] }
 //   POST { tipo, nombre, ... }       → crea producto + presentaciones
-//   PATCH { id, activo }             → publica / despublica
+//   PATCH { id, activo, descontinuado, nombre, origen, ..., imagen } → actualiza solo lo que venga
 //   DELETE ?id=<id>                  → borra el producto (y sus presentaciones)
 
 const { sb } = require("../lib/supabase.js");
@@ -36,6 +36,11 @@ const texto = (v, max = 400) => {
   return s ? s.slice(0, max) : null;
 };
 
+const LIMITES_TEXTO = {
+  nombre: 60, origen: 60, region: 80, variedad: 80, proceso: 60,
+  sca: 10, tostador: 60, notas: 200, descripcion: 600, imagen: 400,
+};
+
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
   if (!esAdmin(event)) return respuestaNoAutorizado();
@@ -44,7 +49,7 @@ exports.handler = async (event) => {
     if (event.httpMethod === "GET") {
       let productos;
       try {
-        productos = await sb("productos?select=id,nombre,activo,stock,origen,imagen,tipo,categoria,descontinuado&order=nombre.asc");
+        productos = await sb("productos?select=id,nombre,activo,stock,origen,region,variedad,proceso,sca,tostador,notas,descripcion,imagen,tipo,categoria,descontinuado&order=nombre.asc");
       } catch (err) {
         console.warn("admin-productos: sin columna categoria/descontinuado todavía (correr migraciones):", err.message);
         try {
@@ -199,6 +204,15 @@ exports.handler = async (event) => {
       const cambios = {};
       if (body.activo !== undefined) cambios.activo = Boolean(body.activo);
       if (body.descontinuado !== undefined) cambios.descontinuado = Boolean(body.descontinuado);
+      // Datos del producto: un campo vacío se borra, salvo el nombre (obligatorio)
+      // y la foto (solo se reemplaza). El id no cambia: lo usan las presentaciones.
+      for (const [campo, max] of Object.entries(LIMITES_TEXTO)) {
+        if (body[campo] !== undefined) cambios[campo] = texto(body[campo], max);
+      }
+      if (cambios.nombre === null) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "El nombre no puede quedar vacío" }) };
+      }
+      if (cambios.imagen === null) delete cambios.imagen;
       if (!Object.keys(cambios).length) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: "No hay nada para actualizar" }) };
       }
