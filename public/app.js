@@ -1002,7 +1002,7 @@ async function checkoutWhatsApp() {
     msg += `\nTel: ${entrega.telefono}`;
     if (entrega.notas) msg += `\nNotas: ${entrega.notas}`;
   } else {
-    msg += `\n\n🏪 *Retiro en el local*`;
+    msg += `\n\n🏪 *Retiro en el local*\nA nombre de: ${entrega.nombre}`;
   }
   msg += "\n\n¿Me confirmás disponibilidad y cómo coordinamos el pago?";
 
@@ -1031,7 +1031,7 @@ function opcionElegida() {
 // El precio NUNCA viaja acá: el servidor vuelve a cotizar y busca, dentro
 // del mismo grupo (transportista+servicio), la opción más barata disponible.
 function datosEntrega() {
-  if (metodoEntrega() === "retiro") return { metodo: "retiro" };
+  if (metodoEntrega() === "retiro") return { metodo: "retiro", nombre: $("#envio-nombre").value.trim() };
   const op = opcionElegida();
   const esSucursal = op && op.tipo === "sucursal";
   const sucursal = esSucursal ? (op.sucursales || []).find((s) => s.id === envioSucursalElegida) : null;
@@ -1054,9 +1054,9 @@ function datosEntrega() {
 // Valida los datos de envío; devuelve un mensaje de error o null si está OK
 function validarEntrega() {
   if (!emailValido(emailCliente())) return "Ingresá tu email para hacer el pedido";
-  if (metodoEntrega() === "retiro") return null;
   const e = datosEntrega();
-  if (!e.nombre) return "Ingresá tu nombre para el envío";
+  if (!e.nombre) return "Ingresá tu nombre y apellido";
+  if (e.metodo === "retiro") return null;
   if (!e.ciudad || !e.provincia || !e.cp) return "Ingresá tu ciudad, provincia y código postal";
   if (!e.telefono) return "Ingresá un teléfono de contacto";
   if (!envioModalidad) return "Elegí si el envío es a domicilio o a sucursal";

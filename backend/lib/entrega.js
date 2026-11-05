@@ -11,7 +11,10 @@
 
 function sanitizarEnvio(envio) {
   if (!envio || typeof envio !== "object") return null;
-  if (envio.metodo === "retiro") return { metodo: "retiro" };
+  if (envio.metodo === "retiro") {
+    const nombre = String(envio.nombre || "").trim().slice(0, 200);
+    return nombre ? { metodo: "retiro", nombre } : { metodo: "retiro" };
+  }
   if (envio.metodo !== "envio") return null;
   const s = (v, max = 200) => String(v || "").trim().slice(0, max);
 

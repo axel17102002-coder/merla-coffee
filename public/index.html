@@ -361,13 +361,15 @@
       </div>
       <div class="points-box" id="points-box"></div>
       <div class="entrega" id="entrega">
+        <div class="entrega__form">
+          <input id="envio-nombre" placeholder="Nombre y apellido" autocomplete="name">
+        </div>
         <p class="entrega__label">¿Cómo lo querés recibir?</p>
         <div class="entrega__ops">
           <label class="entrega__op"><input type="radio" name="entrega" value="retiro" checked> 🏪 Retiro en el local</label>
           <label class="entrega__op"><input type="radio" name="entrega" value="envio"> 📦 Envío</label>
         </div>
         <div class="entrega__form" id="envio-form" hidden>
-          <input id="envio-nombre" placeholder="Nombre y apellido" autocomplete="name">
           <div class="entrega__row">
             <input id="envio-ciudad" placeholder="Ciudad" autocomplete="address-level2">
             <input id="envio-cp" placeholder="Código postal" autocomplete="postal-code" inputmode="numeric">

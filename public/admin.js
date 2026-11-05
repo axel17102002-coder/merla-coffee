@@ -81,9 +81,9 @@ function renderPedidos() {
     const canal = CANALES[p.origen] || p.origen || "—";
     const esManual = ORIGENES_MANUALES.includes(p.origen);
     const aprobable = p.estado === "pendiente" && (p.origen === "whatsapp" || esManual);
-    const envioManual = esManual ? p.envio || {} : null;
-    const cliente = envioManual && envioManual.nombre
-      ? `<p class="pedido__extra">Cliente: ${escapar(envioManual.nombre)}${envioManual.metodo === "retiro" && envioManual.notas ? ` · ${escapar(envioManual.notas)}` : ""}</p>`
+    const datosCliente = esManual || (p.envio && p.envio.metodo === "retiro") ? p.envio || {} : null;
+    const cliente = datosCliente && datosCliente.nombre
+      ? `<p class="pedido__extra">Cliente: ${escapar(datosCliente.nombre)}${datosCliente.metodo === "retiro" && datosCliente.notas ? ` · ${escapar(datosCliente.notas)}` : ""}</p>`
       : "";
     const cupon = p.cupon ? `<p class="pedido__extra">Cupón ${escapar(p.cupon)}: -${formato.format(p.descuento_cupon || 0)}</p>` : "";
     const puntos = p.cliente_email ? `<p class="pedido__extra">Puntos: +${p.puntos_ganados}${p.puntos_canjeados ? ` · canje -${p.puntos_canjeados}` : ""}</p>` : "";
