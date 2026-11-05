@@ -55,6 +55,13 @@ function numeroPedido(n) {
 // web, así que no son carritos abandonados: el cron no los toca.
 const ORIGENES_MANUALES = ["mayorista", "directa"];
 
+const METODOS_PAGO_MANUAL = [
+  { clave: "transferencia", etiqueta: "Transferencia o depósito" },
+  { clave: "efectivo", etiqueta: "Efectivo" },
+  { clave: "mercadopago", etiqueta: "Mercado Pago" },
+  { clave: "otro", etiqueta: "Otro" },
+];
+
 const METODOS_MP = [
   { clave: "dinero", etiqueta: "Dinero en Mercado Pago", config: "comision_mp_dinero" },
   { clave: "debito", etiqueta: "Débito", config: "comision_mp_debito" },
@@ -309,9 +316,37 @@ function calcularPedido(items, opciones, datos) {
 }
 
 // Export para Node (funciones de Netlify); en el browser quedan como globales.
+// Descuentos de un pedido cargado a mano, sobre los precios que fijó el admin.
+// Son opcionales: el precio suele estar negociado y sumarlos solos descontaría
+// dos veces. Se aplican en el mismo orden que la tienda: cantidad, cupón y, sobre
+// lo que queda, transferencia. Lo usan el formulario (para mostrar) y el backend.
+//   lineas: [{ precioUnitario, qty, unidades, esPack }]
+function calcularDescuentosManual(lineas, { cupon = null, aplicarCantidad = false, aplicarTransferencia = false } = {}) {
+  const subtotal = lineas.reduce((t, l) => t + l.precioUnitario * l.qty, 0);
+  const sueltas = lineas.filter((l) => !l.esPack);
+  const unidadesSueltas = sueltas.reduce((t, l) => t + l.unidades, 0);
+  const subtotalSueltas = sueltas.reduce((t, l) => t + l.precioUnitario * l.qty, 0);
+  const descuentoCantidad = aplicarCantidad && unidadesSueltas >= CONFIG.descuentoCantidad
+    ? Math.round((subtotalSueltas * CONFIG.descuentoPorcentaje) / 100)
+    : 0;
+
+  const base = subtotal - descuentoCantidad;
+  let descuentoCupon = 0;
+  if (cupon) {
+    if (base < (cupon.minimo || 0)) {
+      return { ok: false, error: `El cupón ${cupon.codigo} es para pedidos desde $${cupon.minimo.toLocaleString("es-AR")}` };
+    }
+    descuentoCupon = cupon.tipo === "porcentaje" ? Math.round((base * cupon.valor) / 100) : Math.min(cupon.valor, base);
+  }
+
+  const resto = base - descuentoCupon;
+  const descuentoPago = aplicarTransferencia ? resto - precioTransferencia(resto) : 0;
+  return { ok: true, subtotal, descuentoCantidad, descuentoCupon, descuentoPago, total: resto - descuentoPago };
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    CONFIG, METODOS_MP, ORIGENES_MANUALES, comisionMpPorcentaje, comisionMpDe,
+    CONFIG, METODOS_MP, METODOS_PAGO_MANUAL, ORIGENES_MANUALES, calcularDescuentosManual, comisionMpPorcentaje, comisionMpDe,
     presentacionesDe, ahorroDe, precioTransferencia, numeroPedido, calcularPedido,
     precioPack, costoCafePorUnidad, costoUnidad, costoPack,
     precioUnidadDesdeCosto, costoKiloDesdePrecio, margenPack,

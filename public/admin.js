@@ -88,6 +88,12 @@ function renderPedidos() {
     const cupon = p.cupon ? `<p class="pedido__extra">Cupón ${escapar(p.cupon)}: -${formato.format(p.descuento_cupon || 0)}</p>` : "";
     const puntos = p.cliente_email ? `<p class="pedido__extra">Puntos: +${p.puntos_ganados}${p.puntos_canjeados ? ` · canje -${p.puntos_canjeados}` : ""}</p>` : "";
     const entrega = renderEntrega(p.envio);
+    const metodoPago = METODOS_PAGO_MANUAL.find((m) => m.clave === p.metodo_pago);
+    const pago = [
+      p.descuento_cantidad ? `Descuento por cantidad: -${formato.format(p.descuento_cantidad)}` : "",
+      p.descuento_pago ? `Descuento por transferencia: -${formato.format(p.descuento_pago)}` : "",
+      metodoPago ? `Pago: ${escapar(metodoPago.etiqueta)}` : "",
+    ].filter(Boolean).map((t) => `<p class="pedido__extra">${t}</p>`).join("");
     // undefined = falta la migración: sin dato, no se muestra como "sin enviar"
     const estadoMail = p.cliente_email && p.confirmacion_enviada !== undefined
       ? `<p class="pedido__extra mail-estado${p.confirmacion_enviada ? " mail-estado--enviada" : ""}">${p.confirmacion_enviada
@@ -108,7 +114,7 @@ function renderPedidos() {
         <span class="pedido__email">${escapar(p.cliente_email || "Sin email")}</span>
         <strong>${formato.format(p.total)}</strong>
       </div>
-      ${cliente}${cupon}${puntos}${entrega}${estadoMail}${selectorMetodoMp(p)}
+      ${cliente}${pago}${cupon}${puntos}${entrega}${estadoMail}${selectorMetodoMp(p)}
       <div class="pedido__actions">
         <button class="borrar" data-action="eliminar" data-id="${escapar(p.id)}" title="Eliminar pedido">🗑 Eliminar</button>
         ${p.cliente_email ? `<button class="mail" data-action="mail" data-id="${escapar(p.id)}" title="Enviar confirmación por mail">✉️ ${p.confirmacion_enviada ? "Reenviar" : "Enviar confirmación"}</button>` : ""}
@@ -847,6 +853,7 @@ $("#reload").addEventListener("click", cargarPedidos);
 // ===== Pedido manual (mayorista o venta directa) =====
 // Para ventas que se cierran por fuera de la web: el precio lo fija el admin.
 let catalogoManual = [];
+let cuponManual = null;
 
 function opcionesManual() {
   return catalogoManual.map((p) => `<optgroup label="${escapar(p.nombre)} (stock: ${p.stock})">
@@ -872,17 +879,86 @@ function precioDeLista(linea) {
   linea.querySelector("[data-pm-precio]").value = opcion ? opcion.dataset.precio : "";
 }
 
-function totalManual() {
-  const total = [...document.querySelectorAll("#pm-lineas .pm__linea")].reduce((t, l) =>
-    t + (Number(l.querySelector("[data-pm-qty]").value) || 0) * (Number(l.querySelector("[data-pm-precio]").value) || 0), 0);
-  $("#pm-total").textContent = formato.format(total);
-  return total;
+// Las líneas del formulario en el formato de calcularDescuentosManual
+function lineasManual() {
+  return [...document.querySelectorAll("#pm-lineas .pm__linea")].map((l) => {
+    const id = l.querySelector("[data-pm-pres]").value;
+    const pres = catalogoManual.flatMap((p) => p.presentaciones || []).find((x) => x.id === id);
+    const qty = Number(l.querySelector("[data-pm-qty]").value) || 0;
+    const unidadesStock = pres ? pres.unidades_stock : 1;
+    return {
+      presentacion: id,
+      qty,
+      precioUnitario: Number(l.querySelector("[data-pm-precio]").value) || 0,
+      unidades: unidadesStock * qty,
+      esPack: unidadesStock > 1,
+    };
+  });
 }
+
+function totalManual() {
+  const esTransferencia = $("#pm-pago").value === "transferencia";
+  $("#pm-off-transferencia-fila").hidden = !esTransferencia;
+  const calc = calcularDescuentosManual(lineasManual(), {
+    cupon: cuponManual,
+    aplicarCantidad: $("#pm-off-cantidad").checked,
+    aplicarTransferencia: esTransferencia && $("#pm-off-transferencia").checked,
+  });
+  const desglose = $("#pm-desglose");
+  desglose.classList.toggle("pm__desglose--error", !calc.ok);
+  if (!calc.ok) {
+    desglose.textContent = `⚠️ ${calc.error}`;
+    $("#pm-total").textContent = "—";
+    return null;
+  }
+  const filas = [
+    ["Descuento por cantidad", calc.descuentoCantidad],
+    [`Cupón ${cuponManual ? cuponManual.codigo : ""}`, calc.descuentoCupon],
+    ["Descuento por transferencia", calc.descuentoPago],
+  ].filter(([, monto]) => monto > 0);
+  desglose.innerHTML = filas.length
+    ? [`<p><span>Subtotal</span><span>${formato.format(calc.subtotal)}</span></p>`,
+       ...filas.map(([texto, monto]) => `<p><span>${escapar(texto)}</span><span>-${formato.format(monto)}</span></p>`)].join("")
+    : "";
+  $("#pm-total").textContent = formato.format(calc.total);
+  return calc.total;
+}
+
+function mostrarCuponManual() {
+  $("#pm-cupon-fila").hidden = Boolean(cuponManual);
+  $("#pm-cupon-aplicado").hidden = !cuponManual;
+  $("#pm-cupon-codigo").textContent = cuponManual ? cuponManual.codigo : "";
+  totalManual();
+}
+
+$("#pm-cupon-aplicar").addEventListener("click", async () => {
+  const codigo = $("#pm-cupon").value.trim();
+  if (!codigo) return;
+  try {
+    const { cupon } = await api("/api/validar-cupon", {
+      method: "POST",
+      body: JSON.stringify({ codigo, email: $("#pm-email").value }),
+    });
+    cuponManual = cupon;
+    mensaje("#pm-mensaje");
+    mostrarCuponManual();
+  } catch (err) {
+    mensaje("#pm-mensaje", `⚠️ ${err.message}`);
+  }
+});
+$("#pm-cupon-quitar").addEventListener("click", () => {
+  cuponManual = null;
+  $("#pm-cupon").value = "";
+  mostrarCuponManual();
+});
+["#pm-pago", "#pm-off-cantidad", "#pm-off-transferencia"].forEach((s) => $(s).addEventListener("change", totalManual));
 
 function cerrarPedidoManual() {
   $("#pedido-manual").hidden = true;
   $("#pedido-manual").reset();
   $("#pm-lineas").innerHTML = "";
+  cuponManual = null;
+  mostrarCuponManual();
   mensaje("#pm-mensaje");
 }
 
@@ -918,16 +994,15 @@ $("#pm-lineas").addEventListener("click", (e) => {
 
 $("#pedido-manual").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const items = [...document.querySelectorAll("#pm-lineas .pm__linea")].map((l) => ({
-    presentacion: l.querySelector("[data-pm-pres]").value,
-    qty: Number(l.querySelector("[data-pm-qty]").value),
-    precio: Number(l.querySelector("[data-pm-precio]").value),
-  }));
+  const items = lineasManual().map((l) => ({ presentacion: l.presentacion, qty: l.qty, precio: l.precioUnitario }));
   if (!items.length) { mensaje("#pm-mensaje", "⚠️ Agregá al menos un producto"); return; }
+
+  const total = totalManual();
+  if (total === null) return;
 
   const cobrado = $("#pm-cobrado").checked;
   const aviso = cobrado ? "Se marca como cobrado y se descuenta el stock." : "Queda pendiente hasta que lo marques como cobrado.";
-  if (!confirm(`¿Cargar este pedido por ${formato.format(totalManual())}?\n\n${aviso}`)) return;
+  if (!confirm(`¿Cargar este pedido por ${formato.format(total)}?\n\n${aviso}`)) return;
 
   const boton = $("#pm-guardar");
   boton.disabled = true;
@@ -943,6 +1018,10 @@ $("#pedido-manual").addEventListener("submit", async (e) => {
         notas: $("#pm-notas").value,
         cobrado,
         items,
+        cupon: cuponManual ? cuponManual.codigo : null,
+        aplicarCantidad: $("#pm-off-cantidad").checked,
+        metodoPago: $("#pm-pago").value,
+        aplicarTransferencia: $("#pm-off-transferencia").checked,
       }),
     });
     cerrarPedidoManual();

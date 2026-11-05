@@ -72,6 +72,8 @@ create table if not exists pedidos (
   envio jsonb,                       -- { metodo:'retiro'|'envio', nombre, direccion, ciudad, provincia, cp, telefono, notas }
   envio_costo integer not null default 0, -- cotizado con Zipnova; 0 si es retiro
   origen text not null default 'mercadopago' check (origen in ('modo', 'whatsapp', 'mercadopago', 'mayorista', 'directa')),
+  metodo_pago text,                  -- pedidos manuales: con qué pagó (ver METODOS_PAGO_MANUAL en motor.js)
+  descuento_pago integer not null default 0, -- pedidos manuales: descuento por transferencia
   mp_metodo text,                    -- método con que se pagó en MP (dinero/debito/credito/prepaga/cuotas_sin_tarjeta/otros), para su comisión
   recordatorio_enviado timestamptz,  -- cuándo se mandó el mail de carrito abandonado (para no repetirlo)
   confirmacion_enviada timestamptz,  -- última vez que se envió el mail de confirmación
@@ -93,6 +95,8 @@ alter table pedidos add constraint pedidos_origen_check check (origen in ('modo'
 alter table pedidos add column if not exists numero integer;
 alter table pedidos add column if not exists envio jsonb;
 alter table pedidos add column if not exists mp_metodo text;
+alter table pedidos add column if not exists metodo_pago text;
+alter table pedidos add column if not exists descuento_pago integer not null default 0;
 alter table pedidos add column if not exists recordatorio_enviado timestamptz;
 alter table pedidos add column if not exists mp_pago_id text;
 

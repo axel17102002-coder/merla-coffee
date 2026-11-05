@@ -424,3 +424,11 @@ button:disabled { opacity: .55; cursor: wait; }
 /* Estado del mail de confirmación */
 .mail-estado { font-weight: 600; }
 .mail-estado--enviada { color: var(--verde); }
+
+/* Descuentos del pedido manual */
+.pm__descuentos { display: grid; gap: 8px; border-top: 1px solid var(--borde); padding-top: 12px; }
+.pm__cupon { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.pm__cupon[hidden], .pm__cupon-aplicado[hidden], .pm__cobrado[hidden] { display: none; }
+.pm__cupon-aplicado { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; font-size: .9rem; }
+.pm__desglose p { display: flex; justify-content: space-between; margin: 2px 0; color: var(--gris); font-size: .9rem; }
+.pm__desglose--error { color: var(--rojo); font-size: .9rem; font-weight: 600; }

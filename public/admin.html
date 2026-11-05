@@ -82,6 +82,26 @@
             <div class="pm__encabezado" aria-hidden="true"><span>Producto</span><span>Cant.</span><span>Precio c/u</span><span></span></div>
             <div id="pm-lineas"></div>
             <button type="button" class="pm__agregar" id="pm-agregar">+ Agregar producto</button>
+            <div class="pm__descuentos">
+              <div class="pm__cupon" id="pm-cupon-fila">
+                <input id="pm-cupon" maxlength="40" autocomplete="off" placeholder="Cupón (opcional)" aria-label="Cupón">
+                <button type="button" class="pm__agregar" id="pm-cupon-aplicar">Aplicar</button>
+              </div>
+              <p class="pm__cupon-aplicado" id="pm-cupon-aplicado" hidden><span>Cupón <strong id="pm-cupon-codigo"></strong> aplicado</span>
+                <button type="button" class="pm__cancelar" id="pm-cupon-quitar">Quitar</button></p>
+              <label class="pm__campo">Método de pago
+                <select id="pm-pago">
+                  <option value="">Sin especificar</option>
+                  <option value="transferencia">Transferencia o depósito</option>
+                  <option value="efectivo">Efectivo</option>
+                  <option value="mercadopago">Mercado Pago</option>
+                  <option value="otro">Otro</option>
+                </select>
+              </label>
+              <label class="pm__cobrado" id="pm-off-transferencia-fila" hidden><input type="checkbox" id="pm-off-transferencia"> Aplicar 10% OFF por transferencia</label>
+              <label class="pm__cobrado"><input type="checkbox" id="pm-off-cantidad"> Aplicar 5% OFF por cantidad (5 o más unidades sueltas)</label>
+            </div>
+            <div class="pm__desglose" id="pm-desglose"></div>
             <p class="pm__total">Total <strong id="pm-total">$ 0</strong></p>
             <label class="pm__cobrado"><input type="checkbox" id="pm-cobrado"> Ya está cobrado (descuenta el stock)</label>
             <p class="mensaje" id="pm-mensaje"></p>

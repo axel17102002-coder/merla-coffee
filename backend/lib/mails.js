@@ -1,7 +1,7 @@
 // Plantillas de los mails de Merla Coffee (HTML inline: los clientes de correo
 // no cargan hojas de estilo externas).
 
-const { CONFIG, numeroPedido } = require("../../public/motor.js");
+const { CONFIG, METODOS_PAGO_MANUAL, numeroPedido } = require("../../public/motor.js");
 
 const VERDE = "#2f4a36";
 const CREMA = "#f2ead8";
@@ -80,6 +80,7 @@ function resumen(pedido) {
   const desc = [];
   if (pedido.descuento_cantidad) desc.push(`<tr><td style="padding:4px 0;color:${CARAMELO};">Descuento por cantidad</td><td style="padding:4px 0;text-align:right;color:${CARAMELO};">-${pesos(pedido.descuento_cantidad)}</td></tr>`);
   if (pedido.descuento_cupon) desc.push(`<tr><td style="padding:4px 0;color:${CARAMELO};">Cupón ${escapar(pedido.cupon)}</td><td style="padding:4px 0;text-align:right;color:${CARAMELO};">-${pesos(pedido.descuento_cupon)}</td></tr>`);
+  if (pedido.descuento_pago) desc.push(`<tr><td style="padding:4px 0;color:${CARAMELO};">Descuento por transferencia</td><td style="padding:4px 0;text-align:right;color:${CARAMELO};">-${pesos(pedido.descuento_pago)}</td></tr>`);
   if (pedido.descuento_puntos) desc.push(`<tr><td style="padding:4px 0;color:${CARAMELO};">Canje de puntos</td><td style="padding:4px 0;text-align:right;color:${CARAMELO};">-${pesos(pedido.descuento_puntos)}</td></tr>`);
   return `<table style="width:100%;border-collapse:collapse;">
     ${filasItems(pedido.items)}
@@ -96,11 +97,12 @@ function resumen(pedido) {
 function mailAvisoAdmin(pedido) {
   const canal = { mercadopago: "Mercado Pago", whatsapp: "WhatsApp", modo: "MODO", mayorista: "Mayorista", directa: "Venta directa" }[pedido.origen] || pedido.origen;
   const cobrado = pedido.estado === "aprobado";
+  const metodoPago = METODOS_PAGO_MANUAL.find((m) => m.clave === pedido.metodo_pago);
   return {
     asunto: `${cobrado ? "💰 Venta cobrada" : "🧾 Pedido nuevo"} ${numeroPedido(pedido.numero)} · ${pesos(pedido.total)}`,
     html: envoltorio(
       `${cobrado ? "¡Venta cobrada!" : "Pedido nuevo"} ${numeroPedido(pedido.numero)}`,
-      `<p style="margin:0 0 14px;color:${GRIS};">Canal: <strong style="color:${VERDE};">${escapar(canal)}</strong> · Estado: <strong style="color:${VERDE};">${escapar(pedido.estado)}</strong></p>
+      `<p style="margin:0 0 14px;color:${GRIS};">Canal: <strong style="color:${VERDE};">${escapar(canal)}</strong> · Estado: <strong style="color:${VERDE};">${escapar(pedido.estado)}</strong>${metodoPago ? ` · Pago: <strong style="color:${VERDE};">${escapar(metodoPago.etiqueta)}</strong>` : ""}</p>
        ${resumen(pedido)}
        <p style="margin:14px 0 0;color:${GRIS};">Cliente: ${nombreCliente(pedido) ? `${escapar(nombreCliente(pedido))} · ` : ""}${escapar(pedido.cliente_email || "sin email")}</p>
        ${bloqueEntrega(pedido.envio)}

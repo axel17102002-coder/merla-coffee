@@ -4,17 +4,18 @@
 //   GET ?q=<texto>           → busca por número de pedido o email (contra la base)
 //   GET ?limite=<n>          → cuántos traer (200 por defecto, 2000 máximo)
 //   POST { accion, id }      → aprobar/rechazar un pedido de WhatsApp o manual
-//   POST { accion: "crear", origen, nombre, email?, metodo, notas?, cobrado, items:[{presentacion, qty, precio}] }
+//   POST { accion: "crear", origen, nombre, email?, metodo, notas?, cobrado, items:[{presentacion, qty, precio}],
+//          cupon?, aplicarCantidad?, metodoPago?, aplicarTransferencia? }
 //                            → carga un pedido a mano, con precio acordado
 //   PATCH { id, mp_metodo }  → corrige el método de pago de Mercado Pago
 //   DELETE ?id=<uuid>        → borra un pedido definitivamente
 
-const { sb, sbRpc, obtenerCatalogo } = require("../lib/supabase.js");
+const { sb, sbRpc, obtenerCatalogo, obtenerCupon, cuponYaUsado } = require("../lib/supabase.js");
 const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
 const { itemsConCosto } = require("../lib/costos.js");
-const { CONFIG, METODOS_MP, ORIGENES_MANUALES } = require("../../public/motor.js");
+const { CONFIG, METODOS_MP, METODOS_PAGO_MANUAL, ORIGENES_MANUALES, calcularDescuentosManual } = require("../../public/motor.js");
 
-const CAMPOS = "id,numero,origen,items,total,cupon,descuento_cupon,cliente_email,estado,creado,puntos_ganados,puntos_canjeados,envio,envio_costo";
+const CAMPOS = "id,numero,origen,items,total,descuento_cantidad,cupon,descuento_cupon,cliente_email,estado,creado,puntos_ganados,puntos_canjeados,envio,envio_costo";
 
 // Filtro de búsqueda por número de pedido o email. La búsqueda va contra la
 // base y no contra los 200 que trae el panel: el pedido que se busca suele ser
@@ -46,12 +47,12 @@ function limitePedido(valor) {
   return Math.min(n, LIMITE_MAXIMO);
 }
 
-// `mp_metodo` y `confirmacion_enviada` pueden no existir todavía: si falta alguna
+// `mp_metodo`, `confirmacion_enviada`, `metodo_pago` y `descuento_pago` pueden no existir todavía: si falta alguna
 // migración, el panel sigue andando sin esas columnas.
 async function traerPedidos(busqueda, limite) {
   const filtro = filtroBusqueda(busqueda);
   const orden = `${filtro}&order=creado.desc&limit=${limite}`;
-  const intentos = [",mp_metodo,confirmacion_enviada", ",mp_metodo", ""];
+  const intentos = [",mp_metodo,confirmacion_enviada,metodo_pago,descuento_pago", ",mp_metodo,confirmacion_enviada", ",mp_metodo", ""];
   for (const [i, extras] of intentos.entries()) {
     try {
       return await sb(`pedidos?select=${CAMPOS}${extras}${orden}`);
@@ -107,10 +108,29 @@ async function crearPedidoManual(body) {
       qty,
       unidades,
       precioUnitario: precio,
+      esPack: presentacion.unidades_stock > 1,
     });
   }
 
-  const total = lineas.reduce((t, l) => t + l.precioUnitario * l.qty, 0);
+  const metodoPago = String(body.metodoPago || "");
+  if (metodoPago && !METODOS_PAGO_MANUAL.some((m) => m.clave === metodoPago)) return falla(400, "Método de pago inválido");
+
+  let cupon = null;
+  if (body.cupon) {
+    cupon = await obtenerCupon(body.cupon);
+    if (!cupon) return falla(400, "Cupón inválido");
+    // Los cupones son de un solo uso por email: sin email no se puede controlar
+    if (!email) return falla(400, "Para usar un cupón cargá el email del cliente");
+    if (await cuponYaUsado(cupon.codigo, email)) return falla(409, "Este email ya usó ese cupón");
+  }
+
+  const descuentos = calcularDescuentosManual(lineas, {
+    cupon,
+    aplicarCantidad: Boolean(body.aplicarCantidad),
+    aplicarTransferencia: metodoPago === "transferencia" && Boolean(body.aplicarTransferencia),
+  });
+  if (!descuentos.ok) return falla(400, descuentos.error);
+  const { total } = descuentos;
   const notas = String(body.notas || "").trim().slice(0, 300);
 
   let fila;
@@ -122,8 +142,14 @@ async function crearPedidoManual(body) {
         external_intention_id: `man-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         origen,
         items: await itemsConCosto(lineas, productos),
-        subtotal: total,
+        subtotal: descuentos.subtotal,
+        descuento_cantidad: descuentos.descuentoCantidad,
+        cupon: cupon ? cupon.codigo : null,
+        descuento_cupon: descuentos.descuentoCupon,
         total,
+        // Solo si hay dato: así sin la migración se pueden seguir cargando pedidos sin método
+        ...(metodoPago ? { metodo_pago: metodoPago } : {}),
+        ...(descuentos.descuentoPago ? { descuento_pago: descuentos.descuentoPago } : {}),
         puntos_ganados: email ? Math.floor(total / 100) * CONFIG.fidelidad.puntosPorCien : 0,
         cliente_email: email || null,
         envio: { metodo: body.metodo === "envio" ? "envio" : "retiro", nombre, ...(notas ? { notas } : {}) },
@@ -132,6 +158,9 @@ async function crearPedidoManual(body) {
   } catch (err) {
     if (String(err.message).includes("pedidos_origen_check")) {
       return falla(409, "Falta correr supabase/migracion-pedido-manual.sql en Supabase");
+    }
+    if (/metodo_pago|descuento_pago/.test(String(err.message))) {
+      return falla(409, "Falta correr supabase/migracion-pago-manual.sql en Supabase");
     }
     throw err;
   }

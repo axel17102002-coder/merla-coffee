@@ -105,7 +105,7 @@ una regla de precio/punto, va acá y aplica en ambos lados a la vez.
   incompleto. Si el volumen crece, mover el cálculo a una vista/endpoint de Supabase.
 - **Pedidos cargados a mano** (`/admin → + Nuevo pedido`, canales en
   `ORIGENES_MANUALES`): el precio lo fija el admin, no el motor, y suman puntos
-  solo si tienen email. El cron no los borra ni les manda recordatorio aunque estén pendientes.
+  solo si tienen email. Los descuentos son opcionales (`calcularDescuentosManual`). El cron no los borra ni les manda recordatorio aunque estén pendientes.
 - **No existe tabla de "carritos"**: el carrito vive en `localStorage` del cliente
   hasta que confirma. Lo más parecido a un carrito abandonado son los pedidos
   `pendiente`, que un cron (cada 6 h, `wrangler.toml` → `[triggers]`) borra a las 48 h.
