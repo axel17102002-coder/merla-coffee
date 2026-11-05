@@ -20,6 +20,23 @@ async function confirmacionConSaldo(pedido) {
   return mailConfirmacionCliente(pedido, saldo);
 }
 
+// Envía la confirmación y deja registrado cuándo salió, solo si Brevo la aceptó.
+// Si falta la migración de la columna, el mail sale igual. Devuelve si se envió.
+async function enviarConfirmacion(pedido) {
+  const { asunto, html } = await confirmacionConSaldo(pedido);
+  const enviado = await enviarMail({ para: pedido.cliente_email, asunto, html });
+  if (!enviado) return false;
+  try {
+    await sb(`pedidos?id=eq.${encodeURIComponent(pedido.id)}`, {
+      method: "PATCH",
+      body: { confirmacion_enviada: new Date().toISOString() },
+    });
+  } catch (err) {
+    console.warn("avisos: falta confirmacion_enviada (correr migracion-confirmacion-enviada.sql):", err.message);
+  }
+  return true;
+}
+
 // Busca el pedido, avisa al admin y —si se pide— le manda la confirmación al
 // cliente. Los que llaman ya se aseguran de hacerlo una sola vez por pedido
 // (la RPC de aprobación avisa si ya estaba procesado).
@@ -33,8 +50,7 @@ async function avisar(filtro, { confirmarCliente = false } = {}) {
     await enviarMail({ para: config().admin, asunto: admin.asunto, html: admin.html });
 
     if (confirmarCliente && pedido.cliente_email) {
-      const cliente = await confirmacionConSaldo(pedido);
-      await enviarMail({ para: pedido.cliente_email, asunto: cliente.asunto, html: cliente.html });
+      await enviarConfirmacion(pedido);
     }
     return true;
   } catch (err) {
@@ -53,4 +69,4 @@ function avisarVentaPorRef(ref) {
   return avisar(`modo_id=eq.${encodeURIComponent(ref)}`, { confirmarCliente: true });
 }
 
-module.exports = { avisarAdminPorId, avisarVentaPorRef, confirmacionConSaldo };
+module.exports = { avisarAdminPorId, avisarVentaPorRef, enviarConfirmacion };

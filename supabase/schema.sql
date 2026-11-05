@@ -74,6 +74,7 @@ create table if not exists pedidos (
   origen text not null default 'mercadopago' check (origen in ('modo', 'whatsapp', 'mercadopago', 'mayorista', 'directa')),
   mp_metodo text,                    -- método con que se pagó en MP (dinero/debito/credito/prepaga/cuotas_sin_tarjeta/otros), para su comisión
   recordatorio_enviado timestamptz,  -- cuándo se mandó el mail de carrito abandonado (para no repetirlo)
+  confirmacion_enviada timestamptz,  -- última vez que se envió el mail de confirmación
   mp_pago_id text,                   -- payment_id de Mercado Pago, para cruzar con su panel
   estado text not null default 'pendiente'
     check (estado in ('pendiente', 'aprobado', 'rechazado')),

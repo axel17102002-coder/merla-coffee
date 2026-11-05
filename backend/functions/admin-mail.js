@@ -4,8 +4,7 @@
 
 const { sb } = require("../lib/supabase.js");
 const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
-const { enviarMail } = require("../lib/brevo.js");
-const { confirmacionConSaldo } = require("../lib/avisos.js");
+const { enviarConfirmacion } = require("../lib/avisos.js");
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
@@ -28,8 +27,7 @@ exports.handler = async (event) => {
       return { statusCode: 400, headers, body: JSON.stringify({ error: "El pedido no tiene email del cliente" }) };
     }
 
-    const { asunto, html } = await confirmacionConSaldo(pedido);
-    const enviado = await enviarMail({ para: pedido.cliente_email, asunto, html });
+    const enviado = await enviarConfirmacion(pedido);
     if (!enviado) {
       return { statusCode: 502, headers, body: JSON.stringify({ error: "No se pudo enviar el mail (revisá BREVO_API_KEY y el remitente verificado)" }) };
     }

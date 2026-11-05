@@ -46,16 +46,19 @@ function limitePedido(valor) {
   return Math.min(n, LIMITE_MAXIMO);
 }
 
-// `mp_metodo` (el medio con que se pagó en MP, para su comisión) puede no existir
-// todavía: si falta la migración, el panel sigue andando sin esa columna.
+// `mp_metodo` y `confirmacion_enviada` pueden no existir todavía: si falta alguna
+// migración, el panel sigue andando sin esas columnas.
 async function traerPedidos(busqueda, limite) {
   const filtro = filtroBusqueda(busqueda);
   const orden = `${filtro}&order=creado.desc&limit=${limite}`;
-  try {
-    return await sb(`pedidos?select=${CAMPOS},mp_metodo${orden}`);
-  } catch (err) {
-    console.warn("admin-pedidos: falta mp_metodo (correr migracion-metodo-pago-mp.sql):", err.message);
-    return await sb(`pedidos?select=${CAMPOS}${orden}`);
+  const intentos = [",mp_metodo,confirmacion_enviada", ",mp_metodo", ""];
+  for (const [i, extras] of intentos.entries()) {
+    try {
+      return await sb(`pedidos?select=${CAMPOS}${extras}${orden}`);
+    } catch (err) {
+      if (i === intentos.length - 1) throw err;
+      console.warn("admin-pedidos: falta una columna opcional:", err.message);
+    }
   }
 }
 

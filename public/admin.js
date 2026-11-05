@@ -88,6 +88,12 @@ function renderPedidos() {
     const cupon = p.cupon ? `<p class="pedido__extra">Cupón ${escapar(p.cupon)}: -${formato.format(p.descuento_cupon || 0)}</p>` : "";
     const puntos = p.cliente_email ? `<p class="pedido__extra">Puntos: +${p.puntos_ganados}${p.puntos_canjeados ? ` · canje -${p.puntos_canjeados}` : ""}</p>` : "";
     const entrega = renderEntrega(p.envio);
+    // undefined = falta la migración: sin dato, no se muestra como "sin enviar"
+    const estadoMail = p.cliente_email && p.confirmacion_enviada !== undefined
+      ? `<p class="pedido__extra mail-estado${p.confirmacion_enviada ? " mail-estado--enviada" : ""}">${p.confirmacion_enviada
+          ? `✅ Confirmación enviada el ${escapar(new Date(p.confirmacion_enviada).toLocaleString("es-AR", { dateStyle: "medium", timeStyle: "short" }))}`
+          : "✉️ Confirmación sin enviar"}</p>`
+      : "";
     return `<article class="pedido pedido--${escapar(p.estado)}">
       <div class="pedido__top">
         <div class="pedido__top-izq">
@@ -102,10 +108,10 @@ function renderPedidos() {
         <span class="pedido__email">${escapar(p.cliente_email || "Sin email")}</span>
         <strong>${formato.format(p.total)}</strong>
       </div>
-      ${cliente}${cupon}${puntos}${entrega}${selectorMetodoMp(p)}
+      ${cliente}${cupon}${puntos}${entrega}${estadoMail}${selectorMetodoMp(p)}
       <div class="pedido__actions">
         <button class="borrar" data-action="eliminar" data-id="${escapar(p.id)}" title="Eliminar pedido">🗑 Eliminar</button>
-        ${p.cliente_email ? `<button class="mail" data-action="mail" data-id="${escapar(p.id)}" title="Enviar confirmación por mail">✉️ Confirmación</button>` : ""}
+        ${p.cliente_email ? `<button class="mail" data-action="mail" data-id="${escapar(p.id)}" title="Enviar confirmación por mail">✉️ ${p.confirmacion_enviada ? "Reenviar" : "Enviar confirmación"}</button>` : ""}
         ${aprobable ? `<button class="rechazar" data-action="rechazar" data-id="${escapar(p.id)}">Rechazar</button>
         <button class="aprobar" data-action="aprobar" data-id="${escapar(p.id)}">Marcar cobrado</button>` : ""}
       </div>
@@ -783,8 +789,8 @@ $("#pedidos").addEventListener("click", async (e) => {
       await api(`/api/admin-pedidos?id=${encodeURIComponent(id)}`, { method: "DELETE" });
     } else if (action === "mail") {
       const r = await api("/api/admin-mail", { method: "POST", body: JSON.stringify({ pedido_id: id }) });
+      await cargarPedidos();
       mensaje("#panel-message", `✅ Confirmación enviada a ${r.para}`, true);
-      boton.disabled = false;
       return;
     } else {
       await api("/api/admin-pedidos", { method: "POST", body: JSON.stringify({ accion: action, id }) });

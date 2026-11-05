@@ -420,3 +420,7 @@ button:disabled { opacity: .55; cursor: wait; }
   .pm__linea { grid-template-columns: 1fr 1fr 36px; }
   .pm__linea select { grid-column: 1 / -1; }
 }
+
+/* Estado del mail de confirmación */
+.mail-estado { font-weight: 600; }
+.mail-estado--enviada { color: var(--verde); }
