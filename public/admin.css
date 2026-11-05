@@ -62,7 +62,7 @@ button { cursor: pointer; }
 .buscador__limpiar:hover { background: var(--crema); color: var(--texto); }
 
 /* Pedidos: a pantalla completa entran varios por fila */
-.pedidos { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); align-items: start; }
+.pedidos { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr)); align-items: start; }
 .pedido { background: var(--papel); border: 1px solid var(--borde); border-radius: 16px; padding: 20px; box-shadow: 0 5px 18px #22301f10; }
 .pedido__top { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
 .pedido__top-izq { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -432,3 +432,10 @@ button:disabled { opacity: .55; cursor: wait; }
 .pm__cupon-aplicado { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; font-size: .9rem; }
 .pm__desglose p { display: flex; justify-content: space-between; margin: 2px 0; color: var(--gris); font-size: .9rem; }
 .pm__desglose--error { color: var(--rojo); font-size: .9rem; font-weight: 600; }
+
+/* Celular: nada puede ser más ancho que la pantalla */
+.columna-gestion { min-width: 0; }
+.panel__tabs { flex-wrap: wrap; }
+@media (max-width: 560px) {
+  .panel__tabs button { flex: 1 1 30%; }
+}
