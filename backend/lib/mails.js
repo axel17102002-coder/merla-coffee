@@ -34,7 +34,7 @@ function bloqueEntrega(envio) {
   const dir = [envio.direccion, envio.ciudad, envio.provincia, envio.cp && `CP ${envio.cp}`]
     .filter(Boolean).map(escapar).join(", ");
   return `<p style="margin:14px 0 0;color:${GRIS};">📦 <strong style="color:${VERDE};">Envío a domicilio</strong><br>
-    ${escapar(envio.nombre)} — ${dir}${envio.telefono ? `<br>Tel: ${escapar(envio.telefono)}` : ""}${envio.notas ? `<br>${escapar(envio.notas)}` : ""}</p>`;
+    ${escapar(envio.nombre)}${dir ? ` — ${dir}` : ""}${envio.telefono ? `<br>Tel: ${escapar(envio.telefono)}` : ""}${envio.notas ? `<br>${escapar(envio.notas)}` : ""}</p>`;
 }
 
 // Documento completo: el <meta charset> es imprescindible para que los acentos
@@ -78,7 +78,7 @@ function resumen(pedido) {
 
 // Aviso para el administrador: entró un pedido
 function mailAvisoAdmin(pedido) {
-  const canal = { mercadopago: "Mercado Pago", whatsapp: "WhatsApp", modo: "MODO" }[pedido.origen] || pedido.origen;
+  const canal = { mercadopago: "Mercado Pago", whatsapp: "WhatsApp", modo: "MODO", mayorista: "Mayorista", directa: "Venta directa" }[pedido.origen] || pedido.origen;
   const cobrado = pedido.estado === "aprobado";
   return {
     asunto: `${cobrado ? "💰 Venta cobrada" : "🧾 Pedido nuevo"} ${numeroPedido(pedido.numero)} · ${pesos(pedido.total)}`,

@@ -47,12 +47,55 @@
         <div class="columna-pedidos" id="seccion-pedidos">
           <div class="col__head">
             <h2 class="admin__subtitulo">Pedidos</h2>
-            <button id="reload" class="btn-sec">Actualizar</button>
+            <div class="col__acciones">
+              <button id="nuevo-pedido" class="btn-sec">+ Nuevo pedido</button>
+              <button id="reload" class="btn-sec">Actualizar</button>
+            </div>
           </div>
+          <form class="cupon-form pm" id="pedido-manual" hidden>
+            <h3 class="cfg-titulo">Nuevo pedido</h3>
+            <div class="entrega__row">
+              <label class="pm__campo">Canal
+                <select id="pm-origen">
+                  <option value="mayorista">Mayorista</option>
+                  <option value="directa">Venta directa</option>
+                </select>
+              </label>
+              <label class="pm__campo">Cliente
+                <input id="pm-nombre" maxlength="120" required placeholder="Ej.: Hostel Plaza">
+              </label>
+            </div>
+            <div class="entrega__row">
+              <label class="pm__campo">Email (opcional)
+                <input id="pm-email" type="email" autocomplete="off" placeholder="Para mandarle la confirmación">
+              </label>
+              <label class="pm__campo">Entrega
+                <select id="pm-metodo">
+                  <option value="retiro">Retira</option>
+                  <option value="envio">Envío a coordinar</option>
+                </select>
+              </label>
+            </div>
+            <label class="pm__campo">Notas (opcional)
+              <input id="pm-notas" maxlength="300" placeholder="Dirección, condiciones de pago…">
+            </label>
+            <div class="pm__encabezado" aria-hidden="true"><span>Producto</span><span>Cant.</span><span>Precio c/u</span><span></span></div>
+            <div id="pm-lineas"></div>
+            <button type="button" class="pm__agregar" id="pm-agregar">+ Agregar producto</button>
+            <p class="pm__total">Total <strong id="pm-total">$ 0</strong></p>
+            <label class="pm__cobrado"><input type="checkbox" id="pm-cobrado"> Ya está cobrado (descuenta el stock)</label>
+            <p class="mensaje" id="pm-mensaje"></p>
+            <div class="pm__acciones">
+              <button type="button" class="pm__cancelar" id="pm-cancelar">Cancelar</button>
+              <button type="submit" id="pm-guardar">Cargar pedido</button>
+            </div>
+          </form>
           <div class="filtros" id="filtros">
             <button data-filtro="todos" class="filtro-activo">Todos</button>
             <button data-filtro="mercadopago">Mercado Pago</button>
             <button data-filtro="whatsapp">WhatsApp</button>
+            <button data-filtro="mayorista">Mayorista</button>
+            <button data-filtro="directa">Venta directa</button>
           </div>
           <!-- Busca contra la base, no entre los 200 que trae el panel: el que
                se busca suele ser justamente un pedido viejo. -->

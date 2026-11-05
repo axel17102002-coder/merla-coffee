@@ -394,3 +394,29 @@ button:disabled { opacity: .55; cursor: wait; }
   .px-alta__grid { grid-template-columns: 1fr 1fr; }
   .px-config__fila { flex-direction: column; align-items: stretch; }
 }
+
+/* Pedido cargado a mano */
+.col__acciones { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.canal--mayorista { background: #f3e3cf; color: #7a4a14; }
+.canal--directa { background: #e8e4d8; color: #4d5543; }
+.col__head { flex-wrap: wrap; }
+.columna-pedidos { min-width: 0; }
+.pm { margin-bottom: 18px; grid-template-columns: minmax(0, 1fr); }
+.pm[hidden] { display: none; }
+.pm__campo { display: grid; gap: 4px; flex: 1; min-width: 0; font-size: .82rem; font-weight: 700; color: var(--gris); }
+.pm__encabezado, .pm__linea { display: grid; grid-template-columns: minmax(0, 1fr) 76px 112px 36px; gap: 8px; align-items: center; }
+.pm__encabezado { font-size: .78rem; font-weight: 700; color: var(--gris); }
+#pm-lineas { display: grid; gap: 8px; }
+.pm__linea select { min-width: 0; width: 100%; }
+.cupon-form .pm__quitar, .cupon-form .pm__agregar, .cupon-form .pm__cancelar { background: transparent; border: 1px solid var(--borde); color: var(--verde); }
+.cupon-form .pm__quitar { padding: 8px 0; }
+.pm__total { display: flex; justify-content: space-between; margin: 4px 0; font-weight: 700; }
+.pm__total strong { font-size: 1.15rem; color: var(--verde); }
+.pm__cobrado { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.cupon-form .pm__cobrado input { width: auto; }
+.pm__acciones { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
+@media (max-width: 560px) {
+  .pm__encabezado { display: none; }
+  .pm__linea { grid-template-columns: 1fr 1fr 36px; }
+  .pm__linea select { grid-column: 1 / -1; }
+}

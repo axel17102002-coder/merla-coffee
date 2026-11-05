@@ -26,7 +26,7 @@ async function api(url, opciones = {}) {
 function numeroDe(p) {
   return p.numero ? numeroPedido(p.numero) : "#" + String(p.id).slice(0, 8).toUpperCase();
 }
-const CANALES = { mercadopago: "Mercado Pago", whatsapp: "WhatsApp", modo: "MODO" };
+const CANALES = { mercadopago: "Mercado Pago", whatsapp: "WhatsApp", modo: "MODO", mayorista: "Mayorista", directa: "Venta directa" };
 
 // Etiqueta del método con que se pagó en MP (lo guarda el webhook al acreditarse)
 function etiquetaMetodoMp(clave) {
@@ -54,7 +54,7 @@ function renderEntrega(envio) {
   if (!envio || !envio.metodo) return "";
   if (envio.metodo === "retiro") return `<p class="pedido__extra">🏪 Retiro en el local</p>`;
   const partes = [envio.direccion, envio.ciudad, envio.provincia, envio.cp && `CP ${envio.cp}`].filter(Boolean).map(escapar).join(", ");
-  return `<p class="pedido__extra">📦 Envío a: ${escapar(envio.nombre)} — ${partes}${envio.telefono ? " · Tel " + escapar(envio.telefono) : ""}${envio.notas ? " · " + escapar(envio.notas) : ""}</p>`;
+  return `<p class="pedido__extra">📦 Envío a: ${escapar(envio.nombre)}${partes ? ` — ${partes}` : ""}${envio.telefono ? " · Tel " + escapar(envio.telefono) : ""}${envio.notas ? " · " + escapar(envio.notas) : ""}</p>`;
 }
 
 // ===== Pedidos =====
@@ -79,9 +79,14 @@ function renderPedidos() {
     const lineas = (p.items || []).map((i) => `<li><span>${escapar(i.qty)}× ${escapar(i.nombre)}</span> <span>${formato.format(i.precio_unitario * i.qty)}</span></li>`).join("");
     const fecha = new Date(p.creado).toLocaleString("es-AR", { dateStyle: "medium", timeStyle: "short" });
     const canal = CANALES[p.origen] || p.origen || "—";
-    const pendienteWsp = p.estado === "pendiente" && p.origen === "whatsapp";
+    const esManual = ORIGENES_MANUALES.includes(p.origen);
+    const aprobable = p.estado === "pendiente" && (p.origen === "whatsapp" || esManual);
+    const envioManual = esManual ? p.envio || {} : null;
+    const cliente = envioManual && envioManual.nombre
+      ? `<p class="pedido__extra">Cliente: ${escapar(envioManual.nombre)}${envioManual.metodo === "retiro" && envioManual.notas ? ` · ${escapar(envioManual.notas)}` : ""}</p>`
+      : "";
     const cupon = p.cupon ? `<p class="pedido__extra">Cupón ${escapar(p.cupon)}: -${formato.format(p.descuento_cupon || 0)}</p>` : "";
-    const puntos = p.cliente_email ? `<p class="pedido__extra">Puntos: +${p.puntos_ganados}${p.puntos_canjeados ? ` · canje -${p.puntos_canjeados}` : ""}</p>` : "";
+    const puntos = p.cliente_email && !esManual ? `<p class="pedido__extra">Puntos: +${p.puntos_ganados}${p.puntos_canjeados ? ` · canje -${p.puntos_canjeados}` : ""}</p>` : "";
     const entrega = renderEntrega(p.envio);
     return `<article class="pedido pedido--${escapar(p.estado)}">
       <div class="pedido__top">
@@ -97,11 +102,11 @@ function renderPedidos() {
         <span class="pedido__email">${escapar(p.cliente_email || "Sin email")}</span>
         <strong>${formato.format(p.total)}</strong>
       </div>
-      ${cupon}${puntos}${entrega}${selectorMetodoMp(p)}
+      ${cliente}${cupon}${puntos}${entrega}${selectorMetodoMp(p)}
       <div class="pedido__actions">
         <button class="borrar" data-action="eliminar" data-id="${escapar(p.id)}" title="Eliminar pedido">🗑 Eliminar</button>
         ${p.cliente_email ? `<button class="mail" data-action="mail" data-id="${escapar(p.id)}" title="Enviar confirmación por mail">✉️ Confirmación</button>` : ""}
-        ${pendienteWsp ? `<button class="rechazar" data-action="rechazar" data-id="${escapar(p.id)}">Rechazar</button>
+        ${aprobable ? `<button class="rechazar" data-action="rechazar" data-id="${escapar(p.id)}">Rechazar</button>
         <button class="aprobar" data-action="aprobar" data-id="${escapar(p.id)}">Marcar cobrado</button>` : ""}
       </div>
     </article>`;
@@ -832,6 +837,118 @@ $("#pedidos").addEventListener("change", async (e) => {
 });
 
 $("#reload").addEventListener("click", cargarPedidos);
+
+// ===== Pedido manual (mayorista o venta directa) =====
+// Para ventas que se cierran por fuera de la web: el precio lo fija el admin.
+let catalogoManual = [];
+
+function opcionesManual() {
+  return catalogoManual.map((p) => `<optgroup label="${escapar(p.nombre)} (stock: ${p.stock})">
+      ${presentacionesDe(p).map((x) => `<option value="${escapar(x.id)}" data-precio="${x.precio}">${escapar(p.nombre)} · ${escapar(x.nombre)} (lista ${formato.format(x.precio)})</option>`).join("")}
+    </optgroup>`).join("");
+}
+
+function agregarLineaManual() {
+  const linea = document.createElement("div");
+  linea.className = "pm__linea";
+  linea.innerHTML = `<select data-pm-pres aria-label="Producto">${opcionesManual()}</select>
+    <input type="number" min="1" step="1" inputmode="numeric" value="1" data-pm-qty required aria-label="Cantidad">
+    <input type="number" min="1" step="1" inputmode="numeric" data-pm-precio required aria-label="Precio de cada uno">
+    <button type="button" class="pm__quitar" data-pm-quitar aria-label="Quitar producto">✕</button>`;
+  $("#pm-lineas").appendChild(linea);
+  precioDeLista(linea);
+  totalManual();
+}
+
+function precioDeLista(linea) {
+  const select = linea.querySelector("[data-pm-pres]");
+  const opcion = select.options[select.selectedIndex];
+  linea.querySelector("[data-pm-precio]").value = opcion ? opcion.dataset.precio : "";
+}
+
+function totalManual() {
+  const total = [...document.querySelectorAll("#pm-lineas .pm__linea")].reduce((t, l) =>
+    t + (Number(l.querySelector("[data-pm-qty]").value) || 0) * (Number(l.querySelector("[data-pm-precio]").value) || 0), 0);
+  $("#pm-total").textContent = formato.format(total);
+  return total;
+}
+
+function cerrarPedidoManual() {
+  $("#pedido-manual").hidden = true;
+  $("#pedido-manual").reset();
+  $("#pm-lineas").innerHTML = "";
+  mensaje("#pm-mensaje");
+}
+
+$("#nuevo-pedido").addEventListener("click", async () => {
+  if (!$("#pedido-manual").hidden) { cerrarPedidoManual(); return; }
+  mensaje("#panel-message", "Cargando productos…");
+  try {
+    const { productos } = await api("/api/tienda");
+    catalogoManual = productos.filter((p) => presentacionesDe(p).length);
+    mensaje("#panel-message");
+    if (!catalogoManual.length) { mensaje("#panel-message", "⚠️ No hay productos publicados para vender."); return; }
+    $("#pedido-manual").hidden = false;
+    agregarLineaManual();
+    $("#pm-nombre").focus();
+  } catch (err) {
+    mensaje("#panel-message", `⚠️ ${err.message}`);
+  }
+});
+
+$("#pm-agregar").addEventListener("click", agregarLineaManual);
+$("#pm-cancelar").addEventListener("click", cerrarPedidoManual);
+
+$("#pm-lineas").addEventListener("change", (e) => {
+  if (e.target.matches("[data-pm-pres]")) { precioDeLista(e.target.closest(".pm__linea")); totalManual(); }
+});
+$("#pm-lineas").addEventListener("input", totalManual);
+$("#pm-lineas").addEventListener("click", (e) => {
+  const quitar = e.target.closest("[data-pm-quitar]");
+  if (!quitar) return;
+  quitar.closest(".pm__linea").remove();
+  totalManual();
+});
+
+$("#pedido-manual").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const items = [...document.querySelectorAll("#pm-lineas .pm__linea")].map((l) => ({
+    presentacion: l.querySelector("[data-pm-pres]").value,
+    qty: Number(l.querySelector("[data-pm-qty]").value),
+    precio: Number(l.querySelector("[data-pm-precio]").value),
+  }));
+  if (!items.length) { mensaje("#pm-mensaje", "⚠️ Agregá al menos un producto"); return; }
+
+  const cobrado = $("#pm-cobrado").checked;
+  const aviso = cobrado ? "Se marca como cobrado y se descuenta el stock." : "Queda pendiente hasta que lo marques como cobrado.";
+  if (!confirm(`¿Cargar este pedido por ${formato.format(totalManual())}?\n\n${aviso}`)) return;
+
+  const boton = $("#pm-guardar");
+  boton.disabled = true;
+  try {
+    const r = await api("/api/admin-pedidos", {
+      method: "POST",
+      body: JSON.stringify({
+        accion: "crear",
+        origen: $("#pm-origen").value,
+        nombre: $("#pm-nombre").value,
+        email: $("#pm-email").value,
+        metodo: $("#pm-metodo").value,
+        notas: $("#pm-notas").value,
+        cobrado,
+        items,
+      }),
+    });
+    cerrarPedidoManual();
+    await cargarPedidos();
+    mensaje("#panel-message", `✅ Pedido ${numeroPedido(r.numero)} cargado por ${formato.format(r.total)}`, true);
+    if (TABS["tab-productos"].cargado) cargarProductos(); // el stock se ve ahí
+  } catch (err) {
+    mensaje("#pm-mensaje", `⚠️ ${err.message}`);
+  } finally {
+    boton.disabled = false;
+  }
+});
 
 // Secciones Pedidos / Gestión
 $("#secciones").addEventListener("click", (e) => {

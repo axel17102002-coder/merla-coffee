@@ -4,6 +4,11 @@
 const { sb } = require("./supabase.js");
 const { enviarMail, config } = require("./brevo.js");
 const { mailCarritoAbandonado } = require("./mails.js");
+const { ORIGENES_MANUALES } = require("../../public/motor.js");
+
+// Los pedidos cargados a mano se cobran por fuera de la web: no son carritos
+// abandonados, así que ni se borran ni reciben el recordatorio.
+const SIN_MANUALES = `&origen=not.in.(${ORIGENES_MANUALES.join(",")})`;
 
 // Horas que un pedido puede quedar "pendiente" antes de considerarse un
 // carrito abandonado y borrarse. Solo afecta pendientes: los aprobados y
@@ -19,7 +24,7 @@ const HORAS_RECORDATORIO = 24;
 async function limpiarPedidosPendientes() {
   const limite = new Date(Date.now() - HORAS_PENDIENTE * 3600 * 1000).toISOString();
   const borrados = await sb(
-    `pedidos?estado=eq.pendiente&creado=lt.${encodeURIComponent(limite)}`,
+    `pedidos?estado=eq.pendiente&creado=lt.${encodeURIComponent(limite)}${SIN_MANUALES}`,
     { method: "DELETE", headers: { Prefer: "return=representation" } }
   );
   return Array.isArray(borrados) ? borrados.length : 0;
@@ -40,7 +45,7 @@ async function recordarCarritosAbandonados() {
   let pendientes;
   try {
     pendientes = await sb(
-      `pedidos?estado=eq.pendiente&cliente_email=not.is.null&recordatorio_enviado=is.null` +
+      `pedidos?estado=eq.pendiente&cliente_email=not.is.null&recordatorio_enviado=is.null${SIN_MANUALES}` +
       `&creado=gt.${encodeURIComponent(desde)}&creado=lt.${encodeURIComponent(hasta)}&order=creado.asc&limit=50`
     );
   } catch (err) {

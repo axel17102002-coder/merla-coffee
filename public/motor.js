@@ -51,6 +51,10 @@ function numeroPedido(n) {
 // MP cobra distinto según con qué pagó el cliente. La clave se guarda en
 // `pedidos.mp_metodo` (la completa el webhook, o a mano desde /admin) y el % de
 // cada método vive en `configuracion` (sensible: nunca acá).
+// Canales de los pedidos cargados a mano desde /admin. Se cobran por fuera de la
+// web, así que no son carritos abandonados: el cron no los toca.
+const ORIGENES_MANUALES = ["mayorista", "directa"];
+
 const METODOS_MP = [
   { clave: "dinero", etiqueta: "Dinero en Mercado Pago", config: "comision_mp_dinero" },
   { clave: "debito", etiqueta: "Débito", config: "comision_mp_debito" },
@@ -307,7 +311,7 @@ function calcularPedido(items, opciones, datos) {
 // Export para Node (funciones de Netlify); en el browser quedan como globales.
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    CONFIG, METODOS_MP, comisionMpPorcentaje, comisionMpDe,
+    CONFIG, METODOS_MP, ORIGENES_MANUALES, comisionMpPorcentaje, comisionMpDe,
     presentacionesDe, ahorroDe, precioTransferencia, numeroPedido, calcularPedido,
     precioPack, costoCafePorUnidad, costoUnidad, costoPack,
     precioUnidadDesdeCosto, costoKiloDesdePrecio, margenPack,

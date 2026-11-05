@@ -71,7 +71,7 @@ create table if not exists pedidos (
   numero integer,                    -- número de pedido secuencial (#0001); ver secuencia abajo
   envio jsonb,                       -- { metodo:'retiro'|'envio', nombre, direccion, ciudad, provincia, cp, telefono, notas }
   envio_costo integer not null default 0, -- cotizado con Zipnova; 0 si es retiro
-  origen text not null default 'mercadopago' check (origen in ('modo', 'whatsapp', 'mercadopago')),
+  origen text not null default 'mercadopago' check (origen in ('modo', 'whatsapp', 'mercadopago', 'mayorista', 'directa')),
   mp_metodo text,                    -- método con que se pagó en MP (dinero/debito/credito/prepaga/cuotas_sin_tarjeta/otros), para su comisión
   recordatorio_enviado timestamptz,  -- cuándo se mandó el mail de carrito abandonado (para no repetirlo)
   mp_pago_id text,                   -- payment_id de Mercado Pago, para cruzar con su panel
@@ -88,7 +88,7 @@ create index if not exists pedidos_estado_idx on pedidos (estado);
 alter table pedidos add column if not exists origen text not null default 'mercadopago';
 alter table pedidos alter column origen set default 'mercadopago';
 alter table pedidos drop constraint if exists pedidos_origen_check;
-alter table pedidos add constraint pedidos_origen_check check (origen in ('modo', 'whatsapp', 'mercadopago'));
+alter table pedidos add constraint pedidos_origen_check check (origen in ('modo', 'whatsapp', 'mercadopago', 'mayorista', 'directa'));
 alter table pedidos add column if not exists numero integer;
 alter table pedidos add column if not exists envio jsonb;
 alter table pedidos add column if not exists mp_metodo text;
@@ -215,7 +215,7 @@ declare
 begin
   select * into v_pedido
     from pedidos
-    where id = p_pedido_id and origen = 'whatsapp'
+    where id = p_pedido_id and origen in ('whatsapp', 'mayorista', 'directa')
     for update;
 
   if not found then
@@ -274,7 +274,7 @@ set search_path = public
 as $$
 begin
   update pedidos set estado = 'rechazado', actualizado = now()
-    where id = p_pedido_id and origen = 'whatsapp' and estado = 'pendiente';
+    where id = p_pedido_id and origen in ('whatsapp', 'mayorista', 'directa') and estado = 'pendiente';
   return jsonb_build_object('ok', true);
 end;
 $$;
