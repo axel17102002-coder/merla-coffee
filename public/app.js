@@ -1002,7 +1002,7 @@ async function checkoutWhatsApp() {
     msg += `\nTel: ${entrega.telefono}`;
     if (entrega.notas) msg += `\nNotas: ${entrega.notas}`;
   } else {
-    msg += `\n\n🏪 *Retiro en el local*\nA nombre de: ${entrega.nombre}`;
+    msg += `\n\n🏪 *Retiro en el local*${entrega.nombre ? `\nA nombre de: ${entrega.nombre}` : ""}`;
   }
   msg += "\n\n¿Me confirmás disponibilidad y cómo coordinamos el pago?";
 
@@ -1055,8 +1055,9 @@ function datosEntrega() {
 function validarEntrega() {
   if (!emailValido(emailCliente())) return "Ingresá tu email para hacer el pedido";
   const e = datosEntrega();
-  if (!e.nombre) return "Ingresá tu nombre y apellido";
+  // Para retiro el nombre es opcional (el mail saluda sin nombre); para envío lo necesita el correo
   if (e.metodo === "retiro") return null;
+  if (!e.nombre) return "Ingresá tu nombre y apellido para el envío";
   if (!e.ciudad || !e.provincia || !e.cp) return "Ingresá tu ciudad, provincia y código postal";
   if (!e.telefono) return "Ingresá un teléfono de contacto";
   if (!envioModalidad) return "Elegí si el envío es a domicilio o a sucursal";
@@ -1068,7 +1069,9 @@ function validarEntrega() {
 
 // Muestra u oculta el formulario de envío según el método elegido
 function actualizarEntrega() {
-  $("#envio-form").hidden = metodoEntrega() !== "envio";
+  const esEnvio = metodoEntrega() === "envio";
+  $("#envio-form").hidden = !esEnvio;
+  $("#envio-nombre").placeholder = esEnvio ? "Nombre y apellido" : "Nombre y apellido (opcional)";
   renderCarrito();
 }
 document.querySelectorAll('input[name="entrega"]').forEach((r) =>

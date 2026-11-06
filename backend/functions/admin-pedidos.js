@@ -4,7 +4,7 @@
 //   GET ?q=<texto>           → busca por número de pedido o email (contra la base)
 //   GET ?limite=<n>          → cuántos traer (200 por defecto, 2000 máximo)
 //   POST { accion, id }      → aprobar/rechazar un pedido de WhatsApp o manual
-//   POST { accion: "crear", origen, nombre, email?, metodo, notas?, cobrado, items:[{presentacion, qty, precio}],
+//   POST { accion: "crear", origen, nombre?, email?, metodo, notas?, cobrado, items:[{presentacion, qty, precio}],
 //          cupon?, aplicarCantidad?, metodoPago?, aplicarTransferencia? }
 //                            → carga un pedido a mano, con precio acordado
 //   PATCH { id, mp_metodo }  → corrige el método de pago de Mercado Pago
@@ -73,8 +73,8 @@ async function crearPedidoManual(body) {
   const origen = String(body.origen || "");
   if (!ORIGENES_MANUALES.includes(origen)) return falla(400, "Elegí el canal de la venta");
 
+  // Opcional: si no está, el mail saluda sin nombre
   const nombre = String(body.nombre || "").trim().slice(0, 120);
-  if (!nombre) return falla(400, "Poné el nombre del cliente");
 
   const email = String(body.email || "").trim().toLowerCase();
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return falla(400, "El email no es válido");
@@ -152,7 +152,7 @@ async function crearPedidoManual(body) {
         ...(descuentos.descuentoPago ? { descuento_pago: descuentos.descuentoPago } : {}),
         puntos_ganados: email ? Math.floor(total / 100) * CONFIG.fidelidad.puntosPorCien : 0,
         cliente_email: email || null,
-        envio: { metodo: body.metodo === "envio" ? "envio" : "retiro", nombre, ...(notas ? { notas } : {}) },
+        envio: { metodo: body.metodo === "envio" ? "envio" : "retiro", ...(nombre ? { nombre } : {}), ...(notas ? { notas } : {}) },
       },
     });
   } catch (err) {
