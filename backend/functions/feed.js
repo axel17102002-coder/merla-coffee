@@ -27,7 +27,7 @@ function esc(v) {
 // URL base (https://host) desde los headers de la request, sin hardcodear nada
 function baseUrl(event) {
   const h = event.headers || {};
-  const host = h["x-forwarded-host"] || h.host || "merla-coffee.merlacoffee.workers.dev";
+  const host = h["x-forwarded-host"] || h.host || "merlacoffee.com.ar";
   const proto = h["x-forwarded-proto"] || "https";
   return `${proto}://${host}`;
 }

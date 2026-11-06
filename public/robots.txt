@@ -6,4 +6,4 @@ Disallow: /admin
 Disallow: /admin.html
 Disallow: /api/
 
-Sitemap: https://merla-coffee.merlacoffee.workers.dev/sitemap.xml
+Sitemap: https://merlacoffee.com.ar/sitemap.xml

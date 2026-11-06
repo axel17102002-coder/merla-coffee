@@ -7,7 +7,7 @@ const VERDE = "#2f4a36";
 const CREMA = "#f2ead8";
 const CARAMELO = "#b07a42";
 const GRIS = "#66705f";
-const SITIO = "https://merla-coffee.merlacoffee.workers.dev";
+const SITIO = "https://merlacoffee.com.ar";
 const WHATSAPP = "5492216803376"; // mismo número que public/app.js
 
 const pesos = (n) =>
@@ -106,7 +106,7 @@ function mailAvisoAdmin(pedido) {
        ${resumen(pedido)}
        <p style="margin:14px 0 0;color:${GRIS};">Cliente: ${nombreCliente(pedido) ? `${escapar(nombreCliente(pedido))} · ` : ""}${escapar(pedido.cliente_email || "sin email")}</p>
        ${bloqueEntrega(pedido.envio)}
-       <p style="margin:20px 0 0;"><a href="https://merla-coffee.merlacoffee.workers.dev/admin" style="background:${VERDE};color:#fff;text-decoration:none;padding:11px 18px;border-radius:9px;font-weight:bold;display:inline-block;">Ver en el panel</a></p>`
+       <p style="margin:20px 0 0;"><a href="https://merlacoffee.com.ar/admin" style="background:${VERDE};color:#fff;text-decoration:none;padding:11px 18px;border-radius:9px;font-weight:bold;display:inline-block;">Ver en el panel</a></p>`
     ),
   };
 }
@@ -168,7 +168,7 @@ function mailCarritoAbandonado(pedido) {
       `<p style="margin:0 0 14px;color:${GRIS};">Empezaste un pedido en Merla Coffee y quedó sin confirmar. Te dejamos lo que habías elegido, por si querés retomarlo:</p>
        ${resumen(pedido)}
        <p style="margin:18px 0 0;color:${GRIS};">Si ya no te interesa, ignorá este mail: el pedido se cancela solo.</p>
-       <p style="margin:18px 0 0;"><a href="https://merla-coffee.merlacoffee.workers.dev/#cafes" style="background:${VERDE};color:#fff;text-decoration:none;padding:11px 18px;border-radius:9px;font-weight:bold;display:inline-block;">Volver a la tienda</a></p>`
+       <p style="margin:18px 0 0;"><a href="https://merlacoffee.com.ar/#cafes" style="background:${VERDE};color:#fff;text-decoration:none;padding:11px 18px;border-radius:9px;font-weight:bold;display:inline-block;">Volver a la tienda</a></p>`
     ),
   };
 }
