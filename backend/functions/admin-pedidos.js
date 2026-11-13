@@ -4,6 +4,9 @@
 //   GET ?q=<texto>           → busca por número de pedido o email (contra la base)
 //   GET ?limite=<n>          → cuántos traer (200 por defecto, 2000 máximo)
 //   POST { accion, id }      → aprobar/rechazar un pedido de WhatsApp o manual
+//   POST { accion: "cancelar", id, devolverStock }
+//                            → cancela un pedido ya cobrado (cualquier canal): revierte
+//                              puntos, libera el cupón y, si se pide, devuelve el stock
 //   POST { accion: "crear", origen, nombre?, email?, metodo, notas?, cobrado, items:[{presentacion, qty, precio}],
 //          cupon?, aplicarCantidad?, metodoPago?, aplicarTransferencia? }
 //                            → carga un pedido a mano, con precio acordado
@@ -175,6 +178,35 @@ async function crearPedidoManual(body) {
   return { statusCode: 201, cuerpo: { numero: fila.numero, total, estado: body.cobrado ? "aprobado" : "pendiente" } };
 }
 
+// Cancela un pedido ya cobrado. Todo ocurre dentro de la función SQL
+// `cancelar_pedido` (una sola transacción): le quita al cliente los puntos que
+// había sumado, le devuelve los que canjeó, libera el cupón para que lo pueda
+// volver a usar y, si `devolverStock`, repone las unidades. NO devuelve la
+// plata: eso se hace aparte (Mercado Pago, transferencia). El pedido queda
+// `cancelado` y deja de contar en Insights. Devuelve { statusCode, cuerpo }.
+async function cancelarPedido(body) {
+  const id = String(body.id || "");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { statusCode: 400, cuerpo: { error: "Falta el id del pedido" } };
+
+  let resultado;
+  try {
+    resultado = await sbRpc("cancelar_pedido", {
+      p_pedido_id: id,
+      p_devolver_stock: body.devolverStock !== false,
+    });
+  } catch (err) {
+    // PGRST202 = la función no existe; el check = el estado 'cancelado' todavía no está permitido
+    if (/PGRST202|pedidos_estado_check/.test(String(err.message))) {
+      return { statusCode: 409, cuerpo: { error: "Falta correr supabase/migracion-cancelar-pedido.sql en Supabase" } };
+    }
+    throw err;
+  }
+  if (!resultado || !resultado.ok) {
+    return { statusCode: 409, cuerpo: { error: (resultado && resultado.error) || "No se pudo cancelar el pedido" } };
+  }
+  return { statusCode: 200, cuerpo: resultado };
+}
+
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
   if (!esAdmin(event)) return respuestaNoAutorizado();
@@ -197,6 +229,10 @@ exports.handler = async (event) => {
       const body = JSON.parse(event.body || "{}");
       if (body.accion === "crear") {
         const { statusCode, cuerpo } = await crearPedidoManual(body);
+        return { statusCode, headers, body: JSON.stringify(cuerpo) };
+      }
+      if (body.accion === "cancelar") {
+        const { statusCode, cuerpo } = await cancelarPedido(body);
         return { statusCode, headers, body: JSON.stringify(cuerpo) };
       }
       const { accion, id } = body;

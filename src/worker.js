@@ -3,7 +3,7 @@
 // demás lo sirve como archivo estático desde public/.
 
 import { adaptar } from "./adaptador.js";
-import { limpiarPedidosPendientes, recordarCarritosAbandonados } from "../backend/lib/mantenimiento.js";
+import { conciliarPagosMp, limpiarPedidosPendientes, recordarCarritosAbandonados } from "../backend/lib/mantenimiento.js";
 
 import { handler as tienda } from "../backend/functions/tienda.js";
 import { handler as validarCupon } from "../backend/functions/validar-cupon.js";
@@ -69,19 +69,31 @@ export default {
 
   async scheduled(event, env, ctx) {
     cargarEnv(env);
-    // Primero el recordatorio y después la limpieza: al revés, los pedidos que
-    // están justo en el borde de las 48 h se borrarían antes de avisarles.
+    // 1) Conciliar con Mercado Pago: un pedido pendiente que en realidad se
+    //    pagó se aprueba acá, antes de tratarlo como carrito abandonado.
+    //    Si la conciliación falla entera, no se toca ningún pedido de MP.
+    let conciliacion = { aprobados: 0, sinPago: new Set() };
     try {
-      const recordados = await recordarCarritosAbandonados();
+      conciliacion = await conciliarPagosMp();
+      if (conciliacion && conciliacion.aprobados) {
+        console.log(`scheduled: ${conciliacion.aprobados} pedidos pagados que seguían pendientes, aprobados`);
+      }
+    } catch (err) {
+      console.error("scheduled (conciliación):", err);
+    }
+    // 2) Recordatorio y 3) limpieza, en ese orden: al revés, los pedidos que
+    //    están justo en el borde de las 48 h se borrarían antes de avisarles.
+    try {
+      const recordados = await recordarCarritosAbandonados(conciliacion);
       if (recordados) console.log(`scheduled: ${recordados} recordatorios de carrito abandonado enviados`);
     } catch (err) {
       console.error("scheduled (recordatorios):", err);
     }
     try {
-      const borrados = await limpiarPedidosPendientes();
+      const borrados = await limpiarPedidosPendientes(conciliacion);
       console.log(`scheduled: ${borrados} pedidos pendientes vencidos eliminados`);
     } catch (err) {
       console.error("scheduled:", err);
     }
   },
-}
+};

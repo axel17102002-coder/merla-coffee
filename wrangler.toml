@@ -13,12 +13,16 @@ keep_vars = true
 # La URL del proyecto de Supabase no es secreta; las claves sí, y van como
 # Secrets en el panel: SUPABASE_SECRET_KEY y ADMIN_TOKEN
 SUPABASE_URL = "https://goldreguogjsfpmkuiua.supabase.co"
+# Cupón de regalo en el mail de carrito abandonado. Vacío = el mail sale sin
+# cupón. Para activarlo: crear el cupón en /admin → Cupones y poner acá su código.
+CUPON_CARRITO = ""
 
 [assets]
 directory = "public"
 binding = "ASSETS"
 
-# Tarea programada: cada 6 h borra carritos abandonados (pendientes > 48 h).
+# Tarea programada, cada hora: concilia pagos con Mercado Pago, manda el
+# recordatorio de carrito abandonado y borra los pendientes de más de 48 h.
 # La lógica está en el handler `scheduled` de src/worker.js.
 [triggers]
-crons = ["0 */6 * * *"]
+crons = ["0 * * * *"]

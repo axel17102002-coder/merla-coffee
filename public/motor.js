@@ -180,6 +180,9 @@ function ahorroDe(producto, pres) {
   return Math.round((1 - pres.precio / (unidad.precio * pres.unidades_stock)) * 100);
 }
 
+// Máximo de líneas (presentaciones distintas) que acepta un pedido
+const MAX_LINEAS_PEDIDO = 60;
+
 // Calcula un pedido completo.
 //   items:    [{ presentacion: <id de presentación>, qty }]
 //   opciones: { cupon: <objeto cupón o null>, canjePuntos: bool, puntosDisponibles: int|null,
@@ -191,10 +194,18 @@ function calcularPedido(items, opciones, datos) {
     return { ok: false, error: "El carrito está vacío" };
   }
 
+  // Un carrito real no llega ni cerca: es un tope contra pedidos armados a mano
+  if (items.length > MAX_LINEAS_PEDIDO) {
+    return { ok: false, error: "El carrito tiene demasiados productos distintos" };
+  }
+
   const lineas = [];
   const unidadesPorProducto = {};
 
   for (const it of items) {
+    if (!it || typeof it !== "object") {
+      return { ok: false, error: "Hay un producto inválido en el carrito" };
+    }
     let producto = null;
     let pres = null;
     for (const p of datos.productos) {
@@ -264,8 +275,11 @@ function calcularPedido(items, opciones, datos) {
         error: `El cupón ${c.codigo} es para pedidos desde $${c.minimo.toLocaleString("es-AR")}`,
       };
     }
-    descuentoCupon =
-      c.tipo === "porcentaje" ? Math.round((base * c.valor) / 100) : Math.min(c.valor, base);
+    // Ningún cupón descuenta más que el pedido, aunque esté mal cargado (150%)
+    descuentoCupon = Math.max(
+      0,
+      Math.min(base, c.tipo === "porcentaje" ? Math.round((base * c.valor) / 100) : c.valor)
+    );
     cupon = c.codigo;
   }
 
@@ -336,7 +350,7 @@ function calcularDescuentosManual(lineas, { cupon = null, aplicarCantidad = fals
     if (base < (cupon.minimo || 0)) {
       return { ok: false, error: `El cupón ${cupon.codigo} es para pedidos desde $${cupon.minimo.toLocaleString("es-AR")}` };
     }
-    descuentoCupon = cupon.tipo === "porcentaje" ? Math.round((base * cupon.valor) / 100) : Math.min(cupon.valor, base);
+    descuentoCupon = Math.max(0, Math.min(base, cupon.tipo === "porcentaje" ? Math.round((base * cupon.valor) / 100) : cupon.valor));
   }
 
   const resto = base - descuentoCupon;

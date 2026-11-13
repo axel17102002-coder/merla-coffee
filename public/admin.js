@@ -57,6 +57,29 @@ function renderEntrega(envio) {
   return `<p class="pedido__extra">📦 Envío a: ${escapar(envio.nombre)}${partes ? ` — ${partes}` : ""}${envio.telefono ? " · Tel " + escapar(envio.telefono) : ""}${envio.notas ? " · " + escapar(envio.notas) : ""}</p>`;
 }
 
+// Confirmación de "Cancelar" (pedidos ya cobrados), dentro de la tarjeta: dice
+// exactamente qué se revierte y deja elegir si las unidades vuelven al stock
+// (a veces el café ya se entregó o se perdió). Lo ejecuta `cancelar_pedido` en
+// la base; la plata no se devuelve desde acá.
+function panelCancelar(p) {
+  const unidades = (p.items || []).reduce((t, i) => t + (Number(i.unidades) || 0), 0);
+  const efectos = [];
+  if (p.cliente_email && p.puntos_ganados) efectos.push(`se le quitan los ${escapar(p.puntos_ganados)} puntos que sumó`);
+  if (p.cliente_email && p.puntos_canjeados) efectos.push(`se le devuelven los ${escapar(p.puntos_canjeados)} puntos que canjeó`);
+  if (p.cliente_email && p.cupon) efectos.push(`el cupón ${escapar(p.cupon)} le queda libre para volver a usarlo`);
+  const plata = p.origen === "mercadopago"
+    ? "La plata no se devuelve sola: devolvela desde Mercado Pago."
+    : "Si ya te pagó, la plata se la devolvés vos.";
+  return `<div class="pedido__cancelar" data-cancelar hidden>
+      <p><strong>¿Cancelar el pedido ${escapar(numeroDe(p))}?</strong> Deja de contar como venta${efectos.length ? `, ${efectos.join(", ")}` : ""}. ${plata}</p>
+      <label class="pedido__cancelar-stock"><input type="checkbox" data-cancelar-stock checked> Devolver ${unidades === 1 ? "la unidad" : `las ${unidades} unidades`} al stock</label>
+      <div class="pedido__cancelar-botones">
+        <button type="button" data-action="cancelar-volver">Volver</button>
+        <button type="button" class="pedido__cancelar-ok" data-action="cancelar-confirmar" data-id="${escapar(p.id)}">Sí, cancelar el pedido</button>
+      </div>
+    </div>`;
+}
+
 // ===== Pedidos =====
 let pedidosCache = [];
 let filtroCanal = "todos";
@@ -81,6 +104,7 @@ function renderPedidos() {
     const canal = CANALES[p.origen] || p.origen || "—";
     const esManual = ORIGENES_MANUALES.includes(p.origen);
     const aprobable = p.estado === "pendiente" && (p.origen === "whatsapp" || esManual);
+    const cancelable = p.estado === "aprobado"; // ya cobrado, de cualquier canal
     const datosCliente = esManual || (p.envio && p.envio.metodo === "retiro") ? p.envio || {} : null;
     const cliente = datosCliente && datosCliente.nombre
       ? `<p class="pedido__extra">Cliente: ${escapar(datosCliente.nombre)}${datosCliente.metodo === "retiro" && datosCliente.notas ? ` · ${escapar(datosCliente.notas)}` : ""}</p>`
@@ -117,10 +141,12 @@ function renderPedidos() {
       ${cliente}${pago}${cupon}${puntos}${entrega}${estadoMail}${selectorMetodoMp(p)}
       <div class="pedido__actions">
         <button class="borrar" data-action="eliminar" data-id="${escapar(p.id)}" title="Eliminar pedido">🗑 Eliminar</button>
-        ${p.cliente_email ? `<button class="mail" data-action="mail" data-id="${escapar(p.id)}" title="Enviar confirmación por mail">✉️ ${p.confirmacion_enviada ? "Reenviar" : "Enviar confirmación"}</button>` : ""}
+        ${cancelable ? `<button class="rechazar" data-action="cancelar" title="Cancelar este pedido ya cobrado: revierte puntos, cupón y stock">Cancelar</button>` : ""}
+        ${p.cliente_email && p.estado !== "cancelado" ? `<button class="mail" data-action="mail" data-id="${escapar(p.id)}" title="Enviar confirmación por mail">✉️ ${p.confirmacion_enviada ? "Reenviar" : cancelable ? `Enviar<span class="pedido__largo"> confirmación</span>` : "Enviar confirmación"}</button>` : ""}
         ${aprobable ? `<button class="rechazar" data-action="rechazar" data-id="${escapar(p.id)}">Rechazar</button>
         <button class="aprobar" data-action="aprobar" data-id="${escapar(p.id)}">Marcar cobrado</button>` : ""}
       </div>
+      ${cancelable ? panelCancelar(p) : ""}
     </article>`;
   }).join("");
 }
@@ -785,7 +811,38 @@ $("#pedidos").addEventListener("click", async (e) => {
   const boton = e.target.closest("[data-action]");
   if (!boton) return;
   const { action, id } = boton.dataset;
-  if (action === "eliminar" && !confirm("¿Eliminar este pedido definitivamente? No se puede deshacer.")) return;
+
+  // Cancelar un pedido cobrado: el botón abre la confirmación dentro de la
+  // tarjeta, y recién "Sí, cancelar" lo ejecuta.
+  const tarjeta = boton.closest(".pedido");
+  if (action === "cancelar" || action === "cancelar-volver") {
+    const panel = tarjeta.querySelector("[data-cancelar]");
+    panel.hidden = action === "cancelar-volver" || !panel.hidden;
+    return;
+  }
+  if (action === "cancelar-confirmar") {
+    const devolverStock = tarjeta.querySelector("[data-cancelar-stock]").checked;
+    boton.disabled = true;
+    try {
+      await api("/api/admin-pedidos", { method: "POST", body: JSON.stringify({ accion: "cancelar", id, devolverStock }) });
+      await cargarPedidos();
+      if (devolverStock && TABS["tab-productos"].cargado) cargarProductos(); // el stock se ve ahí
+      mensaje("#panel-message", `✅ Pedido cancelado${devolverStock ? " y stock devuelto" : ""}`, true);
+    } catch (err) {
+      mensaje("#panel-message", `⚠️ ${err.message}`);
+      boton.disabled = false;
+    }
+    return;
+  }
+
+  if (action === "eliminar") {
+    // Borrar un pedido cobrado no revierte nada: se avisa y se ofrece el camino correcto
+    const pedido = (pedidosBusqueda || pedidosCache).find((p) => p.id === id);
+    const pregunta = pedido && pedido.estado === "aprobado"
+      ? "Este pedido está cobrado. Eliminarlo lo saca de las ventas, pero NO devuelve el stock ni los puntos.\n\nPara revertirlo, usá «Cancelar».\n\n¿Eliminarlo igual?"
+      : "¿Eliminar este pedido definitivamente? No se puede deshacer.";
+    if (!confirm(pregunta)) return;
+  }
   if (action === "rechazar" && !confirm("¿Rechazar este pedido pendiente?")) return;
   if (action === "aprobar" && !confirm("¿Confirmar el cobro? Esto descuenta stock y actualiza puntos.")) return;
   if (action === "mail" && !confirm("¿Enviar el mail de confirmación al cliente?")) return;

@@ -157,20 +157,75 @@ function mailConfirmacionCliente(pedido, saldo = null) {
   };
 }
 
+// Link que rearma el carrito en la tienda con lo que tenía el pedido. Lleva solo
+// presentaciones y cantidades (nada sensible: el precio se recalcula al cobrar),
+// así funciona aunque abra el mail en otro dispositivo o el pedido ya se haya
+// borrado. app.js lo lee en `retomarPedidoDeURL`.
+function enlaceRetomar(pedido, codigoCupon) {
+  const items = (pedido.items || [])
+    .filter((i) => /^[A-Za-z0-9_-]{1,80}$/.test(String(i.presentacion_id || "")) && Number(i.qty) >= 1)
+    .map((i) => `${i.presentacion_id}:${Math.floor(Number(i.qty))}`);
+  if (!items.length) return `${SITIO}/#cafes`;
+  const cupon = /^[A-Z0-9_-]{2,40}$/.test(String(codigoCupon || "")) ? `&cupon=${codigoCupon}` : "";
+  return `${SITIO}/?retomar=${encodeURIComponent(items.join(","))}${cupon}`;
+}
+
 // Recordatorio de carrito abandonado: el pedido quedó pendiente y el cron lo
-// va a borrar. Sin precios de más ni urgencias falsas: el detalle de lo que
-// eligió y un botón para volver.
-function mailCarritoAbandonado(pedido) {
+// va a borrar. Sin urgencias falsas: el detalle de lo que eligió y un botón que
+// le devuelve el carrito armado. `cuponRegalo` (opcional) es un cupón de la base
+// para tentarlo a terminar; se aplica solo al entrar desde el botón.
+function mailCarritoAbandonado(pedido, cuponRegalo = null) {
+  const regalo = cuponRegalo
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0 0;background:#f6f0e2;border-radius:12px;">
+        <tr><td style="padding:14px 16px;color:${GRIS};line-height:1.5;">🎁 Para que lo termines, te dejamos <strong style="color:${VERDE};">${
+          cuponRegalo.tipo === "porcentaje" ? `${Number(cuponRegalo.valor)}% OFF` : `${pesos(cuponRegalo.valor)} OFF`
+        }</strong>. Se aplica solo al entrar desde el botón (cupón ${escapar(cuponRegalo.codigo)}).</td></tr>
+      </table>`
+    : "";
+  const enlace = enlaceRetomar(pedido, cuponRegalo ? cuponRegalo.codigo : pedido.cupon);
   return {
     asunto: `¿Seguimos con tu pedido? ☕`,
     html: envoltorio(
       "Te quedó un café a medio camino",
-      `<p style="margin:0 0 14px;color:${GRIS};">Empezaste un pedido en Merla Coffee y quedó sin confirmar. Te dejamos lo que habías elegido, por si querés retomarlo:</p>
+      `<p style="margin:0 0 14px;color:${GRIS};">Empezaste un pedido en Merla Coffee y quedó sin confirmar. Te lo guardamos tal cual lo dejaste:</p>
        ${resumen(pedido)}
-       <p style="margin:18px 0 0;color:${GRIS};">Si ya no te interesa, ignorá este mail: el pedido se cancela solo.</p>
-       <p style="margin:18px 0 0;"><a href="https://merlacoffee.com.ar/#cafes" style="background:${VERDE};color:#fff;text-decoration:none;padding:11px 18px;border-radius:9px;font-weight:bold;display:inline-block;">Volver a la tienda</a></p>`
+       ${regalo}
+       <p style="margin:20px 0 0;"><a href="${escapar(enlace)}" style="background:${VERDE};color:#fff;text-decoration:none;padding:13px 20px;border-radius:9px;font-weight:bold;display:inline-block;">Retomar mi pedido</a></p>
+       <p style="margin:18px 0 0;color:${GRIS};">Si ya no te interesa, ignorá este mail: el pedido se cancela solo.</p>`
     ),
   };
 }
 
-module.exports = { mailAvisoAdmin, mailConfirmacionCliente, mailCarritoAbandonado };
+// Aviso al administrador de un pago que necesita que alguien lo mire:
+//   "sin-pedido": entró plata y el pedido ya no existe en la base.
+//   "duplicado":  segundo pago sobre un pedido que ya estaba cobrado.
+// `pago` es el objeto de la API de Mercado Pago.
+function mailPagoRaro(motivo, pago, pedido) {
+  const monto = pesos(pago.transaction_amount);
+  const duplicado = motivo === "duplicado";
+  const numero = pedido ? numeroPedido(pedido.numero) : "";
+  const fila = (etiqueta, valor) =>
+    valor ? `<tr><td style="padding:5px 0;color:${GRIS};">${etiqueta}</td><td style="padding:5px 0;text-align:right;color:#22301f;">${escapar(valor)}</td></tr>` : "";
+  const fecha = pago.date_approved || pago.date_created;
+  return {
+    asunto: duplicado ? `⚠️ Pago duplicado del pedido ${numero} · ${monto}` : `⚠️ Pago sin pedido · ${monto}`,
+    html: envoltorio(
+      duplicado ? `Pagaron dos veces el pedido ${numero}` : "Entró un pago sin pedido",
+      `<p style="margin:0 0 14px;color:${GRIS};">${duplicado
+        ? "Mercado Pago aprobó un segundo pago sobre un pedido que ya estaba cobrado. El pedido no se tocó: falta devolver este pago."
+        : "Mercado Pago aprobó un pago, pero su pedido ya no está en el panel (lo más probable: pagó un link viejo, cuando el pedido pendiente ya se había borrado). La plata entró y no hay pedido que la respalde."}</p>
+       <table style="width:100%;border-collapse:collapse;">
+         ${fila("Pago N°", pago.id)}
+         ${fila("Monto", monto)}
+         ${fila("Pagó", pago.payer && pago.payer.email)}
+         ${fila("Fecha", fecha ? new Date(fecha).toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" }) : "")}
+         ${fila("Referencia", pago.external_reference)}
+       </table>
+       <p style="margin:16px 0 0;color:${GRIS};">Buscalo por su número en Mercado Pago → Actividad. ${duplicado
+        ? "Desde ahí podés devolverle la plata."
+        : "Escribile al cliente: podés cargarle el pedido a mano desde el panel (+ Nuevo pedido) o devolverle la plata."}</p>`
+    ),
+  };
+}
+
+module.exports = { mailAvisoAdmin, mailConfirmacionCliente, mailCarritoAbandonado, mailPagoRaro, enlaceRetomar };

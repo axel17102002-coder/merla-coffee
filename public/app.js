@@ -135,6 +135,7 @@ async function cargarTienda() {
     renderCarrito();
     datosEstructuradosProductos(); // para que Google muestre precio y stock
     abrirProductoDeURL(); // deep-link ?producto=<id> (lo usan los feeds de ads)
+    retomarPedidoDeURL(); // ?retomar=... (botón del mail de carrito abandonado)
   } catch (err) {
     console.error("No se pudo cargar la tienda:", err);
     $("#product-grid").innerHTML = `
@@ -142,6 +143,59 @@ async function cargarTienda() {
       <button class="grid__retry" id="retry-tienda">Reintentar</button></p>`;
     $("#retry-tienda").addEventListener("click", cargarTienda);
   }
+}
+
+// ===== Retomar un pedido desde el mail de carrito abandonado =====
+// El botón del mail trae ?retomar=<presentación>:<cantidad>,... y a veces
+// &cupon=CODIGO (lo arma `enlaceRetomar` en backend/lib/mails.js). Como el
+// carrito vive en este navegador y el mail se puede abrir en otro, el link
+// lleva lo que había elegido: acá se rearma el carrito y se abre para pagar.
+let retomarPendiente = (() => {
+  const qp = new URLSearchParams(location.search);
+  const items = qp.get("retomar");
+  if (!items) return null;
+  history.replaceState(null, "", location.pathname);
+  return { items, cupon: qp.get("cupon") };
+})();
+
+async function retomarPedidoDeURL() {
+  if (!retomarPendiente || !DATOS) return;
+  const { items, cupon } = retomarPendiente;
+  retomarPendiente = null; // una sola vez, aunque la tienda se recargue
+
+  // Se arma línea por línea con lo que siga disponible: si de algo queda menos
+  // stock, entra la cantidad que haya en vez de perder todo el pedido.
+  let nuevo = {};
+  let cambios = false;
+  for (const parte of items.split(",").slice(0, 60)) {
+    const [id, cantidad] = parte.split(":");
+    const pedida = Math.min(Number.parseInt(cantidad, 10) || 0, 99);
+    let puesta = 0;
+    if (pedida >= 1 && productoDe(id)) {
+      for (let q = pedida; q >= 1 && !puesta; q--) {
+        const prueba = { ...nuevo, [id]: q };
+        const lineas = Object.entries(prueba).map(([presentacion, qty]) => ({ presentacion, qty }));
+        if (calcularPedido(lineas, {}, DATOS).ok) {
+          nuevo = prueba;
+          puesta = q;
+        }
+      }
+    }
+    if (puesta < pedida || pedida < 1) cambios = true;
+  }
+
+  if (!Object.keys(nuevo).length) {
+    mostrarToast("Lo que habías elegido ya no está disponible. ¡Mirá los cafés que hay hoy! ☕");
+    return;
+  }
+  carrito = nuevo;
+  guardar();
+  localStorage.removeItem("merla-cupon");
+  localStorage.removeItem("merla-canje");
+  renderCarrito();
+  abrirCarrito();
+  mostrarToast(cambios ? "Recuperamos tu pedido. Algunos productos ya no tienen el mismo stock." : "Recuperamos tu pedido ☕");
+  if (cupon) await aplicarCupon(cupon);
 }
 
 // ============================================================================

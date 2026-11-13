@@ -44,7 +44,7 @@ backend/           El servidor (nunca lo ve el navegador)
   functions/       un archivo por endpoint = /api/<nombre>
   lib/             clientes/helpers: supabase, mercadopago, brevo, admin, zipnova, envio-costo…
 supabase/          SQL: schema.sql (todo desde cero) + migracion-*.sql
-wrangler.toml      config de Cloudflare (assets, cron cada 6 h, vars)
+wrangler.toml      config de Cloudflare (assets, cron cada hora, vars)
 ```
 
 ### `motor.js` es especial
@@ -90,7 +90,11 @@ una regla de precio/punto, va acá y aplica en ambos lados a la vez.
   Supabase real** — las mutaciones son reales; si probás algo destructivo (bajar
   stock, borrar), restaurá el estado después.
 - **Admin de prueba**: entrá a `/admin` con el `ADMIN_TOKEN` de `.dev.vars`.
-- **No hay test suite.** Para verificar cambios de UI, conducí el navegador
+- **Tests**: `node --test` corre `test/*.test.js` (reglas de precio, cobro y
+  envío), sin dependencias ni red. Si la máquina no tiene Node, se corren con el
+  JavaScriptCore de macOS: ver `test/arnes-jsc.js`. Si tocás plata (motor,
+  webhook, cron, cancelación), corrélos y sumá el caso nuevo.
+- **No hay tests de UI.** Para verificar cambios de UI, conducí el navegador
   headless (Playwright/chromium) contra `wrangler dev`: login con el token,
   navegá la sección y chequeá `console --errors`. Los `confirm()` nativos hay que
   aceptarlos desde el driver (`page.on("dialog", d => d.accept())`).
@@ -108,7 +112,19 @@ una regla de precio/punto, va acá y aplica en ambos lados a la vez.
   solo si tienen email. Los descuentos son opcionales (`calcularDescuentosManual`). El cron no los borra ni les manda recordatorio aunque estén pendientes.
 - **No existe tabla de "carritos"**: el carrito vive en `localStorage` del cliente
   hasta que confirma. Lo más parecido a un carrito abandonado son los pedidos
-  `pendiente`, que un cron (cada 6 h, `wrangler.toml` → `[triggers]`) borra a las 48 h.
+  `pendiente`, que un cron (cada hora, `wrangler.toml` → `[triggers]`) borra a las 48 h.
+  A las 2 h (Mercado Pago) o 24 h (WhatsApp) les manda un mail con un link que
+  rearma el carrito (`?retomar=`, lo lee `retomarPedidoDeURL` en `app.js`).
+- **Un pendiente de Mercado Pago puede estar pago.** Si el aviso de MP no llegó,
+  el pedido queda `pendiente` con la plata cobrada. Por eso el cron primero
+  concilia contra la API de MP (`conciliarPagosMp`) y solo recuerda o borra los
+  que MP confirmó sin pago. No agregues otro borrado de pendientes que se saltee eso.
+- **Tres caminos acreditan un pago de MP** (webhook, `confirmar-pedido` y el
+  cron) y los tres pasan por `backend/lib/cobro.js` → `acreditarPagoMp`. El
+  webhook responde 500 a propósito cuando algo nuestro falla: así MP reintenta.
+- **Cancelar ≠ eliminar.** `cancelar_pedido` (SQL, botón "Cancelar" del panel)
+  revierte puntos, cupón y, si se pide, stock de un pedido cobrado y lo deja
+  `cancelado`. `DELETE` solo borra la fila. Ninguno devuelve la plata.
 - **Pasarelas de pago**: se prenden/apagan en `motor.js` → `CONFIG.pagos`. Hoy
   Mercado Pago activo, MODO implementado pero apagado.
 - **Sin credenciales de un servicio no se rompe nada**: mails (Brevo) y envío a

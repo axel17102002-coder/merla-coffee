@@ -25,6 +25,7 @@ const {
   margenUnidadReal,
   margenSimple,
   calcularPedido,
+  calcularDescuentosManual,
   comisionMpPorcentaje,
   comisionMpDe,
 } = require("../public/motor.js");
@@ -204,6 +205,71 @@ test("la cantidad se interpreta como entero: '3' vale 3 y 1,5 se trunca a 1", ()
 test("un producto inactivo no se puede comprar", () => {
   const r = calcularPedido([{ presentacion: "u", qty: 1 }], {}, { productos: catalogo({ activo: false }) });
   assert.equal(r.ok, false);
+});
+
+test("un carrito armado a mano con basura devuelve un error, no una excepción", () => {
+  const productos = catalogo();
+  // Lo que llega del navegador no es confiable: null, un texto, un número
+  for (const basura of [[null], ["u"], [42], [{ qty: 1 }]]) {
+    const r = calcularPedido(basura, {}, { productos });
+    assert.equal(r.ok, false);
+    assert.equal(typeof r.error, "string");
+  }
+  const enorme = Array.from({ length: 500 }, () => ({ presentacion: "u", qty: 1 }));
+  assert.equal(calcularPedido(enorme, {}, { productos: catalogo({ stock: 9999 }) }).ok, false);
+});
+
+test("ningún cupón descuenta más que el pedido, aunque esté mal cargado", () => {
+  const pasado = { codigo: "ROTO", tipo: "porcentaje", valor: 150, minimo: 0, activo: true };
+  const r = calcularPedido([{ presentacion: "u", qty: 1 }], { cupon: pasado }, { productos: catalogo() });
+  assert.equal(r.descuentoCupon, r.subtotal);
+  assert.equal(r.total, 0);
+
+  const negativo = { codigo: "ROTO2", tipo: "monto", valor: -500, minimo: 0, activo: true };
+  const r2 = calcularPedido([{ presentacion: "u", qty: 1 }], { cupon: negativo }, { productos: catalogo() });
+  assert.equal(r2.descuentoCupon, 0); // un cupón nunca puede encarecer el pedido
+});
+
+test("los descuentos se aplican en orden: cantidad, cupón, puntos; el envío no se descuenta", () => {
+  const cupon = { codigo: "MERLA10", tipo: "porcentaje", valor: 10, minimo: 0, activo: true };
+  const r = calcularPedido(
+    [{ presentacion: "u", qty: 5 }],
+    { cupon, canjePuntos: true, puntosDisponibles: 9999, envioCosto: 3000 },
+    { productos: catalogo() }
+  );
+  assert.equal(r.subtotal, 10000);
+  assert.equal(r.descuentoCantidad, 500); // 5% de 10.000
+  assert.equal(r.descuentoCupon, 950); // 10% de 9.500
+  assert.equal(r.descuentoPuntos, CONFIG.fidelidad.canjeDescuento);
+  assert.equal(r.total, 10000 - 500 - 950 - CONFIG.fidelidad.canjeDescuento + 3000);
+  // los puntos se ganan sobre lo que efectivamente pagó por los productos
+  assert.equal(r.puntosGanados, Math.floor((r.total - 3000) / 100));
+});
+
+test("unidad y pack del mismo café comparten stock", () => {
+  // 1 pack (5) + 6 sueltas = 11 > 10 de stock
+  const items = [{ presentacion: "p", qty: 1 }, { presentacion: "u", qty: 6 }];
+  assert.equal(calcularPedido(items, {}, { productos: catalogo({ stock: 10 }) }).ok, false);
+  assert.equal(calcularPedido(items, {}, { productos: catalogo({ stock: 11 }) }).ok, true);
+});
+
+// ===== Pedidos cargados a mano =====
+
+const LINEAS_MANUAL = [{ precioUnitario: 2000, qty: 5, unidades: 5, esPack: false }];
+
+test("en un pedido manual no se descuenta nada si el admin no lo pide", () => {
+  const r = calcularDescuentosManual(LINEAS_MANUAL);
+  assert.equal(r.total, 10000);
+  assert.equal(r.descuentoCantidad + r.descuentoCupon + r.descuentoPago, 0);
+});
+
+test("en un pedido manual los descuentos van en orden: cantidad, cupón y transferencia", () => {
+  const cupon = { codigo: "MERLA10", tipo: "porcentaje", valor: 10, minimo: 0 };
+  const r = calcularDescuentosManual(LINEAS_MANUAL, { cupon, aplicarCantidad: true, aplicarTransferencia: true });
+  assert.equal(r.descuentoCantidad, 500);
+  assert.equal(r.descuentoCupon, 950);
+  assert.equal(r.descuentoPago, 8550 - precioTransferencia(8550));
+  assert.equal(r.total, precioTransferencia(8550));
 });
 
 // ===== Comisión de Mercado Pago =====

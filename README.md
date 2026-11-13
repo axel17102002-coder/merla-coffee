@@ -63,7 +63,7 @@ Entrá a `https://<tu-sitio>/admin` con tu `ADMIN_TOKEN`. Todo se hace desde ah�
 - **Cupones**: crear/editar y activar/desactivar. **No se muestran en la web**: pasalos por Instagram/WhatsApp. Se usan una vez por email.
 - **Productos**: alta con foto (se sube a Supabase Storage). Nacen **ocultos**: se publican con un botón cuando hay stock. Dos tipos: **☕ Café** (precio por fórmula desde el costo del kilo, como siempre) o **🏷️ Producto simple** (tazas, cafés en bolsa de 1/4 kilo, etc.): se carga el precio de venta a mano, sin costo ni margen, y el stock es en unidades directas (sin conversión a drip bags).
 
-Los carritos abandonados (pendientes > 48 h) los borra solo un cron cada 6 h (`wrangler.toml` → `[triggers]`).
+Los carritos abandonados (pendientes > 48 h) los borra solo un cron que corre cada hora (`wrangler.toml` → `[triggers]`). Antes de borrarlos, el mismo cron verifica contra Mercado Pago que de verdad no se hayan pagado y les manda un mail con un link para retomar el pedido.
 
 ## Club Merla
 

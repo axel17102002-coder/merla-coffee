@@ -13,6 +13,13 @@ const { CONFIG, calcularPedido } = require("../../public/motor.js");
 const { sanitizarEnvio } = require("../lib/entrega.js");
 const { resolverEnvioCosto } = require("../lib/envio-costo.js");
 const { itemsConCosto } = require("../lib/costos.js");
+const { permitir, claveDe } = require("../lib/limite.js");
+const { HORAS_PENDIENTE } = require("../lib/mantenimiento.js");
+
+// Cada llamada crea un pedido y una preferencia en Mercado Pago. Un cliente
+// real reintenta un par de veces; un script que llama sin parar, no pasa.
+const MAX_POR_VENTANA = 12;
+const VENTANA_MS = 10 * 60 * 1000;
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json" };
@@ -21,6 +28,15 @@ exports.handler = async (event) => {
   }
   if (!CONFIG.pagos.mercadopago) {
     return { statusCode: 403, headers, body: JSON.stringify({ error: "El pago con Mercado Pago está deshabilitado" }) };
+  }
+
+  const tope = permitir(claveDe("checkout", event), { max: MAX_POR_VENTANA, ventanaMs: VENTANA_MS });
+  if (!tope.ok) {
+    return {
+      statusCode: 429,
+      headers: { ...headers, "Retry-After": String(tope.esperaSegundos) },
+      body: JSON.stringify({ error: "Demasiados intentos seguidos. Esperá unos minutos y probá de nuevo." }),
+    };
   }
 
   let body;
@@ -163,6 +179,11 @@ exports.handler = async (event) => {
         // Solo pagos instantáneos: se excluye el efectivo (Rapipago/Pago Fácil),
         // que tarda días en acreditar y no encaja con la limpieza de pendientes.
         payment_methods: { excluded_payment_types: [{ id: "ticket" }] },
+        // El link de pago vence una hora antes de que el cron borre el pedido
+        // pendiente: nadie puede pagar un link cuyo pedido ya no existe.
+        expires: true,
+        expiration_date_from: new Date().toISOString(),
+        expiration_date_to: new Date(Date.now() + (HORAS_PENDIENTE - 1) * 3600 * 1000).toISOString(),
         ...(sitio
           ? {
               back_urls: {

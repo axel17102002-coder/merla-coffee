@@ -451,3 +451,15 @@ button:disabled { opacity: .55; cursor: wait; }
   .pedido__actions { gap: 6px; }
   .pedido__actions button { flex: 1 1 auto; padding: 9px 8px; font-size: .84rem; white-space: nowrap; }
 }
+
+/* Pedido cancelado, y la confirmación de "Cancelar" dentro de la tarjeta */
+.pedido--cancelado .estado { background: #e4e1d8; color: #5f5b50; }
+.pedido--cancelado > ul, .pedido--cancelado .pedido__meta strong { text-decoration: line-through; color: var(--gris); }
+.pedido__cancelar { margin-top: 12px; padding: 12px 14px; border: 1px solid var(--borde); border-radius: 10px; background: var(--crema); font-size: .9rem; line-height: 1.45; }
+.pedido__cancelar p { margin: 0 0 10px; }
+.pedido__cancelar-stock { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.pedido__cancelar-botones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.pedido__cancelar-botones button { border: 1px solid var(--borde); border-radius: 9px; padding: 9px 14px; font-weight: 700; background: transparent; color: var(--gris); }
+.pedido__cancelar-botones .pedido__cancelar-ok { background: var(--rojo); border-color: var(--rojo); color: #fff; }
+/* Con "Cancelar" son tres botones: en celular el de mail se acorta para que sigan en un renglón */
+@media (max-width: 560px) { .pedido__largo { display: none; } }

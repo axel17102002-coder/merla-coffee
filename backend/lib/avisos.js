@@ -4,7 +4,7 @@
 
 const { sb, obtenerPuntos } = require("./supabase.js");
 const { enviarMail, config } = require("./brevo.js");
-const { mailAvisoAdmin, mailConfirmacionCliente } = require("./mails.js");
+const { mailAvisoAdmin, mailConfirmacionCliente, mailPagoRaro } = require("./mails.js");
 
 // Confirmación con el saldo de puntos al momento de enviarla (por eso va después
 // de aprobar el pedido). Si no se puede leer el saldo, el mail sale igual sin él.
@@ -69,4 +69,24 @@ function avisarVentaPorRef(ref) {
   return avisar(`modo_id=eq.${encodeURIComponent(ref)}`, { confirmarCliente: true });
 }
 
-module.exports = { avisarAdminPorId, avisarVentaPorRef, enviarConfirmacion };
+// Pagos que necesitan que alguien los mire: uno aprobado cuyo pedido ya no
+// existe ("sin-pedido"), o un segundo pago sobre un pedido ya cobrado
+// ("duplicado"). Mercado Pago repite sus avisos, así que se recuerda (en la
+// memoria del Worker, alcanza para no repetir enseguida) cuáles ya salieron.
+const pagosAvisados = new Set();
+async function avisarPagoRaro(motivo, pago, pedido) {
+  const clave = `${motivo}:${pago && pago.id}`;
+  if (pagosAvisados.has(clave)) return false;
+  if (pagosAvisados.size > 500) pagosAvisados.clear();
+  pagosAvisados.add(clave);
+  console.error(`avisos: pago ${motivo}`, pago && pago.id, pago && pago.external_reference);
+  try {
+    const mail = mailPagoRaro(motivo, pago, pedido);
+    return await enviarMail({ para: config().admin, asunto: mail.asunto, html: mail.html });
+  } catch (err) {
+    console.error("avisos (pago raro):", err.message);
+    return false;
+  }
+}
+
+module.exports = { avisarAdminPorId, avisarVentaPorRef, avisarPagoRaro, enviarConfirmacion };

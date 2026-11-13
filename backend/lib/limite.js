@@ -45,4 +45,12 @@ function ipDe(event) {
   return h["cf-connecting-ip"] || h["x-real-ip"] || (h["x-forwarded-for"] || "").split(",")[0].trim() || "";
 }
 
-module.exports = { permitir, ipDe };
+// Clave del contador para un visitante: "<qué se limita>:<su IP>". Sin IP
+// devuelve "" y `permitir` deja pasar: mejor no limitar que meter a todos los
+// visitantes en el mismo contador.
+function claveDe(prefijo, event) {
+  const ip = ipDe(event);
+  return ip ? `${prefijo}:${ip}` : "";
+}
+
+module.exports = { permitir, ipDe, claveDe };

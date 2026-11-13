@@ -4,7 +4,7 @@
 // igualmente lo re-valida todo en modo-checkout.
 
 const { obtenerCupon, cuponYaUsado } = require("../lib/supabase.js");
-const { permitir, ipDe } = require("../lib/limite.js");
+const { permitir, claveDe } = require("../lib/limite.js");
 
 // Intentos por IP y por minuto. Hay cupones ocultos (no se listan en ningún
 // lado), y este endpoint responde distinto con un código válido: sin tope,
@@ -18,7 +18,7 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers, body: JSON.stringify({ error: "Método no permitido" }) };
   }
 
-  const tope = permitir(`cupon:${ipDe(event)}`, { max: MAX_POR_MINUTO, ventanaMs: 60000 });
+  const tope = permitir(claveDe("cupon", event), { max: MAX_POR_MINUTO, ventanaMs: 60000 });
   if (!tope.ok) {
     return {
       statusCode: 429,

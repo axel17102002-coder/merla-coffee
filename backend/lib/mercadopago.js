@@ -41,7 +41,9 @@ async function mp(ruta, opciones = {}) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(`Mercado Pago ${ruta}: HTTP ${res.status} ${JSON.stringify(data).slice(0, 350)}`);
+    const err = new Error(`Mercado Pago ${ruta}: HTTP ${res.status} ${JSON.stringify(data).slice(0, 350)}`);
+    err.status = res.status; // para distinguir "no existe" (404) de una caída
+    throw err;
   }
   return data;
 }
@@ -54,6 +56,18 @@ function crearPreferencia(preferencia) {
 // Estado real de un pago (nunca confiamos en lo que dice el navegador/webhook)
 function obtenerPagoMp(id) {
   return mp(`/v1/payments/${id}`);
+}
+
+// Todos los pagos hechos contra un pedido, buscados por nuestra referencia
+// (más nuevos primero). Es lo que permite conciliar: si el aviso de MP no llegó,
+// el pago igual figura acá. Se vuelve a filtrar en código por si la API ignorara
+// el filtro: nunca se aprueba un pedido por un pago que no es el suyo.
+async function buscarPagosMp(ref) {
+  if (!ref) return [];
+  const data = await mp(
+    `/v1/payments/search?external_reference=${encodeURIComponent(ref)}&sort=date_created&criteria=desc&limit=20`
+  );
+  return (data.results || []).filter((p) => p && String(p.external_reference) === String(ref));
 }
 
 // Con qué medio pagó el cliente, normalizado a las claves de METODOS_MP
@@ -109,4 +123,4 @@ async function registrarPagoMp(ref, pago) {
   }
 }
 
-module.exports = { ambienteMp, crearPreferencia, obtenerPagoMp, metodoDePagoMp, registrarPagoMp };
+module.exports = { ambienteMp, crearPreferencia, obtenerPagoMp, buscarPagosMp, metodoDePagoMp, registrarPagoMp };

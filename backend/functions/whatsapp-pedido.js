@@ -8,11 +8,26 @@ const { sanitizarEnvio } = require("../lib/entrega.js");
 const { resolverEnvioCosto } = require("../lib/envio-costo.js");
 const { avisarAdminPorId } = require("../lib/avisos.js");
 const { itemsConCosto } = require("../lib/costos.js");
+const { permitir, claveDe } = require("../lib/limite.js");
+
+// Cada llamada crea un pedido, gasta un número y le manda un mail al admin:
+// sin tope, cualquiera podría llenar el panel y la casilla de pedidos falsos.
+const MAX_POR_VENTANA = 8;
+const VENTANA_MS = 10 * 60 * 1000;
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json" };
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, headers, body: JSON.stringify({ error: "Método no permitido" }) };
+  }
+
+  const tope = permitir(claveDe("whatsapp", event), { max: MAX_POR_VENTANA, ventanaMs: VENTANA_MS });
+  if (!tope.ok) {
+    return {
+      statusCode: 429,
+      headers: { ...headers, "Retry-After": String(tope.esperaSegundos) },
+      body: JSON.stringify({ error: "Demasiados pedidos seguidos. Esperá unos minutos y probá de nuevo." }),
+    };
   }
 
   try {
