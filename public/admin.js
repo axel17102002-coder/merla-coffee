@@ -922,8 +922,8 @@ function agregarLineaManual() {
   const linea = document.createElement("div");
   linea.className = "pm__linea";
   linea.innerHTML = `<select data-pm-pres aria-label="Producto">${opcionesManual()}</select>
-    <input type="number" min="1" step="1" inputmode="numeric" value="1" data-pm-qty required aria-label="Cantidad">
-    <input type="number" min="1" step="1" inputmode="numeric" data-pm-precio required aria-label="Precio de cada uno">
+    <input type="text" inputmode="numeric" autocomplete="off" value="1" data-pm-qty placeholder="Cant." aria-label="Cantidad">
+    <input type="text" inputmode="numeric" autocomplete="off" data-pm-precio placeholder="Precio c/u" aria-label="Precio de cada uno">
     <button type="button" class="pm__quitar" data-pm-quitar aria-label="Quitar producto">✕</button>`;
   $("#pm-lineas").appendChild(linea);
   precioDeLista(linea);
@@ -936,17 +936,29 @@ function precioDeLista(linea) {
   linea.querySelector("[data-pm-precio]").value = opcion ? opcion.dataset.precio : "";
 }
 
+// Lee un entero como se escribe acá: "1.170" y "1170" son mil ciento setenta
+// (el punto es separador de miles) y "1170,00" también. Devuelve NaN si no es
+// un entero. Los campos son de texto y no `type="number"` a propósito: el
+// navegador leía "1.170" como 1,17 y bloqueaba el guardado con un aviso críptico.
+function enteroEscrito(texto) {
+  const limpio = String(texto == null ? "" : texto)
+    .replace(/[\s$]/g, "")
+    .replace(/,0+$/, "")
+    .replace(/\.(?=\d{3}(\.|$))/g, "");
+  return /^\d+$/.test(limpio) ? Number(limpio) : NaN;
+}
+
 // Las líneas del formulario en el formato de calcularDescuentosManual
 function lineasManual() {
   return [...document.querySelectorAll("#pm-lineas .pm__linea")].map((l) => {
     const id = l.querySelector("[data-pm-pres]").value;
     const pres = catalogoManual.flatMap((p) => p.presentaciones || []).find((x) => x.id === id);
-    const qty = Number(l.querySelector("[data-pm-qty]").value) || 0;
+    const qty = enteroEscrito(l.querySelector("[data-pm-qty]").value) || 0;
     const unidadesStock = pres ? pres.unidades_stock : 1;
     return {
       presentacion: id,
       qty,
-      precioUnitario: Number(l.querySelector("[data-pm-precio]").value) || 0,
+      precioUnitario: enteroEscrito(l.querySelector("[data-pm-precio]").value) || 0,
       unidades: unidadesStock * qty,
       esPack: unidadesStock > 1,
     };
@@ -1053,6 +1065,26 @@ $("#pedido-manual").addEventListener("submit", async (e) => {
   e.preventDefault();
   const items = lineasManual().map((l) => ({ presentacion: l.presentacion, qty: l.qty, precio: l.precioUnitario }));
   if (!items.length) { mensaje("#pm-mensaje", "⚠️ Agregá al menos un producto"); return; }
+
+  // Se revisa acá, con un mensaje que diga qué corregir, en vez de dejar que el
+  // navegador frene el envío sin explicar nada.
+  for (const linea of document.querySelectorAll("#pm-lineas .pm__linea")) {
+    const select = linea.querySelector("[data-pm-pres]");
+    const producto = select.options[select.selectedIndex] ? select.options[select.selectedIndex].textContent.split(" (lista")[0] : "el producto";
+    const revisar = (campo, texto) => {
+      mensaje("#pm-mensaje", `⚠️ ${texto}`);
+      linea.querySelector(campo).focus();
+    };
+    if (!(enteroEscrito(linea.querySelector("[data-pm-qty]").value) >= 1)) {
+      revisar("[data-pm-qty]", `Revisá la cantidad de ${producto}: tiene que ser un número entero (ej.: 83).`);
+      return;
+    }
+    if (!(enteroEscrito(linea.querySelector("[data-pm-precio]").value) >= 1)) {
+      revisar("[data-pm-precio]", `Revisá el precio de ${producto}: escribilo en pesos, sin centavos (ej.: 1170).`);
+      return;
+    }
+  }
+  mensaje("#pm-mensaje");
 
   const total = totalManual();
   if (total === null) return;
