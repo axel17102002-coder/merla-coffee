@@ -272,6 +272,20 @@ test("en un pedido manual los descuentos van en orden: cantidad, cupón y transf
   assert.equal(r.total, precioTransferencia(8550));
 });
 
+test("un precio acordado con centavos da totales en pesos enteros", () => {
+  // 83 × $1.166,67 = $96.833,61 → la línea vale $96.834
+  const r = calcularDescuentosManual([{ precioUnitario: 1166.67, qty: 83, unidades: 83, esPack: false }], { aplicarCantidad: true });
+  assert.equal(r.subtotal, 96834);
+  assert.equal(r.descuentoCantidad, Math.round(96834 * CONFIG.descuentoPorcentaje / 100));
+  assert.ok(Number.isInteger(r.total), "el total se guarda en una columna entera");
+  // dos líneas: el subtotal es la suma de lo que se muestra por línea
+  const dos = calcularDescuentosManual([
+    { precioUnitario: 10.5, qty: 1, unidades: 1, esPack: false },
+    { precioUnitario: 20.5, qty: 1, unidades: 1, esPack: false },
+  ]);
+  assert.equal(dos.subtotal, Math.round(10.5) + Math.round(20.5));
+});
+
 // ===== Comisión de Mercado Pago =====
 
 const CFG_COMISION = {

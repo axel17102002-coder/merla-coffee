@@ -336,10 +336,13 @@ function calcularPedido(items, opciones, datos) {
 // lo que queda, transferencia. Lo usan el formulario (para mostrar) y el backend.
 //   lineas: [{ precioUnitario, qty, unidades, esPack }]
 function calcularDescuentosManual(lineas, { cupon = null, aplicarCantidad = false, aplicarTransferencia = false } = {}) {
-  const subtotal = lineas.reduce((t, l) => t + l.precioUnitario * l.qty, 0);
+  // El precio acordado puede tener centavos ($1.166,67 c/u), pero los pedidos se
+  // guardan en pesos enteros: cada línea se redondea, y los totales salen de ahí.
+  const totalLinea = (l) => Math.round(l.precioUnitario * l.qty);
+  const subtotal = lineas.reduce((t, l) => t + totalLinea(l), 0);
   const sueltas = lineas.filter((l) => !l.esPack);
   const unidadesSueltas = sueltas.reduce((t, l) => t + l.unidades, 0);
-  const subtotalSueltas = sueltas.reduce((t, l) => t + l.precioUnitario * l.qty, 0);
+  const subtotalSueltas = sueltas.reduce((t, l) => t + totalLinea(l), 0);
   const descuentoCantidad = aplicarCantidad && unidadesSueltas >= CONFIG.descuentoCantidad
     ? Math.round((subtotalSueltas * CONFIG.descuentoPorcentaje) / 100)
     : 0;

@@ -301,6 +301,48 @@ test("el mail ofrece el cupón de regalo solo cuando hay uno, y conserva el que 
   assert.match(conRegalo, /cupon=VOLVE10/);
 });
 
+// ===== Pedido cargado a mano (/admin → + Nuevo pedido) =====
+
+function redDePedidoManual() {
+  return [
+    [/GET .*productos\?/, { json: [{ id: "sertao", nombre: "Brasil Sertão", stock: 166, activo: true, tipo: "cafe", costo_kg: 45320 }] }],
+    [/GET .*presentaciones\?/, { json: [{ id: "sertao-unidad", producto_id: "sertao", nombre: "Unidad", precio: 2050, unidades_stock: 1, activo: true }] }],
+    [/GET .*(insumos|configuracion)\?/, { json: [] }],
+    [/POST .*\/pedidos$/, (llamada) => ({ json: [{ id: "11111111-1111-4111-8111-111111111111", numero: 11, ...llamada.body }] })],
+  ];
+}
+const cargarPedido = (items) =>
+  adminPedidos({ httpMethod: "POST", headers: { "x-admin-token": "token-admin-de-prueba" }, queryStringParameters: {}, body: JSON.stringify({ accion: "crear", origen: "mayorista", metodo: "retiro", items }) });
+
+test("un pedido mayorista acepta un precio con centavos y guarda el total en pesos", async () => {
+  const llamadas = simularRed(redDePedidoManual());
+  const r = await cargarPedido([{ presentacion: "sertao-unidad", qty: 83, precio: 1166.67 }]);
+  assert.equal(r.statusCode, 201);
+  assert.equal(JSON.parse(r.body).total, 96834);
+  const fila = llamadas.find((l) => l.metodo === "POST").body;
+  assert.equal(fila.items[0].precio_unitario, 1166.67); // el precio acordado no se pierde
+  assert.equal(fila.subtotal, 96834);
+  for (const campo of ["subtotal", "total", "descuento_cantidad", "descuento_cupon"]) {
+    assert.ok(Number.isInteger(fila[campo]), `${campo} va a una columna entera`);
+  }
+});
+
+test("un pedido manual con precio cero, negativo o que no es un número se rechaza", async () => {
+  for (const precio of [0, -5, "abc", null]) {
+    const llamadas = simularRed(redDePedidoManual());
+    const r = await cargarPedido([{ presentacion: "sertao-unidad", qty: 1, precio }]);
+    assert.equal(r.statusCode, 400);
+    assert.equal(cuantas(llamadas, /POST/), 0);
+  }
+});
+
+test("un pedido manual no puede llevar más unidades que el stock", async () => {
+  simularRed(redDePedidoManual());
+  const r = await cargarPedido([{ presentacion: "sertao-unidad", qty: 167, precio: 1170 }]);
+  assert.equal(r.statusCode, 409);
+  assert.match(JSON.parse(r.body).error, /hay 166 y pediste 167/);
+});
+
 // ===== Cancelar un pedido cobrado (/admin) =====
 
 const ID_PEDIDO = "11111111-1111-4111-8111-111111111111";

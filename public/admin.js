@@ -923,7 +923,7 @@ function agregarLineaManual() {
   linea.className = "pm__linea";
   linea.innerHTML = `<select data-pm-pres aria-label="Producto">${opcionesManual()}</select>
     <input type="text" inputmode="numeric" autocomplete="off" value="1" data-pm-qty placeholder="Cant." aria-label="Cantidad">
-    <input type="text" inputmode="numeric" autocomplete="off" data-pm-precio placeholder="Precio c/u" aria-label="Precio de cada uno">
+    <input type="text" inputmode="decimal" autocomplete="off" data-pm-precio placeholder="Precio c/u" aria-label="Precio de cada uno">
     <button type="button" class="pm__quitar" data-pm-quitar aria-label="Quitar producto">✕</button>`;
   $("#pm-lineas").appendChild(linea);
   precioDeLista(linea);
@@ -948,6 +948,18 @@ function enteroEscrito(texto) {
   return /^\d+$/.test(limpio) ? Number(limpio) : NaN;
 }
 
+// Lee un precio como se escribe acá, con centavos opcionales después de la
+// coma: "1.166,67", "1166,67" y "1170" valen. El punto seguido de tres cifras es
+// separador de miles ("1.170" = 1170); cualquier otro punto se toma como coma.
+// Devuelve NaN si no se entiende o tiene más de dos decimales.
+function precioEscrito(texto) {
+  const limpio = String(texto == null ? "" : texto)
+    .replace(/[\s$]/g, "")
+    .replace(/\.(?=\d{3}([.,]|$))/g, "")
+    .replace(",", ".");
+  return /^\d+(\.\d{1,2})?$/.test(limpio) ? Number(limpio) : NaN;
+}
+
 // Las líneas del formulario en el formato de calcularDescuentosManual
 function lineasManual() {
   return [...document.querySelectorAll("#pm-lineas .pm__linea")].map((l) => {
@@ -958,7 +970,7 @@ function lineasManual() {
     return {
       presentacion: id,
       qty,
-      precioUnitario: enteroEscrito(l.querySelector("[data-pm-precio]").value) || 0,
+      precioUnitario: precioEscrito(l.querySelector("[data-pm-precio]").value) || 0,
       unidades: unidadesStock * qty,
       esPack: unidadesStock > 1,
     };
@@ -1079,8 +1091,8 @@ $("#pedido-manual").addEventListener("submit", async (e) => {
       revisar("[data-pm-qty]", `Revisá la cantidad de ${producto}: tiene que ser un número entero (ej.: 83).`);
       return;
     }
-    if (!(enteroEscrito(linea.querySelector("[data-pm-precio]").value) >= 1)) {
-      revisar("[data-pm-precio]", `Revisá el precio de ${producto}: escribilo en pesos, sin centavos (ej.: 1170).`);
+    if (!(precioEscrito(linea.querySelector("[data-pm-precio]").value) > 0)) {
+      revisar("[data-pm-precio]", `Revisá el precio de ${producto}: escribilo en pesos, con coma para los centavos (ej.: 1170 o 1166,67).`);
       return;
     }
   }

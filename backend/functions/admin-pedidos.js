@@ -94,9 +94,11 @@ async function crearPedidoManual(body) {
     if (!presentacion) return falla(400, "Hay un producto que ya no está disponible");
 
     const qty = Number(item.qty);
-    const precio = Number(item.precio);
+    // El precio acordado puede llevar centavos: se guarda con dos decimales y
+    // el total del pedido se redondea a pesos (calcularDescuentosManual).
+    const precio = Math.round(Number(item.precio) * 100) / 100;
     if (!Number.isInteger(qty) || qty < 1) return falla(400, `Revisá la cantidad de ${producto.nombre}`);
-    if (!Number.isInteger(precio) || precio < 1) return falla(400, `Revisá el precio de ${producto.nombre}`);
+    if (!Number.isFinite(precio) || precio <= 0) return falla(400, `Revisá el precio de ${producto.nombre}`);
 
     const unidades = presentacion.unidades_stock * qty;
     unidadesPorProducto[producto.id] = (unidadesPorProducto[producto.id] || 0) + unidades;
