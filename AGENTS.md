@@ -129,6 +129,10 @@ una regla de precio/punto, va acá y aplica en ambos lados a la vez.
   (301) a `merlacoffee.com.ar` (`backend/lib/dominio.js`, lo aplica `src/worker.js`).
   `/api/*` y los POST **nunca** se redirigen: MP guarda la URL del webhook al
   crear cada pago y un aviso redirigido llegaría sin cuerpo.
+- **Los archivos de `public/` no pasan por el Worker**: Cloudflare los sirve
+  directo. Solo las rutas de `run_worker_first` (`wrangler.toml` → `[assets]`)
+  y las que no son un archivo ejecutan `src/worker.js`. Si agregás lógica que
+  tiene que correr al abrir una página nueva, sumá esa ruta ahí.
 - **Pasarelas de pago**: se prenden/apagan en `motor.js` → `CONFIG.pagos`. Hoy
   Mercado Pago activo, MODO implementado pero apagado.
 - **Sin credenciales de un servicio no se rompe nada**: mails (Brevo) y envío a
