@@ -24,6 +24,11 @@ CUPON_CARRITO = ""
 [assets]
 directory = "public"
 binding = "ASSETS"
+# Los archivos estáticos se sirven sin pasar por el Worker (más rápido y no
+# cuenta en el límite de pedidos). Estas páginas sí pasan primero por él, para
+# que www y workers.dev puedan redirigir al dominio (backend/lib/dominio.js).
+# Solo páginas: imágenes, CSS y JS siguen saliendo directo.
+run_worker_first = ["/", "/index.html", "/admin", "/admin.html", "/robots.txt", "/sitemap.xml"]
 
 # Tarea programada, cada hora: concilia pagos con Mercado Pago, manda el
 # recordatorio de carrito abandonado y borra los pendientes de más de 48 h.
