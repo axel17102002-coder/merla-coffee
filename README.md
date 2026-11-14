@@ -101,7 +101,9 @@ Docs: https://merchants.modo.com.ar/docs
 
 ## Mails (Brevo)
 
-Avisos automáticos y confirmaciones al cliente. Se usa **Brevo** (plan gratis: 300 mails/día) porque permite enviar desde una casilla de Gmail verificada, sin dominio propio.
+Avisos automáticos y confirmaciones al cliente. Se usa **Brevo** (plan gratis: 300 mails/día).
+
+**Remitente**: los mails salen desde `hola@merlacoffee.com.ar` cuando `MAIL_REMITENTE_DOMINIO` (en `wrangler.toml`) tiene esa dirección; si está vacío, desde `MAIL_REMITENTE` (la casilla de Gmail). Mandar desde el dominio propio evita que Gmail y Outlook los marquen como spam, pero exige el dominio **autenticado en Brevo** (Senders, Domains → Domains: registros `brevo-code`, DKIM y DMARC en el DNS de Cloudflare, con los CNAME en "DNS only") y `hola@` agregado como remitente. Si Brevo rechaza el remitente del dominio, el mail se reintenta solo con el de Gmail. Las respuestas de los clientes van siempre a `MAIL_ADMIN` (`replyTo`).
 
 - **Automático**: al cobrarse una venta por Mercado Pago salen dos mails: el aviso a `MAIL_ADMIN` y la confirmación al cliente. Un pedido nuevo de WhatsApp solo avisa al admin (todavía no se cobró).
 - **Manual**: en `/admin`, el botón ✉️ de cada pedido (re)envía la confirmación al cliente.

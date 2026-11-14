@@ -125,6 +125,10 @@ una regla de precio/punto, va acá y aplica en ambos lados a la vez.
 - **Cancelar ≠ eliminar.** `cancelar_pedido` (SQL, botón "Cancelar" del panel)
   revierte puntos, cupón y, si se pide, stock de un pedido cobrado y lo deja
   `cancelado`. `DELETE` solo borra la fila. Ninguno devuelve la plata.
+- **Una sola dirección**: `www.` y `merla-coffee.merlacoffee.workers.dev` redirigen
+  (301) a `merlacoffee.com.ar` (`backend/lib/dominio.js`, lo aplica `src/worker.js`).
+  `/api/*` y los POST **nunca** se redirigen: MP guarda la URL del webhook al
+  crear cada pago y un aviso redirigido llegaría sin cuerpo.
 - **Pasarelas de pago**: se prenden/apagan en `motor.js` → `CONFIG.pagos`. Hoy
   Mercado Pago activo, MODO implementado pero apagado.
 - **Sin credenciales de un servicio no se rompe nada**: mails (Brevo) y envío a

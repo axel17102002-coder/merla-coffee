@@ -3,6 +3,7 @@
 // demás lo sirve como archivo estático desde public/.
 
 import { adaptar } from "./adaptador.js";
+import { urlCanonica } from "../backend/lib/dominio.js";
 import { conciliarPagosMp, limpiarPedidosPendientes, recordarCarritosAbandonados } from "../backend/lib/mantenimiento.js";
 
 import { handler as tienda } from "../backend/functions/tienda.js";
@@ -60,6 +61,9 @@ function cargarEnv(env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // www y workers.dev → merlacoffee.com.ar (ver backend/lib/dominio.js)
+    const destino = urlCanonica(url, request.method);
+    if (destino) return Response.redirect(destino, 301);
     const match = url.pathname.match(/^\/api\/([a-z0-9-]+)\/?$/);
     if (match && rutas[match[1]]) {
       return rutas[match[1]]({ request, env });
