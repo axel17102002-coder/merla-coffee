@@ -13,10 +13,10 @@ keep_vars = true
 # La URL del proyecto de Supabase no es secreta; las claves sí, y van como
 # Secrets en el panel: SUPABASE_SECRET_KEY y ADMIN_TOKEN
 SUPABASE_URL = "https://goldreguogjsfpmkuiua.supabase.co"
-# Remitente de los mails desde el dominio propio. Vacío = salen desde
-# MAIL_REMITENTE (la casilla de Gmail). Se completa con hola@merlacoffee.com.ar
-# recién cuando el dominio está autenticado en Brevo (ver README → Mails).
-MAIL_REMITENTE_DOMINIO = ""
+# Remitente de los mails desde el dominio propio (autenticado en Brevo con
+# DKIM y DMARC el 15/11/2026). Vacío = salen desde MAIL_REMITENTE (Gmail).
+# Si Brevo lo rechazara, cada mail se reintenta solo desde MAIL_REMITENTE.
+MAIL_REMITENTE_DOMINIO = "hola@merlacoffee.com.ar"
 # Cupón de regalo en el mail de carrito abandonado. Vacío = el mail sale sin
 # cupón. Para activarlo: crear el cupón en /admin → Cupones y poner acá su código.
 CUPON_CARRITO = ""
