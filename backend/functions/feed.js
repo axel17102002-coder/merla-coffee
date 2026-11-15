@@ -3,13 +3,15 @@
 // Meta también acepta, así una sola URL sirve para las dos plataformas.
 //
 // Se genera desde el catálogo activo en Supabase (mismos datos que la tienda).
-// El dominio NO se hardcodea: sale de los headers, así funciona igual si algún
-// día se cambia a un dominio propio.
+// Cada <link> apunta a /?producto=<id>, que el Worker sirve con el título, el
+// precio y el stock de ese producto en el HTML (backend/lib/pagina.js): es lo
+// que Google y Meta comparan contra el feed para aprobar el producto.
 //
 //   GET /api/feed  → XML (application/xml)
 
 const { obtenerCatalogo } = require("../lib/supabase.js");
 const { presentacionesDe } = require("../../public/motor.js");
+const { DOMINIO, ALIAS } = require("../lib/dominio.js");
 
 const MONEDA = "ARS";
 // Categoría de Google (taxonomía oficial). Café = Food, Beverages & Tobacco…
@@ -24,28 +26,48 @@ function esc(v) {
     .replace(/'/g, "&apos;");
 }
 
-// URL base (https://host) desde los headers de la request, sin hardcodear nada
+// URL base (https://host) desde los headers de la request. Si el feed se pide
+// por www o por workers.dev, los links igual salen con el dominio principal:
+// Meta y Google tienen que ver una sola dirección por producto.
 function baseUrl(event) {
   const h = event.headers || {};
-  const host = h["x-forwarded-host"] || h.host || "merlacoffee.com.ar";
+  const host = h["x-forwarded-host"] || h.host || DOMINIO;
+  if (ALIAS.includes(host)) return `https://${DOMINIO}`;
   const proto = h["x-forwarded-proto"] || "https";
   return `${proto}://${host}`;
 }
 
 // Las imágenes sembradas son relativas (img/andino.webp); las subidas desde el
 // panel son URLs absolutas de Supabase. El feed necesita siempre absolutas.
+//
+// Las relativas en WebP se mandan en su copia JPG (public/img/<nombre>_web.jpg):
+// Google acepta WebP, pero el catálogo de Meta no lo toma de forma confiable.
+// Las subidas desde el panel van tal cual: conviene subirlas en JPG o PNG.
 function absolutizar(url, base) {
   if (!url) return "";
-  return /^https?:\/\//i.test(url) ? url : `${base}/${String(url).replace(/^\//, "")}`;
+  if (/^https?:\/\//i.test(url)) return url;
+  const relativa = String(url).replace(/^\//, "").replace(/^(img\/[^/?#]+)\.webp$/i, "$1_web.jpg");
+  return `${base}/${relativa}`;
+}
+
+// Título para el catálogo: el nombre solo ("Andino") no dice qué se vende, y
+// los buscadores de Google Shopping y de Meta se guían por el título.
+function tituloFeed(p) {
+  if (p.tipo === "simple") return p.nombre;
+  return `${p.nombre} · Café de especialidad${p.origen ? ` de ${p.origen}` : ""} en drip bag`;
 }
 
 function itemXml(p, base) {
   const pres = presentacionesDe(p);
   const unidad = pres.find((x) => x.unidades_stock === 1) || pres[0];
   if (!unidad) return ""; // sin presentación vendible, no va al feed
-  const precio = `${Number(unidad.precio).toFixed(2)} ${MONEDA}`;
-  const disponible = p.stock > 0 ? "in stock" : "out of stock";
   const imagen = absolutizar(p.imagen, base);
+  // Sin foto, Meta y Google rechazan el producto y lo marcan como error en el
+  // catálogo: no se manda hasta que tenga una.
+  if (!imagen) return "";
+  const precio = `${Number(unidad.precio).toFixed(2)} ${MONEDA}`;
+  // Se compara contra lo que lleva la presentación (un pack necesita 5)
+  const disponible = p.stock >= unidad.unidades_stock ? "in stock" : "out of stock";
   const descripcion =
     p.descripcion ||
     (Array.isArray(p.notas) && p.notas.length ? `Notas: ${p.notas.join(", ")}.` : p.nombre);
@@ -58,7 +80,7 @@ function itemXml(p, base) {
   return `
     <item>
       <g:id>${esc(p.id)}</g:id>
-      <title>${esc(p.nombre)}</title>
+      <title>${esc(tituloFeed(p))}</title>
       <description>${esc(descripcion)}</description>
       <link>${esc(link)}</link>
       <g:image_link>${esc(imagen)}</g:image_link>
@@ -104,3 +126,7 @@ exports.handler = async (event) => {
     return { statusCode: 502, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ error: "No se pudo generar el feed" }) };
   }
 };
+
+// Para los tests
+exports.itemXml = itemXml;
+exports.baseUrl = baseUrl;

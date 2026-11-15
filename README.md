@@ -116,6 +116,16 @@ Configuración (una sola vez):
 
 Sin `BREVO_API_KEY` no se rompe nada: los mails simplemente no se envían y queda el aviso en los logs.
 
+## Catálogo en Google y Meta
+
+Lo que la web ya trae para vincularla con **Google Merchant Center** y **Meta (Facebook/Instagram) Commerce**:
+
+- **Feed de productos**: `https://merlacoffee.com.ar/api/feed` (RSS con el namespace `g:`; sirve para los dos). Se carga como "feed programado" / "lista de datos" en cada panel. No incluye productos sin foto. Las fotos sembradas van en su copia JPG (`public/img/<nombre>_web.jpg`), porque Meta no toma WebP de forma confiable: las fotos nuevas conviene subirlas en JPG o PNG.
+- **Ficha por producto**: `/?producto=<id>` sale con el título, la foto, el precio y el stock de ese producto en el HTML (etiquetas `og:`/`product:` y JSON-LD). Es lo que Google y Meta comparan contra el feed, y lo que usa WhatsApp para la vista previa del link. Lo arma `backend/lib/pagina.js` + `HTMLRewriter` en `src/worker.js`.
+- **Verificación del dominio**: pegar en `wrangler.toml` el código de la opción "etiqueta HTML" (solo el valor de `content`): `GOOGLE_SITE_VERIFICATION` y `META_DOMAIN_VERIFICATION`. Alternativa sin tocar código: el registro TXT que ofrecen ambos paneles, cargado en el DNS de Cloudflare.
+- **Políticas y contacto**: `/politicas` (envíos, pagos, cambios y devoluciones, botón de arrepentimiento, privacidad). Google Merchant la exige. Si cambia cómo se vende, actualizarla.
+- **Eventos**: el Pixel de Meta y GA4 ya mandan `ViewContent`, `AddToCart`, `InitiateCheckout` y `Purchase` con el id de producto del feed, solo si el visitante aceptó las cookies.
+
 ## Envío (Zipnova y/o Andreani)
 
 El envío se cotiza **en vivo** según el peso estimado de lo que se compra, y ese costo se suma al total que se cobra (Mercado Pago o WhatsApp): nunca se confía en un monto mandado por el navegador, se vuelve a calcular en el servidor al pagar.

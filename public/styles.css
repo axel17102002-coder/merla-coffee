@@ -690,7 +690,7 @@ section[id], footer[id] { scroll-margin-top: 90px; }
   margin: 0 auto;
   padding: clamp(40px, 6vw, 64px) clamp(16px, 5vw, 64px) 30px;
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr;
+  grid-template-columns: 1.2fr 1fr 1fr 1fr;
   gap: 40px;
 }
 
@@ -1359,6 +1359,26 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 }
 
 .points-box__canjear:hover { background: var(--verde-claro); }
+
+/* Código de canje que llega por mail */
+.points-box__texto { flex: 1 1 100%; }
+.points-box__codigo {
+  flex: 1 1 110px;
+  min-width: 0;
+  max-width: 150px;
+  border: 1px solid var(--crema-borde);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: 700 0.95rem var(--fuente-texto);
+  letter-spacing: 0.18em;
+  text-align: center;
+  background: #fff;
+  color: #22301f;
+}
+.points-box__links { margin-left: auto; display: flex; gap: 10px; }
+.points-box__links .points-box__quitar { margin-left: 0; }
+.cart .points-box__codigo { background: var(--panel-alto); border-color: var(--panel-borde); color: #f4ead8; }
+.cart .points-box__codigo::placeholder { color: #a1907c; letter-spacing: normal; font-weight: 400; }
 
 .cart__earn {
   font-size: 0.78rem;

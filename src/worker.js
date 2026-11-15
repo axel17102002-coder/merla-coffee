@@ -4,11 +4,15 @@
 
 import { adaptar } from "./adaptador.js";
 import { urlCanonica } from "../backend/lib/dominio.js";
+import { etiquetasVerificacion, fichaProducto, etiquetasProducto, reemplazosProducto } from "../backend/lib/pagina.js";
+import { obtenerCatalogo } from "../backend/lib/supabase.js";
 import { conciliarPagosMp, limpiarPedidosPendientes, recordarCarritosAbandonados } from "../backend/lib/mantenimiento.js";
 
 import { handler as tienda } from "../backend/functions/tienda.js";
 import { handler as validarCupon } from "../backend/functions/validar-cupon.js";
 import { handler as puntos } from "../backend/functions/puntos.js";
+import { handler as canjeCodigo } from "../backend/functions/canje-codigo.js";
+import { handler as canjeVerificar } from "../backend/functions/canje-verificar.js";
 import { handler as modoCheckout } from "../backend/functions/modo-checkout.js";
 import { handler as modoWebhook } from "../backend/functions/modo-webhook.js";
 import { handler as mercadopagoCheckout } from "../backend/functions/mercadopago-checkout.js";
@@ -31,6 +35,8 @@ const rutas = {
   "tienda": adaptar(tienda),
   "validar-cupon": adaptar(validarCupon),
   "puntos": adaptar(puntos),
+  "canje-codigo": adaptar(canjeCodigo),
+  "canje-verificar": adaptar(canjeVerificar),
   "modo-checkout": adaptar(modoCheckout),
   "modo-webhook": adaptar(modoWebhook),
   "mercadopago-checkout": adaptar(mercadopagoCheckout),
@@ -58,6 +64,72 @@ function cargarEnv(env) {
   }
 }
 
+// Catálogo en memoria por un minuto: las fichas de producto las piden sobre
+// todo robots (Google, Meta, WhatsApp), a veces de a muchas seguidas.
+let catalogoEnMemoria = { productos: null, hasta: 0 };
+async function catalogo() {
+  if (catalogoEnMemoria.productos && catalogoEnMemoria.hasta > Date.now()) return catalogoEnMemoria.productos;
+  const productos = await obtenerCatalogo();
+  catalogoEnMemoria = { productos, hasta: Date.now() + 60 * 1000 };
+  return productos;
+}
+
+// La tienda con el <head> ajustado: las etiquetas de verificación de dominio y,
+// si se pidió /?producto=<id>, el título, la foto, el precio y el stock de ese
+// producto (ver backend/lib/pagina.js). Devuelve null cuando no hay nada que
+// agregar: ahí la tienda sale como archivo estático, igual que siempre.
+async function paginaTienda(env, url) {
+  const verificacion = etiquetasVerificacion(env);
+  const idProducto = url.searchParams.get("producto");
+  if (!verificacion && !idProducto) return null;
+
+  let ficha = null;
+  if (idProducto) {
+    cargarEnv(env);
+    try {
+      ficha = fichaProducto((await catalogo()).find((p) => p.id === idProducto));
+    } catch (err) {
+      console.error("pagina: no pude armar la ficha del producto:", err.message);
+    }
+  }
+  if (!verificacion && !ficha) return null;
+
+  // Pedido nuevo, sin los headers condicionales del navegador: hace falta el
+  // HTML completo para reescribirlo (un 304 vendría vacío).
+  const base = await env.ASSETS.fetch(new Request(`${url.origin}/`, { headers: { accept: "text/html" } }));
+  if (!base.ok || !(base.headers.get("content-type") || "").includes("text/html")) return null;
+
+  let reescritor = new HTMLRewriter().on("head", {
+    element(el) {
+      el.append(verificacion + (ficha ? etiquetasProducto(ficha) : ""), { html: true });
+    },
+  });
+  if (ficha) {
+    const valores = reemplazosProducto(ficha);
+    const pisar = (atributo) => ({
+      element(el) {
+        const clave = el.getAttribute(atributo);
+        // El tamaño declarado es el del logo: con otra foto, mejor no declararlo
+        if (ficha.imagen && (clave === "og:image:width" || clave === "og:image:height")) return el.remove();
+        if (valores[clave]) el.setAttribute("content", valores[clave]);
+      },
+    });
+    reescritor = reescritor
+      .on("title", { element(el) { el.setInnerContent(ficha.titulo); } })
+      .on('meta[name="description"]', { element(el) { el.setAttribute("content", ficha.descripcion); } })
+      .on('link[rel="canonical"]', { element(el) { el.setAttribute("href", ficha.url); } })
+      .on("meta[property]", pisar("property"))
+      .on("meta[name]", pisar("name"));
+  }
+
+  const respuesta = reescritor.transform(base);
+  const headers = new Headers(respuesta.headers);
+  headers.delete("etag"); // el contenido ya no es el del archivo
+  headers.delete("last-modified");
+  headers.set("cache-control", "public, max-age=300");
+  return new Response(respuesta.body, { status: 200, headers });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -67,6 +139,15 @@ export default {
     const match = url.pathname.match(/^\/api\/([a-z0-9-]+)\/?$/);
     if (match && rutas[match[1]]) {
       return rutas[match[1]]({ request, env });
+    }
+    if (request.method === "GET" && url.pathname === "/") {
+      // Si algo falla acá, la tienda se sirve igual, sin los agregados
+      try {
+        const pagina = await paginaTienda(env, url);
+        if (pagina) return pagina;
+      } catch (err) {
+        console.error("pagina:", err);
+      }
     }
     return env.ASSETS.fetch(request);
   },

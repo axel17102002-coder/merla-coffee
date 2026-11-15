@@ -9,6 +9,7 @@
 const { sb, obtenerCatalogo, obtenerCupon, obtenerPuntos } = require("../lib/supabase.js");
 const { ambiente, crearPago } = require("../lib/modo.js");
 const { CONFIG, calcularPedido } = require("../../public/motor.js");
+const { paseValido, ERROR_SIN_VERIFICAR } = require("../lib/canje.js");
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json" };
@@ -33,12 +34,9 @@ exports.handler = async (event) => {
     if (!emailValido) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: "Ingresá tu email para hacer el pedido" }) };
     }
-    if (body.canjePuntos && !emailValido) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: "Para canjear puntos ingresá tu email" }),
-      };
+    // Canjear exige haber confirmado el email con el código (backend/lib/canje.js)
+    if (body.canjePuntos && !paseValido(body.canjePase, email)) {
+      return { statusCode: 403, headers, body: JSON.stringify(ERROR_SIN_VERIFICAR) };
     }
 
     // Datos frescos desde la base

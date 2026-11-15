@@ -17,6 +17,12 @@ SUPABASE_URL = "https://goldreguogjsfpmkuiua.supabase.co"
 # DKIM y DMARC el 15/11/2026). Vacío = salen desde MAIL_REMITENTE (Gmail).
 # Si Brevo lo rechazara, cada mail se reintenta solo desde MAIL_REMITENTE.
 MAIL_REMITENTE_DOMINIO = "hola@merlacoffee.com.ar"
+# Verificación del dominio ante Google (Search Console / Merchant Center) y
+# Meta (Business). Son los códigos de la opción "etiqueta HTML" de cada panel:
+# solo el valor de content="...". Son públicos (terminan en el HTML). Vacío =
+# no se agrega la etiqueta. Ver README → "Catálogo en Google y Meta".
+GOOGLE_SITE_VERIFICATION = ""
+META_DOMAIN_VERIFICATION = ""
 # Cupón de regalo en el mail de carrito abandonado. Vacío = el mail sale sin
 # cupón. Para activarlo: crear el cupón en /admin → Cupones y poner acá su código.
 CUPON_CARRITO = ""
@@ -28,7 +34,7 @@ binding = "ASSETS"
 # cuenta en el límite de pedidos). Estas páginas sí pasan primero por él, para
 # que www y workers.dev puedan redirigir al dominio (backend/lib/dominio.js).
 # Solo páginas: imágenes, CSS y JS siguen saliendo directo.
-run_worker_first = ["/", "/index.html", "/admin", "/admin.html", "/robots.txt", "/sitemap.xml"]
+run_worker_first = ["/", "/index.html", "/admin", "/admin.html", "/politicas", "/politicas.html", "/robots.txt", "/sitemap.xml"]
 
 # Tarea programada, cada hora: concilia pagos con Mercado Pago, manda el
 # recordatorio de carrito abandonado y borra los pendientes de más de 48 h.

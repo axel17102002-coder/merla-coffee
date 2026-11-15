@@ -196,6 +196,22 @@ function mailCarritoAbandonado(pedido, cuponRegalo = null) {
   };
 }
 
+// Código para canjear puntos Club Merla (backend/lib/canje.js). Corto y sin
+// links: lo único que tiene que hacer el cliente es copiar seis números.
+function mailCodigoCanje(codigo, minutos) {
+  const separado = `${String(codigo).slice(0, 3)} ${String(codigo).slice(3)}`;
+  return {
+    asunto: `${separado} es tu código para canjear puntos ☕`,
+    html: envoltorio(
+      "Tu código para canjear puntos",
+      `<p style="margin:0 0 14px;color:${GRIS};">Ingresalo en el carrito de Merla Coffee para usar tus puntos Club Merla:</p>
+       <p style="margin:0 0 14px;font-size:34px;font-weight:bold;letter-spacing:6px;color:${VERDE};text-align:center;background:#f6f0e2;border-radius:12px;padding:16px 8px;">${escapar(separado)}</p>
+       <p style="margin:0 0 14px;color:${GRIS};">Vence en ${Number(minutos) || 10} minutos.</p>
+       <p style="margin:0;color:${GRIS};">Si no lo pediste vos, ignorá este mail: sin este código nadie puede usar tus puntos.</p>`
+    ),
+  };
+}
+
 // Aviso al administrador de un pago que necesita que alguien lo mire:
 //   "sin-pedido": entró plata y el pedido ya no existe en la base.
 //   "duplicado":  segundo pago sobre un pedido que ya estaba cobrado.
@@ -228,4 +244,4 @@ function mailPagoRaro(motivo, pago, pedido) {
   };
 }
 
-module.exports = { mailAvisoAdmin, mailConfirmacionCliente, mailCarritoAbandonado, mailPagoRaro, enlaceRetomar };
+module.exports = { mailAvisoAdmin, mailConfirmacionCliente, mailCarritoAbandonado, mailPagoRaro, mailCodigoCanje, enlaceRetomar };

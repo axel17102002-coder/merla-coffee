@@ -133,6 +133,14 @@ una regla de precio/punto, va acá y aplica en ambos lados a la vez.
   directo. Solo las rutas de `run_worker_first` (`wrangler.toml` → `[assets]`)
   y las que no son un archivo ejecutan `src/worker.js`. Si agregás lógica que
   tiene que correr al abrir una página nueva, sumá esa ruta ahí.
+- **Canjear puntos exige verificar el email**: código de 6 dígitos por mail →
+  "pase" firmado en `localStorage` (`backend/lib/canje.js`, sin tablas: todo sale
+  de un HMAC). Los tres checkouts rechazan `canjePuntos` sin `canjePase` válido.
+  Si agregás otro lugar donde se gasten puntos, tiene que pedir el pase.
+- **`/?producto=<id>` se reescribe en el Worker** (`backend/lib/pagina.js`): título,
+  `og:`, precio y stock del producto en el HTML, para Google Merchant, Meta y las
+  vistas previas de links. Si cambiás las etiquetas del `<head>` de `index.html`,
+  revisá que los selectores de `paginaTienda` (`src/worker.js`) sigan encontrándolas.
 - **Pasarelas de pago**: se prenden/apagan en `motor.js` → `CONFIG.pagos`. Hoy
   Mercado Pago activo, MODO implementado pero apagado.
 - **Sin credenciales de un servicio no se rompe nada**: mails (Brevo) y envío a

@@ -9,6 +9,7 @@ const { resolverEnvioCosto } = require("../lib/envio-costo.js");
 const { avisarAdminPorId } = require("../lib/avisos.js");
 const { itemsConCosto } = require("../lib/costos.js");
 const { permitir, claveDe } = require("../lib/limite.js");
+const { paseValido, ERROR_SIN_VERIFICAR } = require("../lib/canje.js");
 
 // Cada llamada crea un pedido, gasta un número y le manda un mail al admin:
 // sin tope, cualquiera podría llenar el panel y la casilla de pedidos falsos.
@@ -37,8 +38,10 @@ exports.handler = async (event) => {
     if (!emailValido) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: "Ingresá tu email para hacer el pedido" }) };
     }
-    if (body.canjePuntos && !emailValido) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: "Para canjear puntos ingresá tu email" }) };
+    // Canjear exige haber confirmado que el email es propio (código por mail):
+    // sin esto, saber el email de un cliente alcanzaba para gastarle los puntos.
+    if (body.canjePuntos && !paseValido(body.canjePase, email)) {
+      return { statusCode: 403, headers, body: JSON.stringify(ERROR_SIN_VERIFICAR) };
     }
 
     const [productos, cupon, puntosDisponibles] = await Promise.all([

@@ -109,7 +109,8 @@ function itemsDelCarrito() {
 }
 
 const cuponActivo = () => JSON.parse(localStorage.getItem("merla-cupon") || "null");
-const canjeActivo = () => localStorage.getItem("merla-canje") === "1";
+// El canje solo cuenta si este navegador confirmó el email (ver paseCanje)
+const canjeActivo = () => localStorage.getItem("merla-canje") === "1" && Boolean(paseCanje());
 const emailCliente = () => (localStorage.getItem("merla-email") || "").trim().toLowerCase();
 const emailValido = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
@@ -807,6 +808,20 @@ function renderPuntosWidget() {
     box.innerHTML = `⭐ Club Merla: dejá tu email arriba para sumar y usar puntos.`;
     return;
   }
+  // Esperando el código que confirma que el email es suyo (ver canjearPuntos)
+  if (canjeVerificando && canjeVerificando.email === email) {
+    box.innerHTML = canjeVerificando.enviando
+      ? `✉️ Mandándote un código a <strong>${escaparHtml(email)}</strong>…`
+      : `<span class="points-box__texto">✉️ Te mandamos un código a <strong>${escaparHtml(email)}</strong>. Ingresalo para usar tus puntos:</span>
+         <input class="points-box__codigo" id="points-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7"
+           placeholder="6 dígitos" aria-label="Código de 6 dígitos que te llegó por mail" value="${escaparAttr(canjeVerificando.codigo)}">
+         <button class="points-box__canjear" id="points-code-ok">Confirmar</button>
+         <span class="points-box__links">
+           <button class="points-box__quitar" id="points-code-resend">Reenviar</button>
+           <button class="points-box__quitar" id="points-code-cancel">Cancelar</button>
+         </span>`;
+    return;
+  }
   if (saldoPuntos === null) {
     box.innerHTML = `⭐ Club Merla: <button class="points-box__canjear" id="points-check">Consultar mis puntos</button>`;
     return;
@@ -944,6 +959,22 @@ function quitarCupon() {
 }
 
 // ===== Canje de puntos =====
+// Los puntos se identifican solo por el email, así que para canjear hay que
+// confirmar que el email es de uno: el servidor manda un código por mail y, al
+// ingresarlo, devuelve un "pase" que queda guardado en este navegador por unos
+// días. Sin pase, el servidor no acepta el canje (backend/lib/canje.js).
+let canjeVerificando = null; // { email, codigo, enviando } mientras se espera el código
+
+// Pase vigente para el email actual, o null
+function paseCanje() {
+  try {
+    const p = JSON.parse(localStorage.getItem("merla-canje-pase") || "null");
+    return p && p.email === emailCliente() && p.vence > Date.now() ? p.pase : null;
+  } catch {
+    return null;
+  }
+}
+
 function canjearPuntos() {
   const r = calcularPedido(
     itemsDelCarrito(),
@@ -954,9 +985,83 @@ function canjearPuntos() {
     mostrarToast(`⚠️ ${r.error}`);
     return;
   }
+  if (!paseCanje()) {
+    pedirCodigoCanje();
+    return;
+  }
   localStorage.setItem("merla-canje", "1");
+  canjeVerificando = null;
   renderCarrito();
   mostrarToast(`⭐ Canje aplicado: -${formatear(DATOS.config.fidelidad.canjeDescuento)}`);
+}
+
+async function pedirCodigoCanje() {
+  const email = emailCliente();
+  canjeVerificando = { email, codigo: "", enviando: true };
+  renderCarrito();
+  try {
+    const res = await fetch("/api/canje-codigo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "No pudimos mandarte el código");
+    if (!canjeVerificando || canjeVerificando.email !== email) return; // canceló o cambió el email
+    canjeVerificando.enviando = false;
+    renderCarrito();
+    if ($("#points-code")) $("#points-code").focus();
+  } catch (err) {
+    canjeVerificando = null;
+    renderCarrito();
+    mostrarToast(`⚠️ ${err.message}`);
+  }
+}
+
+async function confirmarCodigoCanje() {
+  if (!canjeVerificando || canjeVerificando.enviando) return;
+  const { email } = canjeVerificando;
+  const codigo = String(canjeVerificando.codigo || "").replace(/\D/g, "");
+  if (codigo.length !== 6) {
+    mostrarToast("Ingresá los 6 dígitos del código que te llegó por mail");
+    return;
+  }
+  const boton = $("#points-code-ok");
+  if (boton) boton.disabled = true;
+  try {
+    const res = await fetch("/api/canje-verificar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, codigo }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "El código no es correcto");
+    localStorage.setItem("merla-canje-pase", JSON.stringify({
+      email,
+      pase: data.pase,
+      vence: Number(String(data.pase).split(".")[0]) || 0,
+    }));
+    canjeVerificando = null;
+    canjearPuntos(); // el carrito pudo cambiar mientras tanto: se valida de nuevo
+  } catch (err) {
+    if (boton) boton.disabled = false;
+    mostrarToast(`⚠️ ${err.message}`);
+  }
+}
+
+function cancelarCodigoCanje() {
+  canjeVerificando = null;
+  renderCarrito();
+}
+
+// El servidor rechazó el canje porque el pase venció o no es válido: se olvida
+// y el cliente lo vuelve a pedir tocando "Canjear".
+function revisarCanjeRechazado(data) {
+  if (!data || data.codigo !== "canje_sin_verificar") return;
+  localStorage.removeItem("merla-canje-pase");
+  localStorage.removeItem("merla-canje");
+  canjeVerificando = null;
+  renderCarrito();
 }
 
 function quitarCanje() {
@@ -1005,12 +1110,16 @@ async function checkoutWhatsApp() {
         items: itemsDelCarrito(),
         cupon: cuponActivo() ? cuponActivo().codigo : null,
         canjePuntos: canjeActivo(),
+        canjePase: paseCanje(),
         email: emailCliente() || null,
         envio: datosEntrega(),
       }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || "No pudimos registrar el pedido");
+    if (!res.ok) {
+      revisarCanjeRechazado(data);
+      throw new Error(data.error || "No pudimos registrar el pedido");
+    }
     pedido = data;
   } catch (err) {
     if (ventana) ventana.close();
@@ -1412,12 +1521,14 @@ async function pagarConMercadoPago() {
         items: itemsDelCarrito(),
         cupon: cupon ? cupon.codigo : null,
         canjePuntos: canjeActivo(),
+        canjePase: paseCanje(),
         email: emailCliente() || null,
         envio: datosEntrega(),
       }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
+      revisarCanjeRechazado(data);
       throw new Error(data.error || `Error ${res.status} al generar el pago`);
     }
     const pago = await res.json();
@@ -1441,11 +1552,13 @@ async function crearPagoModo() {
       items: itemsDelCarrito(),
       cupon: cupon ? cupon.codigo : null,
       canjePuntos: canjeActivo(),
+      canjePase: paseCanje(),
       email: emailCliente() || null,
     }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
+    revisarCanjeRechazado(data);
     throw new Error(data.error || `Error ${res.status} al generar el pago`);
   }
   return res.json();
@@ -1809,6 +1922,9 @@ document.addEventListener("click", (e) => {
   if (e.target.id === "coupon-remove") return quitarCupon();
   if (e.target.id === "points-redeem") return canjearPuntos();
   if (e.target.id === "points-remove") return quitarCanje();
+  if (e.target.id === "points-code-ok") return confirmarCodigoCanje();
+  if (e.target.id === "points-code-resend") return pedirCodigoCanje();
+  if (e.target.id === "points-code-cancel") return cancelarCodigoCanje();
   if (e.target.id === "points-check") {
     consultarPuntos(emailCliente())
       .then((p) => {
@@ -1837,7 +1953,20 @@ $("#email-input").addEventListener("change", () => {
   metaActualizarEmail(email); // Advanced Matching del pixel
   saldoPuntos = null; // saldo desconocido para el nuevo email
   localStorage.removeItem("merla-canje");
+  canjeVerificando = null; // el código era para el email anterior
   renderCarrito();
+});
+
+// Código de canje: se guarda lo tipeado (el carrito se vuelve a dibujar seguido
+// y si no se perdería) y Enter confirma.
+document.addEventListener("input", (e) => {
+  if (e.target.id === "points-code" && canjeVerificando) canjeVerificando.codigo = e.target.value;
+});
+document.addEventListener("keydown", (e) => {
+  if (e.target.id === "points-code" && e.key === "Enter") {
+    e.preventDefault();
+    confirmarCodigoCanje();
+  }
 });
 
 $("#club-consultar").addEventListener("click", consultarClub);

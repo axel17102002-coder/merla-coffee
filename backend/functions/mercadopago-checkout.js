@@ -14,6 +14,7 @@ const { sanitizarEnvio } = require("../lib/entrega.js");
 const { resolverEnvioCosto } = require("../lib/envio-costo.js");
 const { itemsConCosto } = require("../lib/costos.js");
 const { permitir, claveDe } = require("../lib/limite.js");
+const { paseValido, ERROR_SIN_VERIFICAR } = require("../lib/canje.js");
 const { HORAS_PENDIENTE } = require("../lib/mantenimiento.js");
 
 // Cada llamada crea un pedido y una preferencia en Mercado Pago. Un cliente
@@ -53,12 +54,10 @@ exports.handler = async (event) => {
     if (!emailValido) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: "Ingresá tu email para hacer el pedido" }) };
     }
-    if (body.canjePuntos && !emailValido) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: "Para canjear puntos ingresá tu email" }),
-      };
+    // Canjear exige haber confirmado que el email es propio (código por mail):
+    // sin esto, saber el email de un cliente alcanzaba para gastarle los puntos.
+    if (body.canjePuntos && !paseValido(body.canjePase, email)) {
+      return { statusCode: 403, headers, body: JSON.stringify(ERROR_SIN_VERIFICAR) };
     }
 
     // Datos frescos desde la base
