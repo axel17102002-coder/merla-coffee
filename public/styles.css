@@ -1437,7 +1437,9 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 /* ===== Club Merla ===== */
 .club {
   display: grid;
-  grid-template-columns: 1.2fr 1fr;
+  /* minmax(0, …): sin eso, el ancho mínimo del campo de email ensanchaba la
+     columna más allá de la pantalla y las tarjetas quedaban corridas */
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   gap: 20px;
   max-width: 880px;
   margin: 0 auto;
@@ -1467,6 +1469,7 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 .club__form input {
   flex: 1;
   min-width: 0;
+  width: 0; /* sin ancho propio: lo reparte el flex (si no, empuja la tarjeta) */
   border: 1.5px solid var(--crema-borde);
   border-radius: 999px;
   padding: 10px 16px;
@@ -1595,7 +1598,10 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 .sucursal__detalle { font-size: 0.78rem; color: #66705f; }
 
 @media (max-width: 720px) {
-  .club { grid-template-columns: 1fr; }
+  .club { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  /* En celular, el Club va centrado como su título */
+  .club__card { padding: 24px 20px; text-align: center; }
+  .club__form { margin: 14px auto 10px; max-width: 360px; }
 }
 
 /* ===== Íconos de línea (sprite en index.html) ===== */
