@@ -212,6 +212,45 @@ function mailCodigoCanje(codigo, minutos) {
   };
 }
 
+// Pedido de reseña, unos días después de la compra. Las estrellas son links:
+// tocar una abre el formulario en la web con ese puntaje ya elegido.
+//   enlace(n) → URL del formulario con n estrellas (0 = sin elegir)
+function mailPedidoResena(pedido, enlace) {
+  const productos = [...new Set((pedido.items || []).map((i) => String(i.nombre || "").split(" - ")[0].trim()).filter(Boolean))];
+  const que = productos.length ? `<strong style="color:${VERDE};">${escapar(productos.join(", "))}</strong>` : "tu café";
+  const nombre = String((pedido.envio && pedido.envio.nombre) || "").trim().split(/\s+/)[0];
+  const estrellas = [1, 2, 3, 4, 5]
+    .map((n) => `<a href="${escapar(enlace(n))}" style="color:${CARAMELO};text-decoration:none;font-size:34px;line-height:1;padding:0 3px;" aria-label="${n} de 5 estrellas">★</a>`)
+    .join("");
+  return {
+    asunto: `¿Qué te pareció tu café? ☕`,
+    html: envoltorio(
+      nombre ? `¿Qué te pareció, ${escapar(nombre)}?` : "¿Qué te pareció tu café?",
+      `<p style="margin:0 0 14px;color:${GRIS};">Hace unos días te llegó tu pedido ${numeroPedido(pedido.numero)} con ${que}. Nos ayudaría mucho saber qué te pareció: es un minuto.</p>
+       <p style="margin:18px 0 6px;text-align:center;">${estrellas}</p>
+       <p style="margin:0 0 18px;text-align:center;color:${GRIS};font-size:13px;">Tocá las estrellas para empezar</p>
+       <p style="margin:0 0 16px;text-align:center;"><a href="${escapar(enlace(0))}" style="background:${VERDE};color:#fff;text-decoration:none;padding:13px 20px;border-radius:9px;font-weight:bold;display:inline-block;">Dejar mi opinión</a></p>
+       <p style="margin:0;color:${GRIS};font-size:13px;">Leemos cada opinión antes de publicarla en la web, con tu nombre de pila. Si algo no estuvo bien, contanos: queremos saberlo.</p>`
+    ),
+  };
+}
+
+// Aviso al admin: un cliente dejó una reseña y está esperando aprobación
+function mailResenaNueva(resena) {
+  const estrellas = "★".repeat(resena.estrellas) + "☆".repeat(5 - resena.estrellas);
+  return {
+    asunto: `⭐ Nueva reseña de ${resena.nombre} (${resena.estrellas}/5) para aprobar`,
+    html: envoltorio(
+      "Te dejaron una reseña",
+      `<p style="margin:0 0 6px;color:${CARAMELO};font-size:22px;letter-spacing:2px;">${estrellas}</p>
+       <p style="margin:0 0 14px;color:#22301f;font-size:16px;line-height:1.5;">“${escapar(resena.texto)}”</p>
+       <p style="margin:0 0 18px;color:${GRIS};">${escapar(resena.nombre)}${resena.producto ? ` · compró ${escapar(resena.producto)}` : ""}</p>
+       <p style="margin:0 0 14px;color:${GRIS};">No se publica hasta que la apruebes.</p>
+       <p style="margin:0;"><a href="${SITIO}/admin" style="background:${VERDE};color:#fff;text-decoration:none;padding:11px 18px;border-radius:9px;font-weight:bold;display:inline-block;">Revisarla en el panel</a></p>`
+    ),
+  };
+}
+
 // Aviso al administrador de un pago que necesita que alguien lo mire:
 //   "sin-pedido": entró plata y el pedido ya no existe en la base.
 //   "duplicado":  segundo pago sobre un pedido que ya estaba cobrado.
@@ -244,4 +283,4 @@ function mailPagoRaro(motivo, pago, pedido) {
   };
 }
 
-module.exports = { mailAvisoAdmin, mailConfirmacionCliente, mailCarritoAbandonado, mailPagoRaro, mailCodigoCanje, enlaceRetomar };
+module.exports = { mailAvisoAdmin, mailConfirmacionCliente, mailCarritoAbandonado, mailPagoRaro, mailCodigoCanje, mailPedidoResena, mailResenaNueva, enlaceRetomar };

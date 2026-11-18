@@ -474,3 +474,7 @@ button:disabled { opacity: .55; cursor: wait; }
   .resena-form__fila { grid-template-columns: 1fr; }
   .resena-form__fila select { width: 100%; }
 }
+.fila--nueva { border-color: #b07a42; box-shadow: 0 0 0 1px #b07a42 inset; }
+.resena-fila__chip { display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px; background: #e6efe3; color: #3f7a4c; font-size: .7rem; font-weight: 800; vertical-align: 2px; }
+.resena-fila__chip--nueva { background: #f6e3cb; color: #8a5420; }
+.panel__tabs button.tab-aviso:not(.tab-activo) { color: #8a5420; font-weight: 800; }

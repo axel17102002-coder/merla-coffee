@@ -145,9 +145,13 @@ una regla de precio/punto, va acá y aplica en ambos lados a la vez.
   agotados van en la fila "Vuelven pronto" (`renderGrilla` en `app.js`) y los
   agotados marcados `descontinuado` no se muestran. Para que un café agotado
   desaparezca de la tienda, marcarlo descontinuado en el panel.
-- **Reseñas**: tabla `resenas` (migración `migracion-resenas.sql`), se cargan a
-  mano en `/admin → Reseñas` y llegan a la tienda dentro de `/api/tienda`. Son
-  opiniones reales de clientes: no cargues texto de ejemplo en producción.
+- **Reseñas**: tabla `resenas` (migraciones `migracion-resenas.sql` y
+  `migracion-resenas-clientes.sql`). Llegan por dos caminos: el admin las carga
+  a mano en `/admin → Reseñas`, o las deja el cliente desde el link que le manda
+  el cron 5-14 días después de comprar (`pedirResenas`, `backend/lib/resenas.js`,
+  endpoint `/api/resena`). Las de clientes entran `pendiente` + `verificada`, no
+  se publican hasta que el admin las aprueba y no se editan. Son opiniones
+  reales: no cargues texto de ejemplo en producción.
 - **Íconos**: sprite SVG al principio de `index.html` (`<symbol id="i-...">`),
   se usan con `icono("nombre")` en `app.js`. Para uno nuevo, sumá el `<symbol>`.
 - **Pasarelas de pago**: se prenden/apagan en `motor.js` → `CONFIG.pagos`. Hoy

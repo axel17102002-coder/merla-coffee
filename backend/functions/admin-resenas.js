@@ -2,11 +2,14 @@
 //
 //   GET                                          → { resenas: [...] } (todas)
 //   POST { id?, nombre, texto, detalle?, estrellas } → crea (o edita, con id)
-//   PATCH { id, activo }                         → publica / oculta
+//   PATCH { id, activo }                         → publica / oculta (y la saca de "nuevas")
 //   DELETE ?id=<uuid>                            → borra
 //
 // Solo opiniones reales: se cargan a mano, copiadas de lo que mandan los
-// clientes (WhatsApp, Instagram, mail).
+// clientes (WhatsApp, Instagram, mail), o las dejan ellos desde el link del
+// mail que les llega después de comprar (backend/functions/resena.js). Esas
+// llegan como `pendiente` y con `verificada`, y no se pueden editar: son las
+// palabras del cliente.
 
 const { sb } = require("../lib/supabase.js");
 const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
@@ -23,7 +26,13 @@ exports.handler = async (event) => {
 
   try {
     if (event.httpMethod === "GET") {
-      const resenas = await sb("resenas?select=*&order=creado.desc");
+      // Las nuevas (que dejaron clientes y nadie revisó) primero
+      let resenas;
+      try {
+        resenas = await sb("resenas?select=*&order=pendiente.desc,creado.desc");
+      } catch (err) {
+        resenas = await sb("resenas?select=*&order=creado.desc"); // sin migracion-resenas-clientes.sql
+      }
       return responder(200, { resenas });
     }
 
@@ -40,12 +49,13 @@ exports.handler = async (event) => {
 
       if (body.id) {
         if (!ID.test(String(body.id))) return responder(400, { error: "Reseña inválida" });
-        const [resena] = await sb(`resenas?id=eq.${encodeURIComponent(body.id)}`, {
+        // Solo las cargadas desde el panel: las de clientes no se editan
+        const [resena] = await sb(`resenas?id=eq.${encodeURIComponent(body.id)}&verificada=is.false`, {
           method: "PATCH",
           headers: { Prefer: "return=representation" },
           body: fila,
         });
-        if (!resena) return responder(404, { error: "Esa reseña ya no existe" });
+        if (!resena) return responder(404, { error: "Esa reseña no existe o la dejó un cliente (esas no se editan)" });
         return responder(200, { resena });
       }
       const [resena] = await sb("resenas", { method: "POST", headers: { Prefer: "return=representation" }, body: fila });
@@ -58,7 +68,7 @@ exports.handler = async (event) => {
       const [resena] = await sb(`resenas?id=eq.${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: { Prefer: "return=representation" },
-        body: { activo: Boolean(activo) },
+        body: { activo: Boolean(activo), pendiente: false },
       });
       if (!resena) return responder(404, { error: "Esa reseña ya no existe" });
       return responder(200, { resena });
@@ -76,7 +86,10 @@ exports.handler = async (event) => {
     console.error("admin-resenas:", err);
     // PGRST205 / 42P01 = la tabla no existe todavía
     if (/PGRST205|42P01|resenas/.test(String(err.message)) && /does not exist|Could not find/.test(String(err.message))) {
-      return responder(409, { error: "Falta correr supabase/migracion-resenas.sql en Supabase" });
+      // Si la tabla existe pero no las columnas nuevas, falta la segunda migración
+      const falta = /pendiente|verificada|producto|pedido_id/.test(String(err.message))
+        ? "migracion-resenas-clientes.sql" : "migracion-resenas.sql";
+      return responder(409, { error: `Falta correr supabase/${falta} en Supabase` });
     }
     return responder(502, { error: "No se pudieron gestionar las reseñas" });
   }

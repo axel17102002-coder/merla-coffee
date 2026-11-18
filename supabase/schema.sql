@@ -78,6 +78,7 @@ create table if not exists pedidos (
   recordatorio_enviado timestamptz,  -- cuándo se mandó el mail de carrito abandonado (para no repetirlo)
   confirmacion_enviada timestamptz,  -- última vez que se envió el mail de confirmación
   mp_pago_id text,                   -- payment_id de Mercado Pago, para cruzar con su panel
+  resena_pedida timestamptz,         -- cuándo se le pidió al cliente que opine (mail del cron)
   estado text not null default 'pendiente'
     check (estado in ('pendiente', 'aprobado', 'rechazado', 'cancelado')),
   creado timestamptz not null default now(),
@@ -99,6 +100,7 @@ alter table pedidos add column if not exists metodo_pago text;
 alter table pedidos add column if not exists descuento_pago integer not null default 0;
 alter table pedidos add column if not exists recordatorio_enviado timestamptz;
 alter table pedidos add column if not exists mp_pago_id text;
+alter table pedidos add column if not exists resena_pedida timestamptz;
 alter table pedidos drop constraint if exists pedidos_estado_check;
 alter table pedidos add constraint pedidos_estado_check
   check (estado in ('pendiente', 'aprobado', 'rechazado', 'cancelado'));
@@ -131,8 +133,14 @@ create table if not exists resenas (
   detalle text check (detalle is null or char_length(detalle) <= 60),
   estrellas smallint not null default 5 check (estrellas between 1 and 5),
   activo boolean not null default true,
-  creado timestamptz not null default now()
+  creado timestamptz not null default now(),
+  -- Reseñas que deja el cliente desde el link del mail (migracion-resenas-clientes.sql)
+  pedido_id uuid references pedidos(id) on delete set null,
+  producto text check (producto is null or char_length(producto) <= 120),
+  verificada boolean not null default false,
+  pendiente boolean not null default false
 );
+create unique index if not exists resenas_pedido_idx on resenas (pedido_id) where pedido_id is not null;
 
 -- ---------- Seguridad ----------
 -- RLS activado sin políticas públicas: solo la service_role key (las funciones

@@ -406,7 +406,9 @@ function renderResenas() {
         </div>
         <blockquote class="resena__texto">${escaparHtml(r.texto)}</blockquote>
         <figcaption class="resena__autor">
-          <strong>${escaparHtml(r.nombre)}</strong>${r.detalle ? `<span>${escaparHtml(r.detalle)}</span>` : ""}
+          <strong>${escaparHtml(r.nombre)}</strong>
+          ${r.detalle || r.producto ? `<span>${escaparHtml(r.detalle || `Compró ${r.producto}`)}</span>` : ""}
+          ${r.verificada ? `<span class="resena__verificada">${icono("check")} Compra verificada</span>` : ""}
         </figcaption>
       </figure>`;
   }).join("");
@@ -1853,6 +1855,7 @@ function abrirModal(id) {
 
 function cerrarModal() {
   $("#modal").hidden = true;
+  $("#modal-card").classList.remove("modal__card--simple"); // el formulario de reseña la usa de una columna
   document.body.style.overflow = "";
 }
 
@@ -2119,8 +2122,122 @@ function metaDesdeCarrito() {
   });
 })();
 
+// ===== Opinar desde el link del mail =====
+// Unos días después de comprar, al cliente le llega un mail con un link
+// personal: /?resena=<token> (y &estrellas=N si tocó una estrella del mail).
+// Se abre un formulario corto; la reseña queda pendiente hasta que el admin
+// la aprueba (backend/functions/resena.js).
+let formResena = (() => {
+  const qp = new URLSearchParams(location.search);
+  const token = qp.get("resena");
+  if (!token) return null;
+  history.replaceState(null, "", location.pathname);
+  const n = Number.parseInt(qp.get("estrellas"), 10);
+  return { token, estrellas: n >= 1 && n <= 5 ? n : 0, enviando: false };
+})();
+
+async function abrirResenaDeURL() {
+  if (!formResena) return;
+  try {
+    const res = await fetch(`/api/resena?t=${encodeURIComponent(formResena.token)}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Este link para opinar ya no funciona");
+    if (data.yaEnviada) {
+      formResena = null;
+      mostrarToast("Ya nos dejaste tu opinión por este pedido. ¡Gracias! ☕");
+      return;
+    }
+    Object.assign(formResena, { nombre: data.nombre || "", productos: data.productos || "", numero: data.numero });
+    pintarFormResena();
+    $("#modal").hidden = false;
+    document.body.style.overflow = "hidden";
+  } catch (err) {
+    formResena = null;
+    mostrarToast(`⚠️ ${err.message}`);
+  }
+}
+
+function estrellasFormResena() {
+  return Array.from({ length: 5 }, (_, i) => {
+    const n = i + 1;
+    const elegida = n <= formResena.estrellas;
+    return `<button type="button" class="form-resena__estrella${elegida ? " elegida" : ""}" data-estrella="${n}"
+        role="radio" aria-checked="${n === formResena.estrellas}" aria-label="${n} de 5 estrellas">${icono("estrella", elegida ? "icono--lleno" : "")}</button>`;
+  }).join("");
+}
+
+function pintarFormResena() {
+  const f = formResena;
+  $("#modal-card").classList.add("modal__card--simple");
+  $("#modal-card").innerHTML = `
+    <form class="modal__body form-resena" id="form-resena" novalidate>
+      <button type="button" class="modal__close" aria-label="Cerrar">✕</button>
+      <h3>¿Qué te pareció?</h3>
+      <p class="form-resena__pedido">Tu pedido ${escaparHtml(numeroPedido(f.numero))}${f.productos ? ` · ${escaparHtml(f.productos)}` : ""}</p>
+      <div class="form-resena__estrellas" role="radiogroup" aria-label="Puntaje">${estrellasFormResena()}</div>
+      <label class="form-resena__campo">Tu opinión
+        <textarea id="fr-texto" rows="4" maxlength="400" placeholder="¿Qué café probaste? ¿Dónde lo tomaste? ¿Lo recomendarías?"></textarea>
+      </label>
+      <label class="form-resena__campo">Tu nombre
+        <input id="fr-nombre" maxlength="60" autocomplete="given-name" placeholder="Ej.: Sofía" value="${escaparAttr(f.nombre)}">
+      </label>
+      <p class="form-resena__nota">La leemos antes de publicarla en la web, con tu nombre de pila.</p>
+      <button type="submit" class="btn btn--primary btn--full" id="fr-enviar">Enviar mi opinión</button>
+    </form>`;
+}
+
+async function enviarFormResena() {
+  const f = formResena;
+  if (!f || f.enviando) return;
+  const texto = $("#fr-texto").value.trim();
+  const nombre = $("#fr-nombre").value.trim();
+  if (!f.estrellas) return mostrarToast("Elegí de 1 a 5 estrellas");
+  if (texto.length < 3) return mostrarToast("Contanos qué te pareció (aunque sea una frase)");
+  if (!nombre) return mostrarToast("Poné tu nombre (alcanza con el de pila)");
+  f.enviando = true;
+  $("#fr-enviar").disabled = true;
+  try {
+    const res = await fetch("/api/resena", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ t: f.token, estrellas: f.estrellas, texto, nombre }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok && res.status !== 409) throw new Error(data.error || "No pudimos guardar tu opinión");
+    formResena = null;
+    $("#modal-card").innerHTML = `
+      <div class="modal__body form-resena form-resena--gracias">
+        <button type="button" class="modal__close" aria-label="Cerrar">✕</button>
+        ${icono("cafe", "icono--grande")}
+        <h3>¡Gracias${nombre ? `, ${escaparHtml(nombre.split(" ")[0])}` : ""}!</h3>
+        <p>${res.status === 409 ? escaparHtml(data.error) : "Recibimos tu opinión. La vamos a publicar en la web en los próximos días."}</p>
+        <button type="button" class="btn btn--primary btn--full modal__close-texto">Seguir mirando cafés</button>
+      </div>`;
+  } catch (err) {
+    f.enviando = false;
+    $("#fr-enviar").disabled = false;
+    mostrarToast(`⚠️ ${err.message}`);
+  }
+}
+
+document.addEventListener("click", (e) => {
+  const estrella = e.target.closest("[data-estrella]");
+  if (estrella && formResena) {
+    formResena.estrellas = Number(estrella.dataset.estrella);
+    $(".form-resena__estrellas").innerHTML = estrellasFormResena();
+    return;
+  }
+  if (e.target.closest(".modal__close-texto")) cerrarModal();
+});
+document.addEventListener("submit", (e) => {
+  if (e.target.id !== "form-resena") return;
+  e.preventDefault();
+  enviarFormResena();
+});
+
 // ===== Inicio =====
 const emailGuardado = emailCliente();
 if ($("#club-email") && emailGuardado) $("#club-email").value = emailGuardado;
 cargarTienda();
+abrirResenaDeURL();
 observarReveals();

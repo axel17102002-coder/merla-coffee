@@ -20,13 +20,18 @@ function sinCostos(producto) {
 
 // Reseñas publicadas, las más nuevas primero. Si la tabla todavía no existe
 // (falta migracion-resenas.sql) o falla, la tienda carga igual, sin reseñas.
+// Primero con los datos de "compra verificada"; si esas columnas todavía no
+// existen (falta migracion-resenas-clientes.sql), con las básicas.
 async function resenasPublicadas() {
-  try {
-    return await sb("resenas?select=nombre,texto,detalle,estrellas&activo=is.true&order=creado.desc&limit=12");
-  } catch (err) {
-    console.warn("tienda: sin reseñas (¿falta migracion-resenas.sql?):", err.message);
-    return [];
+  const campos = ["nombre,texto,detalle,estrellas,producto,verificada", "nombre,texto,detalle,estrellas"];
+  for (const select of campos) {
+    try {
+      return await sb(`resenas?select=${select}&activo=is.true&order=creado.desc&limit=12`);
+    } catch (err) {
+      console.warn("tienda: no pude leer las reseñas con", select, "→", err.message);
+    }
   }
+  return [];
 }
 
 exports.handler = async () => {

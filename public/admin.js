@@ -2372,19 +2372,37 @@ function renderResenasAdmin() {
     contenedor.innerHTML = `<div class="vacio">Todavía no cargaste reseñas. Cuando un cliente te mande una opinión, copiala acá.</div>`;
     return;
   }
-  contenedor.innerHTML = resenasCache.map((r) => `<article class="fila${r.activo ? "" : " fila--inactivo"}">
+  // Las nuevas (que dejaron clientes desde el link del mail) piden una
+  // decisión: Publicar o Descartar. Las de clientes no se editan.
+  contenedor.innerHTML = resenasCache.map((r) => {
+    const estado = r.pendiente ? "Nueva, sin revisar" : r.activo ? "Publicada" : "Oculta";
+    return `<article class="fila${r.pendiente ? " fila--nueva" : r.activo ? "" : " fila--inactivo"}">
       <div class="fila__info" style="flex: 1 1 320px">
-        <strong>${escapar(r.nombre)} <span class="resena-fila__estrellas">${"★".repeat(r.estrellas || 5)}</span></strong>
-        ${r.detalle ? `<span class="fila__dato">${escapar(r.detalle)}</span>` : ""}
+        <strong>${escapar(r.nombre)} <span class="resena-fila__estrellas">${"★".repeat(r.estrellas || 5)}</span>
+          ${r.pendiente ? `<span class="resena-fila__chip resena-fila__chip--nueva">Nueva</span>` : ""}
+          ${r.verificada ? `<span class="resena-fila__chip">Compra verificada</span>` : ""}</strong>
+        ${r.detalle || r.producto ? `<span class="fila__dato">${escapar(r.detalle || `Compró ${r.producto}`)}</span>` : ""}
         <span class="resena-fila__texto">${escapar(r.texto)}</span>
-        <span class="fila__dato">${r.activo ? "Publicada" : "Oculta"} · ${escapar(new Date(r.creado).toLocaleDateString("es-AR", { dateStyle: "medium" }))}</span>
+        <span class="fila__dato">${estado} · ${escapar(new Date(r.creado).toLocaleDateString("es-AR", { dateStyle: "medium" }))}</span>
       </div>
       <div class="fila__form">
-        <button class="sec" data-resena-editar="${escapar(r.id)}">Editar</button>
-        <button class="${r.activo ? "sec" : ""}" data-resena-toggle="${escapar(r.id)}" data-activo="${r.activo}">${r.activo ? "Ocultar" : "Publicar"}</button>
+        ${r.verificada ? "" : `<button class="sec" data-resena-editar="${escapar(r.id)}">Editar</button>`}
+        ${r.pendiente
+          ? `<button data-resena-toggle="${escapar(r.id)}" data-activo="false">Publicar</button>
+             <button class="sec" data-resena-toggle="${escapar(r.id)}" data-activo="true">Descartar</button>`
+          : `<button class="${r.activo ? "sec" : ""}" data-resena-toggle="${escapar(r.id)}" data-activo="${r.activo}">${r.activo ? "Ocultar" : "Publicar"}</button>`}
         <button class="sec" data-resena-borrar="${escapar(r.id)}">Borrar</button>
       </div>
-    </article>`).join("");
+    </article>`;
+  }).join("");
+  marcarResenasNuevas();
+}
+
+// "Reseñas (2)" en la pestaña cuando hay nuevas esperando aprobación
+function marcarResenasNuevas() {
+  const nuevas = resenasCache.filter((r) => r.pendiente).length;
+  $("#tab-resenas").textContent = nuevas ? `Reseñas (${nuevas})` : "Reseñas";
+  $("#tab-resenas").classList.toggle("tab-aviso", nuevas > 0);
 }
 
 async function cargarResenas() {
@@ -2685,6 +2703,10 @@ function abrirPanel() {
   $("#panel").hidden = false;
   $("#logout").hidden = false;
   cargarPedidos();
+  // Cuántas reseñas nuevas hay, para mostrarlo en la pestaña sin abrirla
+  api("/api/admin-resenas")
+    .then((d) => { resenasCache = Array.isArray(d.resenas) ? d.resenas : []; marcarResenasNuevas(); })
+    .catch(() => {});
   // reiniciar el estado "cargado" de las tabs y abrir Productos
   Object.values(TABS).forEach((t) => (t.cargado = false));
   activarTab("tab-productos");

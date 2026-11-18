@@ -4,7 +4,8 @@
 
 const { sb, obtenerCupon } = require("./supabase.js");
 const { enviarMail, config } = require("./brevo.js");
-const { mailCarritoAbandonado } = require("./mails.js");
+const { mailCarritoAbandonado, mailPedidoResena } = require("./mails.js");
+const { enlaceResena, elegirPedidosParaResena, DIAS_DESDE, DIAS_HASTA, DIAS_ENTRE_PEDIDOS } = require("./resenas.js");
 const { buscarPagosMp } = require("./mercadopago.js");
 const { acreditarPagoMp } = require("./cobro.js");
 const { ORIGENES_MANUALES } = require("../../public/motor.js");
@@ -200,8 +201,54 @@ async function recordarCarritosAbandonados(conciliacion = null) {
   return enviados;
 }
 
+// Pedido de reseña: a los clientes que compraron hace entre 5 y 14 días les
+// llega un mail con un link personal para opinar (ver backend/lib/resenas.js).
+// `resena_pedida` evita pedirla dos veces. Devuelve cuántos mails salieron.
+const MAX_PEDIDOS_RESENA = 8;
+async function pedirResenas() {
+  if (!config().apiKey) return 0;
+
+  let candidatos, recientes;
+  try {
+    candidatos = await sb(
+      `pedidos?select=id,numero,origen,cliente_email,items,envio,actualizado&estado=eq.aprobado` +
+      `&cliente_email=not.is.null&resena_pedida=is.null` +
+      `&actualizado=lt.${encodeURIComponent(haceHoras(DIAS_DESDE * 24))}` +
+      `&actualizado=gt.${encodeURIComponent(haceHoras(DIAS_HASTA * 24))}&order=actualizado.asc&limit=100`
+    );
+    recientes = await sb(
+      `pedidos?select=cliente_email&resena_pedida=gt.${encodeURIComponent(haceHoras(DIAS_ENTRE_PEDIDOS * 24))}&limit=5000`
+    );
+  } catch (err) {
+    console.warn("mantenimiento: falta resena_pedida (correr migracion-resenas-clientes.sql):", err.message);
+    return 0;
+  }
+
+  const yaPedidas = new Set(recientes.map((p) => String(p.cliente_email || "").trim().toLowerCase()));
+  const elegidos = elegirPedidosParaResena(candidatos, yaPedidas).slice(0, MAX_PEDIDOS_RESENA);
+
+  let enviados = 0;
+  for (const pedido of elegidos) {
+    try {
+      const mail = mailPedidoResena(pedido, (n) => enlaceResena(pedido.id, n));
+      const salio = await enviarMail({ para: pedido.cliente_email, asunto: mail.asunto, html: mail.html });
+      // Se marca aunque Brevo lo rechace: una dirección mala no puede quedar
+      // reintentando cada hora
+      await sb(`pedidos?id=eq.${encodeURIComponent(pedido.id)}`, {
+        method: "PATCH",
+        body: { resena_pedida: new Date().toISOString() },
+      });
+      if (salio) enviados++;
+    } catch (err) {
+      console.error("mantenimiento: no pude pedir la reseña del pedido", pedido.id, err.message);
+    }
+  }
+  return enviados;
+}
+
 module.exports = {
   conciliarPagosMp,
+  pedirResenas,
   limpiarPedidosPendientes,
   recordarCarritosAbandonados,
   elegirRecordatorios,

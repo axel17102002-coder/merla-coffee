@@ -1780,3 +1780,42 @@ section[id], footer[id] { scroll-margin-top: 90px; }
   .precio-transf { font-size: 0.64rem; }
   .card__add { padding: 8px 14px; font-size: 0.8rem; }
 }
+
+/* Reseña con "Compra verificada" (la dejó un cliente desde su link de compra) */
+.resena__verificada { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 0.74rem; font-weight: 700; color: #3f7a4c; }
+.resena__verificada .icono { width: 14px; height: 14px; stroke-width: 2.4; vertical-align: 0; }
+
+/* Formulario para opinar (abre desde el link del mail, dentro del modal) */
+.modal__card--simple { grid-template-columns: 1fr; max-width: 460px; }
+.form-resena { display: flex; flex-direction: column; gap: 14px; }
+.form-resena h3 { font-size: 1.5rem; color: var(--verde); padding-right: 36px; }
+.form-resena__pedido { margin-top: -8px; color: #66705f; font-size: 0.88rem; }
+.form-resena__estrellas { display: flex; gap: 6px; }
+.form-resena__estrella {
+  background: none;
+  border: 0;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--crema-borde);
+  transition: transform 0.12s, color 0.12s;
+}
+.form-resena__estrella .icono { width: 34px; height: 34px; stroke-width: 1.5; vertical-align: 0; }
+.form-resena__estrella.elegida { color: var(--caramelo); }
+.form-resena__estrella:hover { transform: scale(1.1); }
+.form-resena__estrella:focus-visible { outline: 2px solid var(--caramelo); border-radius: 8px; }
+.form-resena__campo { display: flex; flex-direction: column; gap: 6px; font-weight: 700; font-size: 0.86rem; color: var(--verde); }
+.form-resena__campo textarea,
+.form-resena__campo input {
+  border: 1.5px solid var(--crema-borde);
+  border-radius: 12px;
+  padding: 11px 13px;
+  font: 400 0.95rem var(--fuente-texto);
+  color: var(--tinta);
+  background: var(--blanco);
+  resize: vertical;
+}
+.form-resena__campo textarea:focus,
+.form-resena__campo input:focus { outline: 2px solid var(--caramelo); border-color: var(--caramelo); }
+.form-resena__nota { font-size: 0.8rem; color: #66705f; margin-top: -4px; }
+.form-resena--gracias { align-items: center; text-align: center; }
+.form-resena--gracias h3 { padding-right: 0; }
