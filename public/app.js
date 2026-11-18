@@ -82,6 +82,9 @@ function tiposDeQuote() {
 }
 
 const $ = (sel) => document.querySelector(sel);
+// Ícono de línea del sprite de index.html (<symbol id="i-...">)
+const icono = (nombre, clase = "") =>
+  `<svg class="icono${clase ? " " + clase : ""}" aria-hidden="true"><use href="#i-${nombre}"></use></svg>`;
 /**
  * Formatea un número como moneda argentina.
  *
@@ -134,6 +137,7 @@ async function cargarTienda() {
     renderFiltros();
     renderProductos();
     renderCarrito();
+    renderResenas();
     datosEstructuradosProductos(); // para que Google muestre precio y stock
     abrirProductoDeURL(); // deep-link ?producto=<id> (lo usan los feeds de ads)
     retomarPedidoDeURL(); // ?retomar=... (botón del mail de carrito abandonado)
@@ -237,8 +241,10 @@ function renderFiltros() {
     return;
   }
 
+  // Solo países de productos que se muestran (los descontinuados agotados no
+  // aparecen), y sin espacios de más: "Colombia" y "Colombia " eran dos filtros.
   const origenes = [
-    ...new Set(productosFiltro.map((p) => p.origen).filter(Boolean))
+    ...new Set(productosFiltro.filter(seMuestra).map(origenDe).filter(Boolean))
   ];
 
   if (origenes.length < 2) {
@@ -254,7 +260,7 @@ function renderFiltros() {
     origenes
       .map(
         (o) =>
-          `<button class="filtro ${filtroRegion === o ? "activo" : ""}" data-region="${o}">${o}</button>`
+          `<button class="filtro ${filtroRegion === o ? "activo" : ""}" data-region="${escaparAttr(o)}">${escaparHtml(o)}</button>`
       )
       .join("");
 
@@ -299,10 +305,7 @@ function badgeStock(p) {
   // `descontinuado` se edita desde el panel (Productos y Stock); antes estos
   // ids venían hardcodeados acá y había que tocar el código en cada cambio.
   if (p.descontinuado && p.stock > 0) {
-    return `<span class="card__stock--ultima">
-        🔥 Últimas ${p.stock} unidades
-      </span>
-    `;
+    return `<span class="card__stock--ultima">${icono("llama")} Últimas ${p.stock} unidades</span>`;
   }
   if (p.stock === 0) return `<span class="card__stock card__stock--agotado">Agotado</span>`;
   if (p.stock <= 5) return `<span class="card__stock">¡Quedan ${p.stock}!</span>`;
@@ -343,13 +346,70 @@ function ordenados(productos) {
   return [...productos].sort((a, b) => (b.stock > 0) - (a.stock > 0));
 }
 
+const origenDe = (p) => String(p.origen || "").trim();
+// Un agotado que se marcó como descontinuado no vuelve: no se muestra.
+const seMuestra = (p) => p.stock > 0 || !p.descontinuado;
+
+// La grilla muestra solo lo que se puede comprar. Los agotados que van a volver
+// van debajo, en una fila chica ("Vuelven pronto"): antes ocupaban el mismo
+// lugar que los disponibles y en celular eran pantallas enteras de "Sin stock".
 function renderGrilla(selector, productos, mensajeVacio) {
   const el = $(selector);
-  if (!productos.length) {
+  const conStock = productos.filter((p) => p.stock > 0);
+  const vuelven = productos.filter((p) => p.stock <= 0 && seMuestra(p));
+
+  if (conStock.length) {
+    el.innerHTML = conStock.map((p, i) => tarjetaProducto(p, i)).join("");
+  } else if (productos.length && vuelven.length) {
+    el.innerHTML = `<p class="grid__estado">Por ahora estos cafés están agotados. ¡Vuelven pronto!</p>`;
+  } else {
     el.innerHTML = mensajeVacio ? `<p class="grid__estado">${mensajeVacio}</p>` : "";
-    return;
   }
-  el.innerHTML = productos.map((p, i) => tarjetaProducto(p, i)).join("");
+
+  let pronto = el.nextElementSibling;
+  if (!pronto || !pronto.classList.contains("pronto")) {
+    pronto = document.createElement("div");
+    pronto.className = "pronto";
+    el.after(pronto);
+  }
+  pronto.hidden = !vuelven.length;
+  pronto.innerHTML = vuelven.length
+    ? `<p class="pronto__titulo">${icono("reloj")} Vuelven pronto</p>
+       <div class="pronto__lista">${vuelven.map(miniaturaAgotado).join("")}</div>`
+    : "";
+}
+
+function miniaturaAgotado(p) {
+  return `<button class="pronto__item" data-modal="${escaparAttr(p.id)}" aria-label="${escaparAttr(`${p.nombre}: agotado, ver detalle`)}">
+      <span class="pronto__img">${p.imagen ? `<img src="${escaparAttr(p.imagen)}" alt="" loading="lazy">` : icono("cafe")}</span>
+      <span class="pronto__texto">
+        <span class="pronto__nombre">${escaparHtml(p.nombre)}</span>
+        ${origenDe(p) ? `<span class="pronto__origen">${escaparHtml(origenDe(p))}</span>` : ""}
+      </span>
+    </button>`;
+}
+
+// ===== Reseñas de clientes =====
+// Vienen de /api/tienda (tabla `resenas`, cargadas a mano desde /admin). Sin
+// ninguna publicada, la sección queda oculta.
+function renderResenas() {
+  const lista = (DATOS && DATOS.resenas) || [];
+  const seccion = $("#resenas");
+  if (!seccion) return;
+  seccion.hidden = !lista.length;
+  if (!lista.length) return;
+  $("#resenas-lista").innerHTML = lista.map((r) => {
+    const estrellas = Math.max(1, Math.min(5, Number(r.estrellas) || 5));
+    return `<figure class="resena">
+        <div class="resena__estrellas" role="img" aria-label="${estrellas} de 5 estrellas">
+          ${Array.from({ length: 5 }, (_, i) => icono("estrella", i < estrellas ? "icono--lleno" : "icono--vacio")).join("")}
+        </div>
+        <blockquote class="resena__texto">${escaparHtml(r.texto)}</blockquote>
+        <figcaption class="resena__autor">
+          <strong>${escaparHtml(r.nombre)}</strong>${r.detalle ? `<span>${escaparHtml(r.detalle)}</span>` : ""}
+        </figcaption>
+      </figure>`;
+  }).join("");
 }
 
 // El catálogo se separa en tres vidrieras: drip bags (con filtro de región),
@@ -358,14 +418,14 @@ function renderProductos() {
   const cafes = ordenados(
     DATOS.productos
       .filter((p) => p.tipo !== "simple")
-      .filter((p) => filtroRegion === "todos" || p.origen === filtroRegion)
+      .filter((p) => filtroRegion === "todos" || origenDe(p) === filtroRegion)
   );
   renderGrilla("#product-grid", cafes, `No hay cafés de ${filtroRegion} ahora mismo.`);
 
   const cafe14 = ordenados(
     DATOS.productos
       .filter((p) => p.tipo === "simple" && p.categoria === "cafe_bolsa")
-      .filter((p) => filtroRegion === "todos" || p.origen === filtroRegion)
+      .filter((p) => filtroRegion === "todos" || origenDe(p) === filtroRegion)
   );
   renderGrilla("#product-grid-cafe14", cafe14);
   const merch = ordenados(
@@ -692,7 +752,7 @@ function renderCarrito() {
   if (items.length === 0) {
     $("#cart-items").innerHTML = `
       <div class="cart__empty">
-        <span>☕</span>
+        ${icono("cafe", "icono--grande")}
         <p>Tu carrito está vacío.<br>¡Elegí tu próximo café!</p>
       </div>`;
     $("#cart-foot").style.display = "none";
@@ -767,20 +827,20 @@ function renderCarrito() {
   $("#cart-total").textContent = formatear(calc.total);
 
   $("#cart-transf").hidden = false;
-  $("#cart-transf").innerHTML = `💵 Por transferencia: <strong>${formatear(precioTransferencia(calc.total))}</strong> (${CONFIG.transferencia.descuento}% OFF, pedilo por WhatsApp)`;
+  $("#cart-transf").innerHTML = `${icono("billete")} Por transferencia: <strong>${formatear(precioTransferencia(calc.total))}</strong> (${CONFIG.transferencia.descuento}% OFF, pedilo por WhatsApp)`;
 
   const cfg = DATOS.config;
   const faltan = cfg.descuentoCantidad - calc.unidadesSueltas;
   $("#discount-hint").textContent =
     calc.descuentoCantidad > 0
-      ? `🎉 ¡Tenés el ${cfg.descuentoPorcentaje}% de descuento por cantidad!`
+      ? `¡Tenés el ${cfg.descuentoPorcentaje}% de descuento por cantidad!`
       : calc.unidadesSueltas > 0 && faltan <= 2
         ? `Agregá ${faltan} unidad${faltan > 1 ? "es" : ""} suelta${faltan > 1 ? "s" : ""} más y llevate ${cfg.descuentoPorcentaje}% OFF`
         : "";
 
   $("#cart-earn").textContent = emailValido(emailCliente())
-    ? `Al confirmar tu pago sumás ${calc.puntosGanados} puntos Club Merla ⭐`
-    : `Dejá tu email y sumá ${calc.puntosGanados} puntos Club Merla al confirmar el pago ⭐`;
+    ? `Al confirmar tu pago sumás ${calc.puntosGanados} puntos Club Merla`
+    : `Dejá tu email y sumá ${calc.puntosGanados} puntos Club Merla al confirmar el pago`;
 
   $("#modo-test-note").hidden = (DATOS.config.pagoAmbiente || "test") !== "test";
 }
@@ -800,19 +860,19 @@ function renderPuntosWidget() {
   const email = emailCliente();
 
   if (canjeActivo()) {
-    box.innerHTML = `⭐ Canje aplicado: <strong>-${formatear(cfg.canjeDescuento)}</strong>
+    box.innerHTML = `${icono("estrella")} Canje aplicado: <strong>-${formatear(cfg.canjeDescuento)}</strong>
       (${cfg.canjePuntos} puntos) <button class="points-box__quitar" id="points-remove">Quitar</button>`;
     return;
   }
   if (!emailValido(email)) {
-    box.innerHTML = `⭐ Club Merla: dejá tu email arriba para sumar y usar puntos.`;
+    box.innerHTML = `${icono("estrella")} Club Merla: dejá tu email arriba para sumar y usar puntos.`;
     return;
   }
   // Esperando el código que confirma que el email es suyo (ver canjearPuntos)
   if (canjeVerificando && canjeVerificando.email === email) {
     box.innerHTML = canjeVerificando.enviando
-      ? `✉️ Mandándote un código a <strong>${escaparHtml(email)}</strong>…`
-      : `<span class="points-box__texto">✉️ Te mandamos un código a <strong>${escaparHtml(email)}</strong>. Ingresalo para usar tus puntos:</span>
+      ? `${icono("sobre")} Mandándote un código a <strong>${escaparHtml(email)}</strong>…`
+      : `<span class="points-box__texto">${icono("sobre")} Te mandamos un código a <strong>${escaparHtml(email)}</strong>. Ingresalo para usar tus puntos:</span>
          <input class="points-box__codigo" id="points-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7"
            placeholder="6 dígitos" aria-label="Código de 6 dígitos que te llegó por mail" value="${escaparAttr(canjeVerificando.codigo)}">
          <button class="points-box__canjear" id="points-code-ok">Confirmar</button>
@@ -823,15 +883,15 @@ function renderPuntosWidget() {
     return;
   }
   if (saldoPuntos === null) {
-    box.innerHTML = `⭐ Club Merla: <button class="points-box__canjear" id="points-check">Consultar mis puntos</button>`;
+    box.innerHTML = `${icono("estrella")} Club Merla: <button class="points-box__canjear" id="points-check">Consultar mis puntos</button>`;
     return;
   }
   if (saldoPuntos >= cfg.canjePuntos) {
-    box.innerHTML = `⭐ Tenés <strong>${saldoPuntos} puntos</strong> ·
+    box.innerHTML = `${icono("estrella")} Tenés <strong>${saldoPuntos} puntos</strong> ·
       <button class="points-box__canjear" id="points-redeem">Canjear ${cfg.canjePuntos} por ${formatear(cfg.canjeDescuento)} OFF</button>`;
     return;
   }
-  box.innerHTML = `⭐ Tenés <strong>${saldoPuntos} puntos</strong>. Juntá ${cfg.canjePuntos} y canjealos por ${formatear(cfg.canjeDescuento)} de descuento.`;
+  box.innerHTML = `${icono("estrella")} Tenés <strong>${saldoPuntos} puntos</strong>. Juntá ${cfg.canjePuntos} y canjealos por ${formatear(cfg.canjeDescuento)} de descuento.`;
 }
 
 async function consultarPuntos(email) {
@@ -1334,11 +1394,11 @@ function actualizarEnvioCostoEstado(items) {
   };
 
   if (!destino.cp || !destino.ciudad || !destino.provincia) {
-    limpiar("📦 Ingresá tu código postal, ciudad y provincia para ver las opciones de envío.");
+    limpiar("Ingresá tu código postal, ciudad y provincia para ver las opciones de envío.");
     return;
   }
   if (envioQuote.cargando) {
-    limpiar("📦 Buscando opciones de envío…");
+    limpiar("Buscando opciones de envío…");
     return;
   }
   if (vigente && envioQuote.error) {
@@ -1346,7 +1406,7 @@ function actualizarEnvioCostoEstado(items) {
     return;
   }
   if (!vigente || !envioQuote.opciones.length) {
-    limpiar("📦 Ingresá tu código postal, ciudad y provincia para ver las opciones de envío.");
+    limpiar("Ingresá tu código postal, ciudad y provincia para ver las opciones de envío.");
     return;
   }
 
@@ -1361,7 +1421,7 @@ function actualizarEnvioCostoEstado(items) {
   modalidades.innerHTML = hayQueElegir ? tarjetasModalidad() : "";
 
   if (!envioModalidad) {
-    el.textContent = "📦 ¿Cómo querés recibirlo?";
+    el.textContent = "¿Cómo querés recibirlo?";
     cont.hidden = true;
     cont.innerHTML = "";
     $("#envio-direccion").hidden = true;
@@ -1373,9 +1433,9 @@ function actualizarEnvioCostoEstado(items) {
   // El aviso de arriba rotula el paso 1 (las tarjetas de modalidad); el rótulo
   // de los correos va pegado a su propia lista, si no parece que nombra a las
   // tarjetas que tiene encima.
-  el.textContent = hayQueElegir ? "📦 ¿Cómo querés recibirlo?" : "📦 Elegí el correo:";
+  el.textContent = hayQueElegir ? "¿Cómo querés recibirlo?" : "Elegí el correo:";
   cont.hidden = false;
-  cont.innerHTML = (hayQueElegir ? `<p class="envio-opciones__titulo">${envioModalidad === "sucursal" ? "🏤" : "🚚"} Elegí el correo</p>` : "") +
+  cont.innerHTML = (hayQueElegir ? `<p class="envio-opciones__titulo">${icono(envioModalidad === "sucursal" ? "pin" : "camion")} Elegí el correo</p>` : "") +
     deLaModalidad.map((o) => {
     const marcada = o.clave === envioOpcionElegida;
     // Un mismo correo puede traer varios servicios (paq.ar da Clásico y
@@ -1417,13 +1477,13 @@ function tarjetasModalidad() {
     if (!deEse.length) return "";
     const desde = Math.min(...deEse.map((o) => o.precio));
     const activa = envioModalidad === tipo;
-    const icono = tipo === "sucursal" ? "🏤" : "🚚";
+    const dibujo = icono(tipo === "sucursal" ? "pin" : "camion");
     const titulo = tipo === "sucursal" ? "A sucursal" : "A domicilio";
     const detalle = tipo === "sucursal" ? "Lo retirás vos" : "Te lo llevan";
     return `<label class="modalidad${activa ? " modalidad--activa" : ""}">
         <input type="radio" name="envio-modalidad" value="${tipo}" ${activa ? "checked" : ""}>
         <span class="modalidad__datos">
-          <span class="modalidad__titulo">${icono} ${titulo}</span>
+          <span class="modalidad__titulo">${dibujo} ${titulo}</span>
           <span class="modalidad__detalle">${detalle} · desde ${formatear(desde)}</span>
         </span>
       </label>`;
@@ -1460,7 +1520,7 @@ function listaSucursales(sucursales) {
   const falta = !envioSucursalElegida;
   return `<div class="sucursales">
       <p class="sucursales__titulo${falta ? " sucursales__titulo--falta" : ""}">
-        ${falta ? "🏤 Elegí dónde retirarlo" : "🏤 Retirás el pedido en"}
+        ${icono("pin")} ${falta ? "Elegí dónde retirarlo" : "Retirás el pedido en"}
       </p>
       ${filas}
     </div>`;
@@ -1694,7 +1754,7 @@ function actualizarClub() {
   const el = $("#club-saldo");
   if (!el) return;
   if (saldoPuntos !== null && emailValido(emailCliente())) {
-    el.textContent = `Tenés ${saldoPuntos} puntos ⭐`;
+    el.textContent = `Tenés ${saldoPuntos} puntos`;
   }
 }
 
@@ -1711,7 +1771,7 @@ async function consultarClub() {
   btn.disabled = true;
   try {
     saldoPuntos = await consultarPuntos(email);
-    $("#club-saldo").textContent = `Tenés ${saldoPuntos} puntos ⭐`;
+    $("#club-saldo").textContent = `Tenés ${saldoPuntos} puntos`;
     renderCarrito();
   } catch (err) {
     mostrarToast(`⚠️ ${err.message}`);
@@ -1766,7 +1826,7 @@ function abrirModal(id) {
     <div class="modal__body" data-card="${p.id}">
       <button class="modal__close" aria-label="Cerrar">✕</button>
       <h3>${p.nombre}</h3>
-      ${(p.region || p.origen) ? `<p class="modal__region">📍 ${p.region || p.origen}</p>` : ""}
+      ${(p.region || p.origen) ? `<p class="modal__region">${icono("pin")} ${escaparHtml(p.region || p.origen)}</p>` : ""}
       <p class="modal__desc">${p.descripcion || ""}</p>
       <div class="modal__specs">
         ${p.variedad ? `<div><strong>Variedad</strong>${p.variedad}</div>` : ""}

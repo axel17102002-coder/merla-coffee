@@ -141,6 +141,15 @@ una regla de precio/punto, va acá y aplica en ambos lados a la vez.
   `og:`, precio y stock del producto en el HTML, para Google Merchant, Meta y las
   vistas previas de links. Si cambiás las etiquetas del `<head>` de `index.html`,
   revisá que los selectores de `paginaTienda` (`src/worker.js`) sigan encontrándolas.
+- **Agotados en la tienda**: la grilla muestra solo productos con stock; los
+  agotados van en la fila "Vuelven pronto" (`renderGrilla` en `app.js`) y los
+  agotados marcados `descontinuado` no se muestran. Para que un café agotado
+  desaparezca de la tienda, marcarlo descontinuado en el panel.
+- **Reseñas**: tabla `resenas` (migración `migracion-resenas.sql`), se cargan a
+  mano en `/admin → Reseñas` y llegan a la tienda dentro de `/api/tienda`. Son
+  opiniones reales de clientes: no cargues texto de ejemplo en producción.
+- **Íconos**: sprite SVG al principio de `index.html` (`<symbol id="i-...">`),
+  se usan con `icono("nombre")` en `app.js`. Para uno nuevo, sumá el `<symbol>`.
 - **Pasarelas de pago**: se prenden/apagan en `motor.js` → `CONFIG.pagos`. Hoy
   Mercado Pago activo, MODO implementado pero apagado.
 - **Sin credenciales de un servicio no se rompe nada**: mails (Brevo) y envío a

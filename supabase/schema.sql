@@ -123,6 +123,17 @@ create table if not exists cupones_usados (
   unique (codigo, email)
 );
 
+-- Reseñas de clientes para la tienda (se cargan desde /admin → Reseñas)
+create table if not exists resenas (
+  id uuid primary key default gen_random_uuid(),
+  nombre text not null check (char_length(nombre) between 1 and 60),
+  texto text not null check (char_length(texto) between 1 and 400),
+  detalle text check (detalle is null or char_length(detalle) <= 60),
+  estrellas smallint not null default 5 check (estrellas between 1 and 5),
+  activo boolean not null default true,
+  creado timestamptz not null default now()
+);
+
 -- ---------- Seguridad ----------
 -- RLS activado sin políticas públicas: solo la service_role key (las funciones
 -- de Netlify) puede leer/escribir. El navegador nunca toca la base directo.
@@ -133,6 +144,7 @@ alter table cupones enable row level security;
 alter table cupones_usados enable row level security;
 alter table clientes enable row level security;
 alter table pedidos enable row level security;
+alter table resenas enable row level security;
 
 -- ---------- Función atómica: aprobar pedido ----------
 -- La llama el webhook de MODO (o la confirmación del navegador) cuando el pago

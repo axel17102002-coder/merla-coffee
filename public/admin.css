@@ -463,3 +463,14 @@ button:disabled { opacity: .55; cursor: wait; }
 .pedido__cancelar-botones .pedido__cancelar-ok { background: var(--rojo); border-color: var(--rojo); color: #fff; }
 /* Con "Cancelar" son tres botones: en celular el de mail se acorta para que sigan en un renglón */
 @media (max-width: 560px) { .pedido__largo { display: none; } }
+
+/* Reseñas de clientes (pestaña Reseñas) */
+.resena-form__fila { display: grid; grid-template-columns: 1fr 1.4fr auto; gap: 8px; }
+.resena-form__fila select { width: auto; }
+.resena-form__acciones { display: flex; justify-content: flex-end; gap: 8px; }
+.resena-fila__texto { color: var(--texto); font-size: .92rem; line-height: 1.45; white-space: pre-line; }
+.resena-fila__estrellas { color: #b07a42; letter-spacing: 1px; }
+@media (max-width: 560px) {
+  .resena-form__fila { grid-template-columns: 1fr; }
+  .resena-form__fila select { width: 100%; }
+}

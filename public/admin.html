@@ -171,6 +171,7 @@
           <button id="tab-envio">🚚 Envío</button>
           <button id="tab-mercadopago">💳 Mercado Pago</button>
           <button id="tab-cupones">Cupones</button>
+          <button id="tab-resenas">Reseñas</button>
         </div>
 
         <!-- VISTA UNIFICADA: Productos y Stock -->
@@ -429,6 +430,32 @@
             </form>
             <p class="mensaje" id="cupon-message"></p>
             <div class="lista" id="cupones"></div>
+          </div>
+
+          <!-- Reseñas: se muestran en la tienda ("Lo que dicen de Merla").
+               Solo opiniones reales, copiadas de lo que mandan los clientes. -->
+          <div id="vista-resenas" hidden>
+            <p class="panel__hint">Cargá opiniones <strong>reales</strong> de clientes (de WhatsApp, Instagram o mail, con su permiso). Aparecen en la tienda debajo de los cafés; sin ninguna publicada, la sección no se muestra.</p>
+            <form class="cupon-form" id="resena-form">
+              <div class="resena-form__fila">
+                <input id="resena-nombre" placeholder="Nombre (ej. Sofía)" maxlength="60" required aria-label="Nombre de quien opina">
+                <input id="resena-detalle" placeholder="Detalle opcional (ej. La Plata · Brasil Sertão)" maxlength="60" aria-label="Detalle opcional">
+                <select id="resena-estrellas" aria-label="Estrellas">
+                  <option value="5">★★★★★</option>
+                  <option value="4">★★★★</option>
+                  <option value="3">★★★</option>
+                  <option value="2">★★</option>
+                  <option value="1">★</option>
+                </select>
+              </div>
+              <textarea id="resena-texto" rows="3" maxlength="400" required placeholder="Lo que dijo, tal cual (máx. 400 caracteres)" aria-label="Texto de la reseña"></textarea>
+              <div class="resena-form__acciones">
+                <button type="button" class="pm__cancelar" id="resena-cancelar" hidden>Cancelar edición</button>
+                <button type="submit" id="resena-guardar">Publicar reseña</button>
+              </div>
+            </form>
+            <p class="mensaje" id="resena-message"></p>
+            <div class="lista" id="resenas"></div>
           </div>
 
 

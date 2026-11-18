@@ -2361,6 +2361,115 @@ $("#cupones").addEventListener("click", async (e) => {
   }
 });
 
+// ===== Reseñas de clientes =====
+// Las que se muestran en la tienda. Solo opiniones reales, cargadas a mano.
+let resenasCache = [];
+let resenaEditando = null; // id de la reseña que se está editando
+
+function renderResenasAdmin() {
+  const contenedor = $("#resenas");
+  if (!resenasCache.length) {
+    contenedor.innerHTML = `<div class="vacio">Todavía no cargaste reseñas. Cuando un cliente te mande una opinión, copiala acá.</div>`;
+    return;
+  }
+  contenedor.innerHTML = resenasCache.map((r) => `<article class="fila${r.activo ? "" : " fila--inactivo"}">
+      <div class="fila__info" style="flex: 1 1 320px">
+        <strong>${escapar(r.nombre)} <span class="resena-fila__estrellas">${"★".repeat(r.estrellas || 5)}</span></strong>
+        ${r.detalle ? `<span class="fila__dato">${escapar(r.detalle)}</span>` : ""}
+        <span class="resena-fila__texto">${escapar(r.texto)}</span>
+        <span class="fila__dato">${r.activo ? "Publicada" : "Oculta"} · ${escapar(new Date(r.creado).toLocaleDateString("es-AR", { dateStyle: "medium" }))}</span>
+      </div>
+      <div class="fila__form">
+        <button class="sec" data-resena-editar="${escapar(r.id)}">Editar</button>
+        <button class="${r.activo ? "sec" : ""}" data-resena-toggle="${escapar(r.id)}" data-activo="${r.activo}">${r.activo ? "Ocultar" : "Publicar"}</button>
+        <button class="sec" data-resena-borrar="${escapar(r.id)}">Borrar</button>
+      </div>
+    </article>`).join("");
+}
+
+async function cargarResenas() {
+  mensaje("#resena-message", "Cargando reseñas…");
+  try {
+    const datos = await api("/api/admin-resenas");
+    resenasCache = Array.isArray(datos.resenas) ? datos.resenas : [];
+    renderResenasAdmin();
+    mensaje("#resena-message", "");
+  } catch (err) {
+    mensaje("#resena-message", `⚠️ ${err.message}`);
+  }
+}
+
+function terminarEdicionResena() {
+  resenaEditando = null;
+  $("#resena-form").reset();
+  $("#resena-guardar").textContent = "Publicar reseña";
+  $("#resena-cancelar").hidden = true;
+}
+
+$("#resena-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const boton = $("#resena-guardar");
+  boton.disabled = true;
+  try {
+    await api("/api/admin-resenas", {
+      method: "POST",
+      body: JSON.stringify({
+        id: resenaEditando || undefined,
+        nombre: $("#resena-nombre").value,
+        detalle: $("#resena-detalle").value,
+        estrellas: Number($("#resena-estrellas").value),
+        texto: $("#resena-texto").value,
+      }),
+    });
+    const aviso = resenaEditando ? "✅ Reseña actualizada" : "✅ Reseña publicada en la tienda";
+    terminarEdicionResena();
+    await cargarResenas(); // primero recargar: si no, la carga borra el aviso
+    mensaje("#resena-message", aviso, true);
+  } catch (err) {
+    mensaje("#resena-message", `⚠️ ${err.message}`);
+  } finally {
+    boton.disabled = false;
+  }
+});
+$("#resena-cancelar").addEventListener("click", terminarEdicionResena);
+
+$("#resenas").addEventListener("click", async (e) => {
+  const editar = e.target.closest("[data-resena-editar]");
+  if (editar) {
+    const r = resenasCache.find((x) => x.id === editar.dataset.resenaEditar);
+    if (!r) return;
+    resenaEditando = r.id;
+    $("#resena-nombre").value = r.nombre;
+    $("#resena-detalle").value = r.detalle || "";
+    $("#resena-estrellas").value = String(r.estrellas || 5);
+    $("#resena-texto").value = r.texto;
+    $("#resena-guardar").textContent = "Guardar cambios";
+    $("#resena-cancelar").hidden = false;
+    $("#resena-form").scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+  const boton = e.target.closest("[data-resena-toggle], [data-resena-borrar]");
+  if (!boton) return;
+  const borrar = boton.dataset.resenaBorrar;
+  if (borrar && !confirm("¿Borrar esta reseña? No se puede deshacer (si solo querés sacarla de la tienda, usá Ocultar).")) return;
+  boton.disabled = true;
+  try {
+    if (borrar) {
+      await api(`/api/admin-resenas?id=${encodeURIComponent(borrar)}`, { method: "DELETE" });
+      if (resenaEditando === borrar) terminarEdicionResena();
+    } else {
+      await api("/api/admin-resenas", {
+        method: "PATCH",
+        body: JSON.stringify({ id: boton.dataset.resenaToggle, activo: boton.dataset.activo !== "true" }),
+      });
+    }
+    cargarResenas();
+  } catch (err) {
+    mensaje("#resena-message", `⚠️ ${err.message}`);
+    boton.disabled = false;
+  }
+});
+
 // ===== Alta de producto =====
 // Tipo de producto: 'cafe' (fórmula por kilo) o 'simple' (precio fijo a mano)
 let productoTipo = "cafe";
@@ -2542,6 +2651,7 @@ const TABS = {
   "tab-envio": { vista: "vista-envio", cargar: cargarPrecios, grupo: "config", cargado: false },
   "tab-mercadopago": { vista: "vista-mercadopago", cargar: cargarPrecios, grupo: "config", cargado: false },
   "tab-cupones": { vista: "vista-cupones", cargar: cargarCupones, cargado: false },
+  "tab-resenas": { vista: "vista-resenas", cargar: cargarResenas, cargado: false },
 };
 
 // Marca (o desmarca) todas las pestañas de un grupo de una vez

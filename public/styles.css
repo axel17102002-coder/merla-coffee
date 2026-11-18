@@ -1597,3 +1597,180 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 @media (max-width: 720px) {
   .club { grid-template-columns: 1fr; }
 }
+
+/* ===== Íconos de línea (sprite en index.html) ===== */
+/* Toman el color del texto que los rodea. Reemplazan a los emojis, que cambian
+   de dibujo según el celular. */
+.icono {
+  width: 1.15em;
+  height: 1.15em;
+  flex: none;
+  display: inline-block;
+  vertical-align: -0.2em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.icono--lleno { fill: currentColor; }
+.icono--titulo { color: var(--caramelo); width: 1em; height: 1em; vertical-align: -0.12em; margin-right: 4px; }
+.icono--grande { width: 2.6rem; height: 2.6rem; display: block; margin: 0 auto 12px; stroke-width: 1.4; color: var(--caramelo); }
+.announcement__item .icono { margin-right: 4px; }
+.hero__tag { display: inline-flex; align-items: center; gap: 8px; }
+.hero__tag .icono { color: var(--caramelo); }
+.benefit__icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--crema-suave);
+  border: 1px solid var(--crema-borde);
+  color: var(--verde);
+  font-size: 1rem;
+}
+.benefit__icon .icono { width: 21px; height: 21px; vertical-align: 0; }
+.card__stock--ultima { display: inline-flex; align-items: center; gap: 5px; }
+.card__stock--ultima .icono { width: 1.1em; height: 1.1em; vertical-align: 0; }
+.modal__region .icono { vertical-align: -0.18em; }
+.cart__empty .icono--grande { color: var(--caramelo); }
+
+/* ===== Agotados que vuelven: fila chica debajo de la grilla ===== */
+.pronto { margin-top: clamp(24px, 4vw, 40px); }
+.pronto__titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--fuente-display);
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--verde);
+  margin-bottom: 12px;
+}
+.pronto__titulo .icono { color: var(--caramelo); vertical-align: 0; }
+.pronto__lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+.pronto__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px 8px 8px;
+  background: var(--blanco);
+  border: 1px solid var(--crema-borde);
+  border-radius: 14px;
+  font-family: var(--fuente-texto);
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.pronto__item:hover { border-color: var(--caramelo); box-shadow: var(--sombra-suave); }
+.pronto__img {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--crema-suave);
+  color: var(--caramelo);
+}
+.pronto__img img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(0.85); opacity: 0.8; }
+.pronto__texto { display: flex; flex-direction: column; min-width: 0; }
+.pronto__nombre { font-weight: 700; color: var(--verde); font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pronto__origen { font-size: 0.76rem; color: #66705f; }
+
+/* ===== Reseñas de clientes ===== */
+.resenas__lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+}
+.resena {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 22px;
+  background: var(--blanco);
+  border: 1px solid var(--crema-borde);
+  border-radius: var(--radio);
+}
+.resena__estrellas { display: flex; gap: 2px; color: var(--caramelo); }
+.resena__estrellas .icono { width: 17px; height: 17px; }
+.resena__estrellas .icono--vacio { color: var(--crema-borde); }
+.resena__texto { margin: 0; color: var(--tinta); font-size: 0.98rem; line-height: 1.55; flex: 1; }
+.resena__autor { display: flex; flex-direction: column; font-size: 0.85rem; color: #66705f; }
+.resena__autor strong { color: var(--verde); font-size: 0.92rem; }
+
+/* ===== Celular: primero lo que se compra ===== */
+@media (max-width: 720px) {
+  /* Inicio: el texto y el botón arriba, la foto más baja debajo. Antes la foto
+     ocupaba toda la primera pantalla y el primer café quedaba a 2,5 pantallas. */
+  .hero { padding: 22px 16px 26px; gap: 20px; }
+  .hero__img { order: 0; max-width: none; }
+  .hero__img img { aspect-ratio: 16 / 11; }
+  .hero__img::before { inset: 8px -8px -8px 8px; }
+  .hero__kicker { font-size: 0.66rem; margin-bottom: 14px; padding: 5px 12px; }
+  .hero h1 { font-size: 2rem; }
+  .hero__sub { margin: 12px 0 18px; font-size: 0.96rem; }
+  .hero__cta { gap: 10px; }
+  .hero__cta .btn { flex: 1 1 auto; text-align: center; padding-left: 18px; padding-right: 18px; }
+  .hero__tag { bottom: 12px; left: 12px; font-size: 0.78rem; padding: 8px 12px; }
+
+  /* Beneficios en 2×2 (antes, cuatro tarjetas una debajo de otra) */
+  .benefits { grid-template-columns: repeat(2, 1fr); gap: 10px; padding-bottom: 28px; }
+  .benefit { flex-direction: column; gap: 8px; padding: 14px; }
+  .benefit strong { font-size: 0.84rem; }
+  .benefit p { font-size: 0.74rem; }
+
+  .pronto__lista { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; scrollbar-width: none; }
+  .pronto__lista::-webkit-scrollbar { display: none; }
+  .pronto__item { flex: 0 0 72%; scroll-snap-align: start; }
+
+  .resenas__lista { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 12px; padding-bottom: 6px; scrollbar-width: none; }
+  .resenas__lista::-webkit-scrollbar { display: none; }
+  .resena { flex: 0 0 85%; scroll-snap-align: start; padding: 18px; }
+}
+
+/* Tarjetas de producto en celular: foto a la izquierda y datos a la derecha.
+   Antes cada tarjeta ocupaba una pantalla entera; así entran unas tres. */
+@media (max-width: 560px) {
+  .grid { gap: 12px; }
+  .card { flex-direction: row; }
+  .card:hover { transform: none; }
+  .card__img { flex: 0 0 36%; min-height: 100%; }
+  .card__img img { position: absolute; inset: 0; height: 100%; aspect-ratio: auto; }
+  .card__img:hover img { transform: none; }
+  .card__origin { top: 8px; left: 8px; font-size: 0.64rem; padding: 3px 8px; }
+  .card__sca { display: none; }
+  .card__stock--ultima {
+    top: auto;
+    bottom: 8px;
+    left: 6px;
+    right: 6px;
+    justify-content: center;
+    padding: 4px 6px;
+    font-size: 0.58rem;
+    letter-spacing: 0.02em;
+    white-space: normal;
+    text-align: center;
+  }
+  .card__stock { bottom: 8px; right: 6px; left: 6px; text-align: center; font-size: 0.62rem; padding: 3px 6px; }
+  .card__body { padding: 12px 12px 12px 14px; gap: 7px; min-width: 0; }
+  .card__body h3 { font-size: 1.08rem; line-height: 1.2; }
+  .card__notes { gap: 4px; }
+  .chip { font-size: 0.66rem; padding: 2px 7px; }
+  .card__more { font-size: 0.76rem; }
+  .pres { gap: 5px; }
+  .pres__btn { padding: 6px 4px; font-size: 0.74rem; }
+  .card__foot { gap: 6px; align-items: flex-end; }
+  .card__price { font-size: 1.12rem; }
+  .precio-transf { font-size: 0.64rem; }
+  .card__add { padding: 8px 14px; font-size: 0.8rem; }
+}

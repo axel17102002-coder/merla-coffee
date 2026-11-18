@@ -2,7 +2,7 @@
 // Catálogo público: productos activos con stock y presentaciones, más la
 // configuración de descuentos y Club Merla. Es lo que carga la web al abrir.
 
-const { obtenerCatalogo } = require("../lib/supabase.js");
+const { obtenerCatalogo, sb } = require("../lib/supabase.js");
 const { ambienteMp } = require("../lib/mercadopago.js");
 const { CONFIG } = require("../../public/motor.js");
 
@@ -18,9 +18,21 @@ function sinCostos(producto) {
   return limpio;
 }
 
+// Reseñas publicadas, las más nuevas primero. Si la tabla todavía no existe
+// (falta migracion-resenas.sql) o falla, la tienda carga igual, sin reseñas.
+async function resenasPublicadas() {
+  try {
+    return await sb("resenas?select=nombre,texto,detalle,estrellas&activo=is.true&order=creado.desc&limit=12");
+  } catch (err) {
+    console.warn("tienda: sin reseñas (¿falta migracion-resenas.sql?):", err.message);
+    return [];
+  }
+}
+
 exports.handler = async () => {
   try {
-    const productos = (await obtenerCatalogo()).map(sinCostos);
+    const [catalogo, resenas] = await Promise.all([obtenerCatalogo(), resenasPublicadas()]);
+    const productos = catalogo.map(sinCostos);
     return {
       statusCode: 200,
       headers: {
@@ -29,6 +41,7 @@ exports.handler = async () => {
       },
       body: JSON.stringify({
         productos,
+        resenas,
         // pagoAmbiente le avisa al frontend si el cobro online es de prueba
         // Lista explícita: NO mandamos todo CONFIG para no filtrar nada
         // sensible sin querer (los costos y márgenes viven en la base y son
