@@ -1819,3 +1819,63 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 .form-resena__nota { font-size: 0.8rem; color: #66705f; margin-top: -4px; }
 .form-resena--gracias { align-items: center; text-align: center; }
 .form-resena--gracias h3 { padding-right: 0; }
+
+/* ===== Perfil de sabor (dulzor, acidez, cuerpo de 1 a 5) ===== */
+.perfil { display: grid; gap: 4px; margin: 0; }
+.perfil__fila { display: grid; grid-template-columns: 58px 1fr; align-items: center; gap: 8px; }
+.perfil dt { font-size: 0.74rem; font-weight: 700; color: #5a6552; }
+.perfil dd { display: flex; gap: 4px; margin: 0; }
+.perfil__punto { width: 9px; height: 9px; border-radius: 50%; background: var(--crema-borde); }
+.perfil__punto.lleno { background: var(--caramelo); }
+.perfil--modal { margin: 4px 0 16px; gap: 6px; }
+.perfil--modal .perfil__fila { grid-template-columns: 72px 1fr; }
+.perfil--modal dt { font-size: 0.82rem; }
+.perfil--modal .perfil__punto { width: 12px; height: 12px; }
+
+/* Precio por taza, al lado del precio */
+.card__precio-fila { display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 6px; }
+.precio-taza { font-size: 0.74rem; font-weight: 600; color: #66705f; }
+
+/* ===== ¿Cuál es para vos? ===== */
+.para-vos {
+  max-width: 640px;
+  margin: 0 auto clamp(20px, 3vw, 28px);
+  padding: 16px 18px;
+  background: var(--blanco);
+  border: 1px solid var(--crema-borde);
+  border-radius: var(--radio);
+  text-align: center;
+}
+.para-vos__titulo { font-family: var(--fuente-display); font-weight: 800; font-size: 1.15rem; color: var(--verde); margin-bottom: 10px; }
+.para-vos__opciones { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.para-vos__opcion {
+  border: 1.5px solid var(--crema-borde);
+  background: var(--crema-suave);
+  color: var(--verde);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font: 700 0.86rem var(--fuente-texto);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.para-vos__opcion:hover { border-color: var(--caramelo); }
+.para-vos__opcion.activo { background: var(--verde); border-color: var(--verde); color: var(--crema); }
+.para-vos__resultado:empty { display: none; }
+.para-vos__sugerencia {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--crema-borde);
+  text-align: left;
+}
+.para-vos__sugerencia img { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; flex: none; }
+.para-vos__texto p { font-size: 0.95rem; color: var(--tinta); margin-bottom: 4px; }
+
+@media (max-width: 560px) {
+  /* En la tarjeta horizontal del celular no entra: el perfil se ve en la ficha */
+  .perfil--tarjeta { display: none; }
+  .para-vos { padding: 14px; }
+  .para-vos__opcion { padding: 7px 12px; font-size: 0.8rem; }
+}

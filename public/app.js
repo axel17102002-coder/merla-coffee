@@ -137,6 +137,7 @@ async function cargarTienda() {
     renderFiltros();
     renderProductos();
     renderCarrito();
+    renderParaVos();
     renderResenas();
     datosEstructuradosProductos(); // para que Google muestre precio y stock
     abrirProductoDeURL(); // deep-link ?producto=<id> (lo usan los feeds de ads)
@@ -271,6 +272,39 @@ function renderFiltros() {
   marcarDeslizables();
 }
 
+// ===== Perfil de sabor y precio por taza =====
+// Dulzor, acidez y cuerpo de 1 a 5 (se cargan en /admin). Si falta alguno, el
+// café no muestra perfil ni entra en "¿Cuál es para vos?".
+const PERFIL = [
+  ["perfil_dulzor", "Dulzor"],
+  ["perfil_acidez", "Acidez"],
+  ["perfil_cuerpo", "Cuerpo"],
+];
+function perfilDe(p) {
+  const valores = PERFIL.map(([clave]) => Number(p[clave]));
+  return valores.every((n) => Number.isInteger(n) && n >= 1 && n <= 5) ? valores : null;
+}
+
+function barrasPerfil(p, clase = "") {
+  const perfil = perfilDe(p);
+  if (!perfil) return "";
+  return `<dl class="perfil ${clase}">${PERFIL.map(([, etiqueta], i) => `
+      <div class="perfil__fila">
+        <dt>${etiqueta}</dt>
+        <dd role="img" aria-label="${etiqueta}: ${perfil[i]} de 5">${Array.from({ length: 5 }, (_, j) =>
+          `<span class="perfil__punto${j < perfil[i] ? " lleno" : ""}"></span>`).join("")}</dd>
+      </div>`).join("")}
+    </dl>`;
+}
+
+// Una drip bag es una taza: el precio por taza es lo que conviene mirar (y en el
+// pack, cuánto sale cada una). Las tazas y el café en bolsa no lo llevan.
+function textoTaza(p, pres) {
+  if (!pres || p.tipo === "simple") return "";
+  const unidades = Number(pres.unidades_stock) || 1;
+  return unidades === 1 ? "la taza" : `${formatear(Math.round(pres.precio / unidades))} la taza`;
+}
+
 // ===== Render de productos =====
 function selectorPresentaciones(p) {
   const opciones = presentacionesDe(p);
@@ -282,7 +316,7 @@ function selectorPresentaciones(p) {
           const ahorro = ahorroDe(p, o);
           return `
         <button class="pres__btn ${i === 0 ? "activo" : ""}" data-pres="${o.id}"
-          data-precio="${o.precio}" ${o.unidades_stock > p.stock ? "disabled" : ""}>
+          data-precio="${o.precio}" data-taza="${escaparAttr(textoTaza(p, o))}" ${o.unidades_stock > p.stock ? "disabled" : ""}>
           ${o.nombre}${ahorro > 0 ? ` <em>-${ahorro}%</em>` : ""}
         </button>`;
         })
@@ -326,11 +360,15 @@ function tarjetaProducto(p, i) {
       <div class="card__body">
         <h3>${p.nombre}</h3>
         <div class="card__notes">${p.notas.map((n) => `<span class="chip">${n}</span>`).join("")}</div>
+        ${barrasPerfil(p, "perfil--tarjeta")}
         <button class="card__more" data-modal="${p.id}">Ver detalle</button>
         ${p.stock > 0 ? selectorPresentaciones(p) : ""}
         <div class="card__foot">
           <div class="card__precios">
-            <span class="card__price" data-precio-de="${p.id}">${base ? formatear(base.precio) : ""}</span>
+            <span class="card__precio-fila">
+              <span class="card__price" data-precio-de="${p.id}">${base ? formatear(base.precio) : ""}</span>
+              ${textoTaza(p, base) ? `<span class="precio-taza" data-taza-de="${p.id}">${textoTaza(p, base)}</span>` : ""}
+            </span>
             ${base ? `<span class="precio-transf"><strong data-transf-de="${p.id}">${formatear(precioTransferencia(base.precio))}</strong> con transferencia</span>` : ""}
           </div>
           <button class="card__add" data-add="${p.id}" ${p.stock === 0 || !base ? "disabled" : ""}>
@@ -388,6 +426,56 @@ function miniaturaAgotado(p) {
       </span>
     </button>`;
 }
+
+// ===== ¿Cuál es para vos? =====
+// El cliente elige qué le gusta y se le recomienda el café con stock que mejor
+// encaja, según el perfil de sabor. Sin dos o más cafés con perfil cargado, el
+// bloque no aparece. Los puntajes ponderan lo que pide y castigan lo contrario.
+const GUSTOS = [
+  { id: "dulce", texto: "Dulce y suave", puntaje: ([d, a]) => d * 2 - a },
+  { id: "frutal", texto: "Frutal y brillante", puntaje: ([d, a, c]) => a * 2 + d * 0.3 - c * 0.5 },
+  { id: "intenso", texto: "Intenso, con cuerpo", puntaje: ([d, a, c]) => c * 2 + d * 0.5 - a * 0.5 },
+];
+let gustoElegido = null;
+
+function candidatosParaVos() {
+  return DATOS.productos.filter((p) => p.tipo !== "simple" && p.stock > 0 && perfilDe(p));
+}
+
+function renderParaVos() {
+  const caja = $("#para-vos");
+  if (!caja) return;
+  const candidatos = candidatosParaVos();
+  caja.hidden = candidatos.length < 2;
+  if (caja.hidden) return;
+  $("#para-vos-opciones").innerHTML = GUSTOS.map((g) =>
+    `<button type="button" class="para-vos__opcion${gustoElegido === g.id ? " activo" : ""}" data-gusto="${g.id}" aria-pressed="${gustoElegido === g.id}">${g.texto}</button>`
+  ).join("");
+
+  const gusto = GUSTOS.find((g) => g.id === gustoElegido);
+  if (!gusto) {
+    $("#para-vos-resultado").innerHTML = "";
+    return;
+  }
+  // El de mejor puntaje; si empatan, el que va primero en la tienda
+  const elegido = candidatos.reduce((mejor, p) => (gusto.puntaje(perfilDe(p)) > gusto.puntaje(perfilDe(mejor)) ? p : mejor));
+  const notas = (elegido.notas || []).slice(0, 3).join(", ").toLowerCase();
+  $("#para-vos-resultado").innerHTML = `
+    <div class="para-vos__sugerencia">
+      ${elegido.imagen ? `<img src="${escaparAttr(elegido.imagen)}" alt="" loading="lazy">` : ""}
+      <div class="para-vos__texto">
+        <p>Te va a gustar el <strong>${escaparHtml(elegido.nombre)}</strong>${notas ? `: ${escaparHtml(notas)}.` : "."}</p>
+        <button type="button" class="card__more" data-modal="${escaparAttr(elegido.id)}">Ver detalle y comprar</button>
+      </div>
+    </div>`;
+}
+
+document.addEventListener("click", (e) => {
+  const opcion = e.target.closest("[data-gusto]");
+  if (!opcion) return;
+  gustoElegido = gustoElegido === opcion.dataset.gusto ? null : opcion.dataset.gusto;
+  renderParaVos();
+});
 
 // ===== Reseñas de clientes =====
 // Vienen de /api/tienda (tabla `resenas`, cargadas a mano desde /admin). Sin
@@ -1830,6 +1918,7 @@ function abrirModal(id) {
       <h3>${p.nombre}</h3>
       ${(p.region || p.origen) ? `<p class="modal__region">${icono("pin")} ${escaparHtml(p.region || p.origen)}</p>` : ""}
       <p class="modal__desc">${p.descripcion || ""}</p>
+      ${barrasPerfil(p, "perfil--modal")}
       <div class="modal__specs">
         ${p.variedad ? `<div><strong>Variedad</strong>${p.variedad}</div>` : ""}
         ${p.proceso ? `<div><strong>Proceso</strong>${p.proceso}</div>` : ""}
@@ -1841,7 +1930,10 @@ function abrirModal(id) {
       ${p.stock > 0 ? selectorPresentaciones(p) : ""}
       <div class="modal__foot">
         <div class="card__precios">
-          <span class="modal__price" data-precio-de="${p.id}">${base ? formatear(base.precio) : ""}</span>
+          <span class="card__precio-fila">
+            <span class="modal__price" data-precio-de="${p.id}">${base ? formatear(base.precio) : ""}</span>
+            ${textoTaza(p, base) ? `<span class="precio-taza" data-taza-de="${p.id}">${textoTaza(p, base)}</span>` : ""}
+          </span>
           ${base ? `<span class="precio-transf"><strong data-transf-de="${p.id}">${formatear(precioTransferencia(base.precio))}</strong> con transferencia</span>` : ""}
         </div>
         <button class="btn btn--primary" data-add-modal="${p.id}" ${p.stock === 0 || !base ? "disabled" : ""}>
@@ -1958,6 +2050,8 @@ document.addEventListener("click", (e) => {
     if (precioEl) precioEl.textContent = formatear(Number(presBtn.dataset.precio));
     const transfEl = contenedor.querySelector("[data-transf-de]");
     if (transfEl) transfEl.textContent = formatear(precioTransferencia(Number(presBtn.dataset.precio)));
+    const tazaEl = contenedor.querySelector("[data-taza-de]");
+    if (tazaEl) tazaEl.textContent = presBtn.dataset.taza || "";
     return;
   }
 

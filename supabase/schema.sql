@@ -25,8 +25,15 @@ create table if not exists productos (
   notas text,          -- separadas por "; "
   descripcion text,
   imagen text,
+  -- Perfil de sabor de 1 a 5 (migracion-perfil.sql): barritas en la tienda y "¿Cuál es para vos?"
+  perfil_dulzor smallint check (perfil_dulzor is null or perfil_dulzor between 1 and 5),
+  perfil_acidez smallint check (perfil_acidez is null or perfil_acidez between 1 and 5),
+  perfil_cuerpo smallint check (perfil_cuerpo is null or perfil_cuerpo between 1 and 5),
   creado timestamptz not null default now()
 );
+alter table productos add column if not exists perfil_dulzor smallint;
+alter table productos add column if not exists perfil_acidez smallint;
+alter table productos add column if not exists perfil_cuerpo smallint;
 
 create table if not exists presentaciones (
   id text primary key,

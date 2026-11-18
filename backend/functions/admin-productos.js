@@ -36,6 +36,9 @@ const texto = (v, max = 400) => {
   return s ? s.slice(0, max) : null;
 };
 
+// Perfil de sabor, de 1 a 5 (vacío = sin dato)
+const PERFIL = ["perfil_dulzor", "perfil_acidez", "perfil_cuerpo"];
+
 const LIMITES_TEXTO = {
   nombre: 60, origen: 60, region: 80, variedad: 80, proceso: 60,
   sca: 10, tostador: 60, notas: 200, descripcion: 600, imagen: 400,
@@ -48,8 +51,15 @@ exports.handler = async (event) => {
   try {
     if (event.httpMethod === "GET") {
       let productos;
+      const completos = "id,nombre,activo,stock,origen,region,variedad,proceso,sca,tostador,notas,descripcion,imagen,tipo,categoria,descontinuado";
       try {
-        productos = await sb("productos?select=id,nombre,activo,stock,origen,region,variedad,proceso,sca,tostador,notas,descripcion,imagen,tipo,categoria,descontinuado&order=nombre.asc");
+        try {
+          productos = await sb(`productos?select=${completos},${PERFIL.join(",")}&order=nombre.asc`);
+        } catch (err) {
+          // Sin migracion-perfil.sql: el panel no muestra el perfil de sabor
+          console.warn("admin-productos: sin perfil de sabor todavía (correr migracion-perfil.sql):", err.message);
+          productos = await sb(`productos?select=${completos}&order=nombre.asc`);
+        }
       } catch (err) {
         console.warn("admin-productos: sin columna categoria/descontinuado todavía (correr migraciones):", err.message);
         try {
@@ -208,6 +218,11 @@ exports.handler = async (event) => {
       // y la foto (solo se reemplaza). El id no cambia: lo usan las presentaciones.
       for (const [campo, max] of Object.entries(LIMITES_TEXTO)) {
         if (body[campo] !== undefined) cambios[campo] = texto(body[campo], max);
+      }
+      for (const campo of PERFIL) {
+        if (body[campo] === undefined) continue;
+        const n = Number.parseInt(body[campo], 10);
+        cambios[campo] = n >= 1 && n <= 5 ? n : null;
       }
       if (cambios.nombre === null) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: "El nombre no puede quedar vacío" }) };

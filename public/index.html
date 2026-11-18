@@ -246,6 +246,13 @@
           <h3>Nuestras drip bags</h3>
           <p>Seleccionamos microlotes de Sudamérica, tostados por los mejores tostadores del país. Cada drip bag rinde una taza de 200 cc.</p>
         </div>
+        <!-- Recomendación según el gusto. Usa el perfil de sabor (dulzor,
+             acidez, cuerpo) que se carga en /admin; sin perfiles, no aparece. -->
+        <div class="para-vos" id="para-vos" hidden>
+          <p class="para-vos__titulo">¿Cuál es para vos?</p>
+          <div class="para-vos__opciones" id="para-vos-opciones" role="group" aria-label="Elegí lo que te gusta"></div>
+          <div class="para-vos__resultado" id="para-vos-resultado" aria-live="polite"></div>
+        </div>
         <div class="filtros region-filtros" hidden></div>
         <div class="grid" id="product-grid"></div>
       </div>

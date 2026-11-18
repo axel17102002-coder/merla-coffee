@@ -478,3 +478,6 @@ button:disabled { opacity: .55; cursor: wait; }
 .resena-fila__chip { display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px; background: #e6efe3; color: #3f7a4c; font-size: .7rem; font-weight: 800; vertical-align: 2px; }
 .resena-fila__chip--nueva { background: #f6e3cb; color: #8a5420; }
 .panel__tabs button.tab-aviso:not(.tab-activo) { color: #8a5420; font-weight: 800; }
+.fila__editor-perfil-titulo { font-weight: 700; font-size: .86rem; color: var(--verde); margin-bottom: 6px; }
+.fila__editor-perfil-titulo span { font-weight: 400; color: var(--gris); }
+.fila__editor select { border: 1px solid var(--borde); border-radius: 9px; padding: 10px 11px; width: 100%; background: #fff; }

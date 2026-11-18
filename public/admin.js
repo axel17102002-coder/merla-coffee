@@ -1178,6 +1178,14 @@ function filaProductoStock(p) {
 
 // Formulario para corregir los datos de un producto, abierto dentro de su fila.
 // Stock, precios y publicación se manejan aparte: acá no se tocan.
+// Selector de 1 a 5 (o vacío) para el perfil de sabor de un café
+function selectorPerfil(p, clave, etiqueta) {
+  const actual = Number(p[clave]) || 0;
+  const opciones = [`<option value=""${actual ? "" : " selected"}>Sin dato</option>`]
+    .concat([1, 2, 3, 4, 5].map((n) => `<option value="${n}"${n === actual ? " selected" : ""}>${n} · ${"●".repeat(n)}${"○".repeat(5 - n)}</option>`));
+  return `<label class="pm__campo">${etiqueta}<select data-ed="${clave}">${opciones.join("")}</select></label>`;
+}
+
 function formularioDatosProducto(p) {
   const campo = (clave, etiqueta, max) => `<label class="pm__campo">${etiqueta}
       <input data-ed="${clave}" maxlength="${max}" value="${escapar(p[clave])}"></label>`;
@@ -1191,7 +1199,11 @@ function formularioDatosProducto(p) {
         ${campo("variedad", "Variedad", 80)}${campo("proceso", "Proceso", 60)}
         ${campo("tostador", "Tostador", 60)}${campo("sca", "Puntaje SCA", 10)}
       </div>
-      ${campo("notas", "Notas separadas por ;", 200)}` : ""}
+      ${campo("notas", "Notas separadas por ;", 200)}
+      ${"perfil_dulzor" in p ? `<div class="fila__editor-perfil">
+        <p class="fila__editor-perfil-titulo">Perfil de sabor <span>(de 1 a 5; se ve en la tienda y en "¿Cuál es para vos?")</span></p>
+        <div class="fila__editor-grilla">${selectorPerfil(p, "perfil_dulzor", "Dulzor")}${selectorPerfil(p, "perfil_acidez", "Acidez")}${selectorPerfil(p, "perfil_cuerpo", "Cuerpo")}</div>
+      </div>` : ""}` : ""}
       <label class="pm__campo">Descripción
         <textarea data-ed="descripcion" maxlength="600" rows="3">${escapar(p.descripcion)}</textarea></label>
       <label class="prod-foto">

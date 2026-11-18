@@ -152,6 +152,10 @@ una regla de precio/punto, va acá y aplica en ambos lados a la vez.
   endpoint `/api/resena`). Las de clientes entran `pendiente` + `verificada`, no
   se publican hasta que el admin las aprueba y no se editan. Son opiniones
   reales: no cargues texto de ejemplo en producción.
+- **Perfil de sabor**: `productos.perfil_dulzor/acidez/cuerpo` (1 a 5, migración
+  `migracion-perfil.sql`), se editan en el panel. La tienda los usa para las
+  barritas y para "¿Cuál es para vos?" (`GUSTOS` en `app.js`); un café sin los
+  tres valores no muestra perfil ni entra en la recomendación.
 - **Íconos**: sprite SVG al principio de `index.html` (`<symbol id="i-...">`),
   se usan con `icono("nombre")` en `app.js`. Para uno nuevo, sumá el `<symbol>`.
 - **Pasarelas de pago**: se prenden/apagan en `motor.js` → `CONFIG.pagos`. Hoy
