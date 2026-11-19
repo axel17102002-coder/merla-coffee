@@ -236,3 +236,148 @@ test("al enriquecer el envío se guardan proveedor, servicio, plazo y transporti
   assert.equal(completo.direccion, "");
   assert.equal(completo.sucursal.id, "X5000");
 });
+
+// ===== Empaque centralizado (tara + tamaño de caja) =====
+
+const { calcularPaquete } = require("../backend/lib/empaque.js");
+
+test("el paquete suma el peso de los productos más la tara de la caja y elige tamaño acorde", () => {
+  const productos = [
+    { id: "andino", tipo: "cafe", presentaciones: [{ id: "andino-pack5", unidades_stock: 5 }] },
+    { id: "taza", tipo: "simple", categoria: "merch", presentaciones: [{ id: "taza-u", unidades_stock: 1 }] },
+  ];
+  const cfg = { pesoDripBagG: 18, pesoCafeBolsaG: 270, pesoMerchG: 350, pesoCajaG: 80 };
+
+  const chico = calcularPaquete([{ presentacion: "andino-pack5", qty: 2 }], productos, cfg);
+  assert.equal(chico.pesoGramos, 18 * 10 + 80); // 260 g
+  assert.equal(chico.caja, "chica");
+
+  const mediano = calcularPaquete([{ presentacion: "taza-u", qty: 2 }], productos, cfg);
+  assert.equal(mediano.pesoGramos, 350 * 2 + 80); // 780 g
+  assert.equal(mediano.caja, "mediana");
+
+  const grande = calcularPaquete([{ presentacion: "taza-u", qty: 6 }], productos, cfg);
+  assert.equal(grande.pesoGramos, 350 * 6 + 80); // 2180 g
+  assert.equal(grande.caja, "grande");
+});
+
+// ===== Envío local en La Plata =====
+
+const envioLocal = require("../backend/lib/envio-local.js");
+
+test("el envío local cubre los CPs de La Plata (incluso en formato CPA) y no otras provincias", async () => {
+  assert.equal(envioLocal.cubreDestino({ cp: "1900", provincia: "Buenos Aires" }), true);
+  assert.equal(envioLocal.cubreDestino({ cp: "B1900ABC", provincia: "Buenos Aires" }), true);
+  assert.equal(envioLocal.cubreDestino({ cp: "1904", provincia: "Buenos Aires" }), true);
+  assert.equal(envioLocal.cubreDestino({ cp: "5000", provincia: "Córdoba" }), false);
+  assert.equal(envioLocal.cubreDestino({ cp: "1425", provincia: "Ciudad Autónoma de Buenos Aires" }), false);
+
+  const r = await envioLocal.cotizarOpciones({ cp: "1900", provincia: "Buenos Aires", cfg: { envioLocalPrecio: 1500 } });
+  assert.equal(r.ok, true);
+  assert.equal(r.opciones.length, 1);
+  assert.equal(r.opciones[0].precio, 1500);
+  assert.equal(r.opciones[0].local, true);
+  assert.equal(proveedorDe(r.opciones[0].grupo).id, "local");
+});
+
+// ===== Deduplicación entre APIs directas y agregador =====
+
+const { deduplicarOpciones, aplicarEnvioGratis } = require("../backend/lib/envio-costo.js");
+
+test("si paq.ar y Zipnova cotizan Correo Argentino, se prioriza paq.ar directo sin duplicar", () => {
+  const mezcladas = [
+    { proveedor: "zipnova", tipo: "domicilio", transportista: "Correo Argentino S.A.", precio: 14000 },
+    { proveedor: "paqar", tipo: "domicilio", transportista: "Correo Argentino", servicio: "Clásico", precio: 7000 },
+    { proveedor: "paqar", tipo: "domicilio", transportista: "Correo Argentino", servicio: "Expreso", precio: 9500 },
+    { proveedor: "zipnova", tipo: "domicilio", transportista: "OCA", precio: 11000 },
+  ];
+  const limpias = deduplicarOpciones(mezcladas);
+  assert.equal(limpias.length, 3);
+  assert.ok(!limpias.some((o) => o.proveedor === "zipnova" && o.transportista.includes("Correo")));
+  assert.ok(limpias.some((o) => o.transportista === "OCA"));
+});
+
+test("si el proveedor directo no respondió, el agregador queda como respaldo", () => {
+  const soloZipnova = [
+    { proveedor: "zipnova", tipo: "sucursal", transportista: "Correo Argentino", precio: 12000 },
+  ];
+  assert.equal(deduplicarOpciones(soloZipnova).length, 1);
+});
+
+// ===== Envío gratis por monto =====
+
+test("el envío gratis bonifica el envío local y la opción más barata de cada modalidad", () => {
+  const opciones = [
+    { proveedor: "local", tipo: "domicilio", local: true, precio: 1500 },
+    { proveedor: "paqar", tipo: "domicilio", precio: 7000 },
+    { proveedor: "paqar", tipo: "domicilio", precio: 9500 },
+    { proveedor: "paqar", tipo: "sucursal", precio: 5500 },
+  ];
+  // Debajo del mínimo: no cambia nada
+  const sinGratis = aplicarEnvioGratis(opciones, 20000, { envioGratisDesde: 30000 });
+  assert.deepEqual(sinGratis.map((o) => o.precio), [1500, 7000, 9500, 5500]);
+
+  // Superando el mínimo: local + domicilio más barato + sucursal más barata pasan a $0
+  const conGratis = aplicarEnvioGratis(opciones, 35000, { envioGratisDesde: 30000 });
+  const local = conGratis.find((o) => o.local);
+  const domBarato = conGratis.find((o) => !o.local && o.tipo === "domicilio" && o.gratis);
+  const domCaro = conGratis.find((o) => !o.local && o.tipo === "domicilio" && !o.gratis);
+  const sucBarata = conGratis.find((o) => o.tipo === "sucursal");
+  assert.equal(local.precio, 0);
+  assert.equal(local.precioOriginal, 1500);
+  assert.equal(domBarato.precio, 0);
+  assert.equal(domBarato.precioOriginal, 7000);
+  assert.equal(domCaro.precio, 9500);
+  assert.equal(sucBarata.precio, 0);
+});
+
+// ===== Orden de sucursales por cercanía de CP =====
+
+test("las sucursales de paq.ar se ordenan por CP exacto, misma ciudad y luego CP más cercano", () => {
+  const lista = [
+    { code: "BAHIA", name: "Bahía Blanca", location: "Bahía Blanca", postalCode: "8000" },
+    { code: "LAPLATA", name: "La Plata Centro", location: "La Plata", postalCode: "1900" },
+    { code: "QUILMES", name: "Quilmes", location: "Quilmes", postalCode: "1878" },
+  ];
+  // Destino Berisso (1923): no tiene sucursal exacta, pero La Plata (1900) está a 23 de CP vs Bahía Blanca a 6077
+  const ordenadas = paqar.ordenarSucursales(lista, "1923", "Berisso");
+  assert.equal(ordenadas[0].code, "LAPLATA");
+  assert.equal(ordenadas[1].code, "QUILMES");
+  assert.equal(ordenadas[2].code, "BAHIA");
+});
+
+// ===== Firma HMAC de cotizaciones =====
+
+const { firmarOpcion, verificarOpcion, TTL_MS } = require("../backend/lib/cotizacion-firma.js");
+
+test("una cotización firmada se verifica en el checkout y rechaza manipulaciones o vencimiento", () => {
+  const previo = process.env.ADMIN_TOKEN;
+  process.env.ADMIN_TOKEN = "secreto-prueba-envio";
+  try {
+    const items = [{ presentacion: "andino-pack5", qty: 2 }];
+    const destino = { cp: "5000", ciudad: "Córdoba", provincia: "Córdoba" };
+    const opcion = { proveedor: "paqar", grupo: "paqar:D:CP", tipo: "domicilio", transportista: "Correo Argentino", servicio: "Clásico", plazo: "2 a 5 días hábiles", precio: 7025 };
+    const ahora = 1700000000000;
+
+    const token = firmarOpcion(opcion, { items, destino, pesoGramos: 260, ahora });
+    assert.ok(token.includes("."));
+
+    // Válido dentro de los 20 min con mismo carrito y destino
+    const ok = verificarOpcion(token, { grupo: "paqar:D:CP", items, destino, ahora: ahora + 60000 });
+    assert.equal(ok.opcion.precio, 7025);
+    assert.equal(ok.proveedor, "paqar");
+    assert.equal(ok.pesoGramos, 260);
+
+    // Rechaza si cambió el carrito
+    assert.equal(verificarOpcion(token, { grupo: "paqar:D:CP", items: [{ presentacion: "andino-pack5", qty: 3 }], destino, ahora }), null);
+    // Rechaza si cambió el destino
+    assert.equal(verificarOpcion(token, { grupo: "paqar:D:CP", items, destino: { ...destino, cp: "1900" }, ahora }), null);
+    // Rechaza si venció
+    assert.equal(verificarOpcion(token, { grupo: "paqar:D:CP", items, destino, ahora: ahora + TTL_MS + 1 }), null);
+    // Rechaza si se alteró la firma
+    assert.equal(verificarOpcion(token.slice(0, -1) + (token.endsWith("a") ? "b" : "a"), { grupo: "paqar:D:CP", items, destino, ahora }), null);
+  } finally {
+    if (previo === undefined) delete process.env.ADMIN_TOKEN;
+    else process.env.ADMIN_TOKEN = previo;
+  }
+});

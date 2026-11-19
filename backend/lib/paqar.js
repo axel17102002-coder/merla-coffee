@@ -93,14 +93,17 @@ async function pedir(cred, ruta, opciones = {}) {
 // Caja genérica, la misma que se usa con los otros proveedores.
 const PAQUETE_CM = { height: 10, width: 20, length: 25 };
 
-function cuerpoTarifa({ cred, cpDestino, pesoGramos }) {
+function cuerpoTarifa({ cred, cpDestino, pesoGramos, paquete }) {
+  const medidas = paquete
+    ? { height: paquete.alto, width: paquete.ancho, length: paquete.largo }
+    : PAQUETE_CM;
   return {
     customerId: String(cred.customerId),
     postalCodeOrigin: String(cred.cpOrigen),
     postalCodeDestination: String(cpDestino || "").trim(),
     // Sin deliveredType pide las dos modalidades de una: una sola llamada
     dimensions: [{
-      ...PAQUETE_CM,
+      ...medidas,
       weight: Math.max(1, Math.round(Number(pesoGramos) || 0)), // en gramos
       quantity: 1,
     }],
@@ -118,6 +121,7 @@ function normalizarTarifa(r) {
   return {
     clave: `paqar:${r.deliveredType}:${producto}`,
     grupo: `paqar:${r.deliveredType}:${producto}`,
+    proveedor: "paqar",
     tipo,
     transportista: NOMBRE,
     // El nombre del servicio distingue dos filas del mismo correo que solo se
@@ -145,16 +149,45 @@ function codigoProvincia(nombre) {
   return CODIGOS_PROVINCIA[limpio] || null;
 }
 
-async function sucursalesDe(cred, provincia, cpDestino) {
+const limpiarTexto = (s) =>
+  String(s || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+const cpNumero = (cp) => {
+  const m = String(cp || "").match(/\d{4}/);
+  return m ? Number(m[0]) : NaN;
+};
+
+// Ordena las sucursales de toda la provincia por cercanía real al destino:
+//   1) mismo código postal exacto
+//   2) misma ciudad/localidad
+//   3) menor distancia numérica entre códigos postales
+// Evita que si un CP no tiene sucursal propia (ej. Berisso 1923) salgan las
+// primeras 8 de la provincia al azar (ej. Bahía Blanca).
+function ordenarSucursales(lista, cpDestino, ciudad) {
+  const cpNumDestino = cpNumero(cpDestino);
+  const ciudadLimpia = limpiarTexto(ciudad);
+  const puntaje = (a) => {
+    const cpSuc = cpNumero(a.postalCode);
+    const mismoCp = Number.isFinite(cpNumDestino) && cpSuc === cpNumDestino ? 0 : 1;
+    const loc = limpiarTexto(a.location || a.city || a.name);
+    const mismaCiudad = ciudadLimpia && loc && (loc.includes(ciudadLimpia) || ciudadLimpia.includes(loc)) ? 0 : 1;
+    const dist = Number.isFinite(cpNumDestino) && Number.isFinite(cpSuc) ? Math.abs(cpSuc - cpNumDestino) : 99999;
+    return [mismoCp, mismaCiudad, dist];
+  };
+  return [...(lista || [])].sort((a, b) => {
+    const pa = puntaje(a);
+    const pb = puntaje(b);
+    return (pa[0] - pb[0]) || (pa[1] - pb[1]) || (pa[2] - pb[2]);
+  });
+}
+
+async function sucursalesDe(cred, provincia, cpDestino, ciudad) {
   const codigo = codigoProvincia(provincia);
   if (!codigo) return [];
   try {
     const data = await pedir(cred, `/agencies?provinceCode=${encodeURIComponent(codigo)}`);
     const lista = Array.isArray(data) ? data : data.agencies || data.data || [];
-    // Primero las del mismo CP que el destino: son las que le quedan cerca
-    const cp = String(cpDestino || "").trim();
-    const cerca = lista.filter((a) => String(a.postalCode || "").trim() === cp);
-    return (cerca.length ? cerca : lista).slice(0, 8).map((a) => ({
+    return ordenarSucursales(lista, cpDestino, ciudad).slice(0, 8).map((a) => ({
       id: String(a.code || a.id || ""),
       descripcion: a.name || a.description || "",
       direccion: [a.streetName || a.street, a.streetNumber].filter(Boolean).join(" "),
@@ -168,13 +201,13 @@ async function sucursalesDe(cred, provincia, cpDestino) {
   }
 }
 
-async function cotizarOpciones({ cp, ciudad, provincia, pesoGramos, valorDeclarado }) {
+async function cotizarOpciones({ cp, ciudad, provincia, pesoGramos, paquete, valorDeclarado, incluirSucursales = true }) {
   const cred = credenciales();
   if (!cred) return { ok: false, error: "paq.ar no está configurado." };
 
   let data;
   try {
-    data = await pedir(cred, "/rates", { method: "POST", body: cuerpoTarifa({ cred, cpDestino: cp, pesoGramos }) });
+    data = await pedir(cred, "/rates", { method: "POST", body: cuerpoTarifa({ cred, cpDestino: cp, pesoGramos, paquete }) });
   } catch (err) {
     console.warn("paqar: cotización fallida:", err.status || "", err.message);
     return { ok: false, error: "paq.ar no cotizó para esa dirección." };
@@ -185,8 +218,8 @@ async function cotizarOpciones({ cp, ciudad, provincia, pesoGramos, valorDeclara
 
   // Las sucursales se piden una sola vez y se comparten entre las opciones a
   // sucursal: son las mismas para todos los servicios (Clásico, Expreso…).
-  if (opciones.some((o) => o.tipo === "sucursal")) {
-    const sucursales = await sucursalesDe(cred, provincia, cp);
+  if (incluirSucursales && opciones.some((o) => o.tipo === "sucursal")) {
+    const sucursales = await sucursalesDe(cred, provincia, cp, ciudad);
     for (const o of opciones) if (o.tipo === "sucursal") o.sucursales = sucursales;
   }
 
@@ -195,10 +228,10 @@ async function cotizarOpciones({ cp, ciudad, provincia, pesoGramos, valorDeclara
   return { ok: true, opciones: habilitadas.sort((a, b) => a.precio - b.precio) };
 }
 
-// Vuelve a cotizar y busca el grupo elegido: nunca se confía en el precio que
-// mandó el navegador.
-async function precioDeOpcion({ grupo, cp, ciudad, provincia, pesoGramos, valorDeclarado }) {
-  const resultado = await cotizarOpciones({ cp, ciudad, provincia, pesoGramos, valorDeclarado });
+// Vuelve a cotizar y busca el grupo elegido (sin bajar sucursales: al pagar
+// solo hace falta validar la tarifa vigente).
+async function precioDeOpcion({ grupo, cp, ciudad, provincia, pesoGramos, paquete, valorDeclarado }) {
+  const resultado = await cotizarOpciones({ cp, ciudad, provincia, pesoGramos, paquete, valorDeclarado, incluirSucursales: false });
   if (!resultado.ok) return resultado;
   const opcion = resultado.opciones.find((o) => o.grupo === grupo);
   if (!opcion) {
@@ -209,5 +242,5 @@ async function precioDeOpcion({ grupo, cp, ciudad, provincia, pesoGramos, valorD
 
 module.exports = {
   disponible, cotizarOpciones, precioDeOpcion,
-  normalizarTarifa, cuerpoTarifa, codigoProvincia, NOMBRE,
+  normalizarTarifa, cuerpoTarifa, codigoProvincia, ordenarSucursales, NOMBRE,
 };

@@ -216,7 +216,7 @@
     <section class="benefits">
       <div class="benefit">
         <span class="benefit__icon"><svg class="icono" aria-hidden="true"><use href="#i-camion"></use></svg></span>
-        <div><strong>Envíos a todo el país</strong><p>Dentro de La Plata: $1.500</p></div>
+        <div><strong>Envíos a todo el país</strong><p>Dentro de La Plata: <span data-precio-laplata>$1.500</span></p></div>
       </div>
       <div class="benefit">
         <span class="benefit__icon"><svg class="icono" aria-hidden="true"><use href="#i-etiqueta"></use></svg></span>
@@ -345,11 +345,11 @@
       <div class="info-cards">
         <div class="info-card">
           <h3><svg class="icono icono--titulo" aria-hidden="true"><use href="#i-pin"></use></svg> En La Plata</h3>
-          <p>Envío dentro de la ciudad: <strong>$1.500</strong>. También podés retirar sin cargo en nuestro punto de retiro, coordinando por WhatsApp.</p>
+          <p>Envío dentro de la ciudad: <strong data-precio-laplata>$1.500</strong> (24 a 48 hs hábiles). También podés retirar sin cargo en zona centro, coordinando horario por WhatsApp.</p>
         </div>
         <div class="info-card">
           <h3><svg class="icono icono--titulo" aria-hidden="true"><use href="#i-camion"></use></svg> Al resto del país</h3>
-          <p>Hacemos envíos a todo el país. Al finalizar tu pedido coordinamos el envío que más te convenga.</p>
+          <p>Hacemos envíos a toda la Argentina, a domicilio o a sucursal. Cotizás el costo en vivo desde el carrito con tu código postal.</p>
         </div>
         <div class="info-card">
           <h3><svg class="icono icono--titulo" aria-hidden="true"><use href="#i-tarjeta"></use></svg> Pagos</h3>
@@ -417,9 +417,10 @@
         </div>
         <p class="entrega__label">¿Cómo lo querés recibir?</p>
         <div class="entrega__ops">
-          <label class="entrega__op"><input type="radio" name="entrega" value="retiro" checked> <svg class="icono" aria-hidden="true"><use href="#i-bolsa"></use></svg> Retiro en el local</label>
+          <label class="entrega__op"><input type="radio" name="entrega" value="retiro" checked> <svg class="icono" aria-hidden="true"><use href="#i-bolsa"></use></svg> Retiro sin cargo</label>
           <label class="entrega__op"><input type="radio" name="entrega" value="envio"> <svg class="icono" aria-hidden="true"><use href="#i-camion"></use></svg> Envío</label>
         </div>
+        <p class="entrega__retiro-nota" id="retiro-nota"><svg class="icono" aria-hidden="true"><use href="#i-pin"></use></svg> Retiro sin cargo en La Plata (zona centro). Al confirmar coordinamos día y horario por WhatsApp.</p>
         <div class="entrega__form" id="envio-form" hidden>
           <div class="entrega__row">
             <input id="envio-ciudad" placeholder="Ciudad" autocomplete="address-level2">

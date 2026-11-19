@@ -96,9 +96,10 @@ async function pedir(cred, ruta) {
 // cualquier combinación de drip bags, bolsas de 1/4 y alguna taza.
 const PAQUETE_CM = { alto: 10, ancho: 20, largo: 25 };
 
-function queryTarifa({ cred, contrato, cp, pesoGramos, valorDeclarado }) {
+function queryTarifa({ cred, contrato, cp, pesoGramos, paquete, valorDeclarado }) {
   const kilos = Math.max(0.1, (Number(pesoGramos) || 0) / 1000);
-  const volumen = PAQUETE_CM.alto * PAQUETE_CM.ancho * PAQUETE_CM.largo; // cm³
+  const caja = paquete || PAQUETE_CM;
+  const volumen = caja.alto * caja.ancho * caja.largo; // cm³
   const p = new URLSearchParams({
     cpDestino: String(cp || "").trim(),
     contrato: String(contrato),
@@ -107,9 +108,9 @@ function queryTarifa({ cred, contrato, cp, pesoGramos, valorDeclarado }) {
     "bultos[0][valorDeclarado]": String(Math.max(1, Math.round(Number(valorDeclarado) || 0))),
     "bultos[0][volumen]": String(volumen),
     "bultos[0][kilos]": String(kilos),
-    "bultos[0][altoCm]": String(PAQUETE_CM.alto),
-    "bultos[0][anchoCm]": String(PAQUETE_CM.ancho),
-    "bultos[0][largoCm]": String(PAQUETE_CM.largo),
+    "bultos[0][altoCm]": String(caja.alto),
+    "bultos[0][anchoCm]": String(caja.ancho),
+    "bultos[0][largoCm]": String(caja.largo),
   });
   return `/v1/tarifas?${p.toString()}`;
 }
@@ -124,12 +125,10 @@ function precioDeTarifa(data) {
 }
 
 // Sucursales de Andreani cerca del destino, con la forma que espera el carrito.
-// Si falla, la opción a sucursal igual se ofrece sin lista y el checkout la
-// rechaza pidiendo elegir una: nunca se manda un paquete a una sucursal que el
-// cliente no vio.
-async function sucursalesDe(cred, ciudad) {
-  try {
-    const data = await pedir(cred, `/v2/sucursales?localidad=${encodeURIComponent(ciudad)}`);
+// Busca primero por localidad y, si no encuentra (ej. abreviatura o tilde),
+// reintenta por código postal. Si falla, devuelve [] y el checkout pide elegir.
+async function sucursalesDe(cred, ciudad, cp) {
+  const normalizar = (data) => {
     const lista = Array.isArray(data) ? data : data.sucursales || data.data || [];
     return lista.slice(0, 8).map((s) => {
       const dir = s.direccion || {};
@@ -141,6 +140,13 @@ async function sucursalesDe(cred, ciudad) {
         cp: dir.codigoPostal || "",
       };
     }).filter((s) => s.id);
+  };
+  try {
+    const porCiudad = ciudad ? normalizar(await pedir(cred, `/v2/sucursales?localidad=${encodeURIComponent(ciudad)}`)) : [];
+    if (porCiudad.length) return porCiudad;
+    const cpLimpio = String(cp || "").trim();
+    if (cpLimpio) return normalizar(await pedir(cred, `/v2/sucursales?codigoPostal=${encodeURIComponent(cpLimpio)}`));
+    return [];
   } catch (err) {
     console.warn("andreani: no pude traer sucursales:", err.message);
     return [];
@@ -151,23 +157,24 @@ async function sucursalesDe(cred, ciudad) {
 // forma que las de Zipnova para que el carrito no distinga de dónde vienen.
 // `grupo` lleva el prefijo del proveedor: es lo que usa el checkout para saber
 // a quién volver a preguntarle el precio antes de cobrar.
-async function cotizarOpciones({ cp, ciudad, provincia, pesoGramos, valorDeclarado }) {
+async function cotizarOpciones({ cp, ciudad, provincia, pesoGramos, paquete, valorDeclarado, incluirSucursales = true }) {
   const cred = credenciales();
   if (!cred) return { ok: false, error: "Andreani no está configurado." };
 
   const pedidos = Object.entries(cred.contratos)
     .filter(([, contrato]) => contrato)
     .map(async ([tipo, contrato]) => {
-      const data = await pedir(cred, queryTarifa({ cred, contrato, cp, pesoGramos, valorDeclarado }));
+      const data = await pedir(cred, queryTarifa({ cred, contrato, cp, pesoGramos, paquete, valorDeclarado }));
       const precio = precioDeTarifa(data);
       if (precio == null) return null;
       return {
         clave: `andreani:${tipo}`,
         grupo: `andreani:${tipo}`,
+        proveedor: "andreani",
         tipo,
         transportista: NOMBRE,
         precio,
-        sucursales: tipo === "sucursal" ? await sucursalesDe(cred, ciudad) : null,
+        sucursales: tipo === "sucursal" && incluirSucursales ? await sucursalesDe(cred, ciudad, cp) : null,
       };
     });
 
@@ -186,10 +193,10 @@ async function cotizarOpciones({ cp, ciudad, provincia, pesoGramos, valorDeclara
   return { ok: true, opciones: habilitadas.sort((a, b) => a.precio - b.precio) };
 }
 
-// Vuelve a cotizar y busca el grupo que eligió el cliente: nunca se confía en
-// el precio que mandó el navegador.
-async function precioDeOpcion({ grupo, cp, ciudad, provincia, pesoGramos, valorDeclarado }) {
-  const resultado = await cotizarOpciones({ cp, ciudad, provincia, pesoGramos, valorDeclarado });
+// Vuelve a cotizar y busca el grupo que eligió el cliente (sin volver a bajar
+// sucursales: al pagar solo importa validar el precio vigente).
+async function precioDeOpcion({ grupo, cp, ciudad, provincia, pesoGramos, paquete, valorDeclarado }) {
+  const resultado = await cotizarOpciones({ cp, ciudad, provincia, pesoGramos, paquete, valorDeclarado, incluirSucursales: false });
   if (!resultado.ok) return resultado;
   const opcion = resultado.opciones.find((o) => o.grupo === grupo);
   if (!opcion) {

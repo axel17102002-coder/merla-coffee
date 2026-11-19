@@ -19,10 +19,14 @@ const RESPALDO = {
   gramosPorBag: 12,
   packUnidades: 5,
   packDescuento: 10,
-  // Peso estimado por tipo de producto (gramos), para cotizar el envío con Zipnova
+  // Peso estimado por tipo de producto y embalaje (gramos), para cotizar envíos
   pesoDripBagG: 18,
   pesoCafeBolsaG: 270,
   pesoMerchG: 350,
+  pesoCajaG: 80,
+  // Envío propio en La Plata y umbral de envío gratis (0 = desactivado)
+  envioLocalPrecio: 1500,
+  envioGratisDesde: 0,
   // Comisión promedio de Mercado Pago (%). Solo se usa para restarla de la
   // rentabilidad en los pedidos cobrados por ese medio. 0 = no descontar.
   comisionMp: 0,
@@ -35,9 +39,9 @@ const RESPALDO = {
     prepaga: 0,
     cuotas_sin_tarjeta: 0,
   },
-  // Qué APIs de envío se consultan, se prenden desde /admin → Precios → Envío.
+  // Qué proveedores de envío se consultan, se prenden desde /admin → Envío.
   // Prendidos por defecto: sin la migración corrida manda solo si hay credenciales.
-  proveedoresEnvio: { zipnova: true, andreani: true, paqar: true },
+  proveedoresEnvio: { local: true, zipnova: true, andreani: true, paqar: true },
 };
 
 const CLAVES = {
@@ -48,6 +52,9 @@ const CLAVES = {
   peso_drip_bag_g: "pesoDripBagG",
   peso_cafe_bolsa_g: "pesoCafeBolsaG",
   peso_merch_g: "pesoMerchG",
+  peso_caja_g: "pesoCajaG",
+  envio_local_precio: "envioLocalPrecio",
+  envio_gratis_desde: "envioGratisDesde",
   comision_mercadopago: "comisionMp",
 };
 
@@ -61,9 +68,10 @@ const CLAVES_METODO_MP = {
   comision_mp_cuotas_sin_tarjeta: "cuotas_sin_tarjeta",
 };
 
-// Interruptor de cada API de envío: 0 = apagada. `valor` es numérico porque la
-// tabla `configuracion` guarda números, así que se lee como 1/0.
+// Interruptor de cada proveedor de envío: 0 = apagado. `valor` es numérico
+// porque la tabla `configuracion` guarda números, así que se lee como 1/0.
 const CLAVES_PROVEEDOR_ENVIO = {
+  envio_local: "local",
   envio_zipnova: "zipnova",
   envio_andreani: "andreani",
   envio_paqar: "paqar",

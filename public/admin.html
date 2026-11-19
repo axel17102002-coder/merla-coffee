@@ -331,16 +331,41 @@
               </header>
               <p class="mensaje" id="zipnova-estado"></p>
 
-              <!-- A qué APIs se les piden tarifas. Apagar una no borra sus
-                   credenciales: simplemente se deja de consultar. -->
+              <!-- A qué proveedores se les piden tarifas (local + APIs). -->
               <div class="px-config px-config--transportistas">
                 <div class="px-config__fila px-config__fila--nota">
                   <div class="px-config__info">
-                    <strong>APIs de envío</strong>
-                    <span>Cuáles se consultan al cotizar. Apagar una no borra sus credenciales, solo deja de pedirle tarifas. Con todas apagadas queda únicamente el retiro.</span>
+                    <strong>Proveedores de envío</strong>
+                    <span>Cuáles se consultan al cotizar. El envío local aplica en La Plata (CP 1900, 1901, 1902, 1904, 1906, 1908). Si una API directa (Paqar / Andreani) y Zipnova cotizan el mismo correo, se muestra solo la directa sin duplicar.</span>
                   </div>
                 </div>
                 <div id="proveedores-envio"></div>
+              </div>
+
+              <!-- Reglas locales y comerciales de envío -->
+              <div class="px-config">
+                <div class="px-config__fila">
+                  <div class="px-config__info">
+                    <strong>Precio de envío en La Plata</strong>
+                    <span>Tarifa fija de cadetería propia para CP 1900–1908. También se actualiza sola en la tienda.</span>
+                  </div>
+                  <div class="px-config__control">
+                    <span class="px-unidad">$</span>
+                    <input id="cfg-envio-local-precio" data-clave="envio_local_precio" type="number" min="0" step="50" inputmode="numeric" aria-label="Precio del envío local en La Plata">
+                    <span class="px-estado" data-estado></span>
+                  </div>
+                </div>
+                <div class="px-config__fila">
+                  <div class="px-config__info">
+                    <strong>Envío gratis desde</strong>
+                    <span>Subtotal mínimo en productos para bonificar el envío local y la opción más económica de correo. 0 = desactivado.</span>
+                  </div>
+                  <div class="px-config__control">
+                    <span class="px-unidad">$</span>
+                    <input id="cfg-envio-gratis" data-clave="envio_gratis_desde" type="number" min="0" step="500" inputmode="numeric" aria-label="Monto mínimo para envío gratis">
+                    <span class="px-estado" data-estado></span>
+                  </div>
+                </div>
               </div>
 
               <!-- Qué correos ve el cliente. La lista se completa sola con lo
@@ -385,6 +410,17 @@
                   </div>
                   <div class="px-config__control">
                     <input id="cfg-peso-merch" data-clave="peso_merch_g" type="number" min="1" step="1" inputmode="numeric" aria-label="Peso de una taza u otro producto simple en gramos">
+                    <span class="px-unidad">g</span>
+                    <span class="px-estado" data-estado></span>
+                  </div>
+                </div>
+                <div class="px-config__fila">
+                  <div class="px-config__info">
+                    <strong>Peso de la caja / embalaje</strong>
+                    <span>Tara fija que se suma una vez a cada pedido para calcular el paquete real.</span>
+                  </div>
+                  <div class="px-config__control">
+                    <input id="cfg-peso-caja" data-clave="peso_caja_g" type="number" min="0" step="5" inputmode="numeric" aria-label="Peso de la caja de envío en gramos">
                     <span class="px-unidad">g</span>
                     <span class="px-estado" data-estado></span>
                   </div>

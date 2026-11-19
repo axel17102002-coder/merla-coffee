@@ -41,6 +41,9 @@ function sanitizarEnvio(envio) {
     opcionTipo: esSucursal ? "sucursal" : "domicilio",
     transportista: s(envio.transportista, 60),
     sucursal,
+    // Token firmado de /api/cotizar-envio: se usa solo en memoria al cobrar y
+    // nunca se persiste en la base (lo descarta enriquecerEnvio).
+    cotizacionToken: s(envio.cotizacionToken, 1200),
   };
 }
 
@@ -69,19 +72,26 @@ function validarEnvio(envio) {
 // que queden guardados en Supabase y se vean bien en /admin y en los mails.
 function enriquecerEnvio(envio, resultadoEnvio) {
   if (!envio || envio.metodo !== "envio" || !resultadoEnvio || !resultadoEnvio.opcion) {
+    if (envio && "cotizacionToken" in envio) {
+      const { cotizacionToken, ...limpio } = envio;
+      return limpio;
+    }
     return envio;
   }
+  const { cotizacionToken, ...base } = envio;
   const op = resultadoEnvio.opcion;
   const esSucursal = op.tipo === "sucursal";
   return {
-    ...envio,
-    proveedor: resultadoEnvio.proveedor || envio.proveedor || "",
+    ...base,
+    proveedor: resultadoEnvio.proveedor || base.proveedor || "",
     opcionTipo: esSucursal ? "sucursal" : "domicilio",
-    transportista: op.transportista || envio.transportista || "",
+    transportista: op.transportista || base.transportista || "",
     servicio: op.servicio || "",
     plazo: op.plazo || "",
-    direccion: esSucursal ? "" : envio.direccion,
-    sucursal: esSucursal ? envio.sucursal : null,
+    ...(op.gratis ? { gratis: true } : {}),
+    ...(resultadoEnvio.pesoGramos ? { pesoGramos: resultadoEnvio.pesoGramos } : {}),
+    direccion: esSucursal ? "" : base.direccion,
+    sucursal: esSucursal ? base.sucursal : null,
   };
 }
 

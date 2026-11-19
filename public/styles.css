@@ -987,6 +987,10 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 .cart .entrega__op input,
 .cart .envio-opcion input { accent-color: var(--panel-calido); }
 .cart .envio-opcion__servicio { color: var(--panel-tenue); }
+.cart .entrega__retiro-nota { background: var(--panel-alto); border-color: var(--panel-borde); color: var(--panel-tenue); }
+.cart .envio-opcion__badge { background: #264830; color: #b7ebc7; }
+.cart .envio-opcion__precio--gratis { color: #93d6a8; }
+.cart .envio-opcion__tachado { color: var(--panel-tenue); }
 
 /* ===== Modal producto ===== */
 .modal {
@@ -1536,6 +1540,16 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 }
 .entrega__op:has(input:checked) { border-color: var(--verde); background: #eef3ec; font-weight: 700; }
 .entrega__op input { accent-color: var(--verde); }
+.entrega__retiro-nota {
+  margin: 8px 0 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--crema-borde);
+  background: var(--crema-suave);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #4a5744;
+}
 .entrega__form { display: grid; gap: 8px; margin-top: 10px; }
 .entrega__row { display: flex; gap: 8px; }
 .entrega__form input,
@@ -1566,7 +1580,20 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 /* Nombre del servicio y plazo, para distinguir dos filas del mismo correo */
 .envio-opcion__servicio { font-size: 0.74rem; color: #66705f; font-weight: 400; }
 .envio-opcion:has(input:checked) .envio-opcion__label { font-weight: 700; }
-.envio-opcion__precio { white-space: nowrap; flex-shrink: 0; font-weight: 700; }
+.envio-opcion__precio { white-space: nowrap; flex-shrink: 0; font-weight: 700; display: flex; align-items: baseline; gap: 6px; }
+.envio-opcion__badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  background: #e1f0e5;
+  color: #1f5c31;
+  vertical-align: middle;
+}
+.envio-opcion__precio--gratis { color: #2e7d4f; }
+.envio-opcion__tachado { text-decoration: line-through; opacity: 0.65; font-size: 0.78rem; font-weight: 500; }
 /* Paso 1 del envío: a domicilio o a sucursal. Dos tarjetas grandes, con el
    precio más barato de cada una para poder comparar sin abrirlas. */
 .modalidades { display: flex; gap: 8px; margin-bottom: 4px; }

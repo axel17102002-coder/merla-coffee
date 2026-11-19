@@ -139,6 +139,7 @@ function cargarTienda() {
       const res = await fetch("/api/tienda");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       DATOS = await res.json();
+      aplicarConfigEnvio();
       renderFiltros();
       renderProductos();
       renderCarrito();
@@ -825,6 +826,21 @@ function estadoPedido() {
     : { items, calc: null, error: calc.error, pendiente: null };
 }
 
+// Refleja en la tienda el precio del envío local en La Plata y la nota del
+// punto de retiro que vienen de la base (sin quedar desfasados con /admin).
+function aplicarConfigEnvio() {
+  const cfgEnvio = DATOS && DATOS.config && DATOS.config.envio;
+  if (!cfgEnvio) return;
+  if (Number.isFinite(cfgEnvio.localPrecio) && cfgEnvio.localPrecio >= 0) {
+    const texto = cfgEnvio.localPrecio === 0 ? "gratis" : formatear(cfgEnvio.localPrecio);
+    document.querySelectorAll("[data-precio-laplata]").forEach((el) => { el.textContent = texto; });
+  }
+  const nota = $("#retiro-nota");
+  if (nota && cfgEnvio.retiroNota) {
+    nota.innerHTML = `${icono("pin")} ${escaparHtml(cfgEnvio.retiroNota)}`;
+  }
+}
+
 // El descuento por transferencia aplica sobre los productos, no sobre el flete
 // que se le paga al correo.
 function totalTransferencia(calc) {
@@ -897,54 +913,91 @@ function renderCarrito() {
 
   actualizarEnvioCostoEstado(items);
 
-  if (error || pendiente) {
+  if (error) {
     $("#cart-summary").hidden = true;
     $("#cart-error").hidden = false;
-    $("#cart-error").textContent = error ? `⚠️ ${error}. Ajustá las cantidades para continuar.` : pendiente;
+    $("#cart-error").textContent = `⚠️ ${error}. Ajustá las cantidades para continuar.`;
     $("#pay-mp").disabled = true;
     $("#pay-modo").disabled = true;
     $("#checkout").disabled = true;
     return;
   }
 
-  $("#cart-error").hidden = true;
+  // Si todavía falta cotizar o elegir correo, mostramos igualmente el resumen
+  // de productos (sin esconder el subtotal ni los descuentos) y dejamos los
+  // botones de pago bloqueados hasta que el cliente elija su envío.
+  const resumen = calc || calcularPedido(
+    items,
+    { cupon: cuponActivo(), canjePuntos: canjeActivo(), puntosDisponibles: saldoPuntos, envioCosto: 0 },
+    DATOS
+  );
+  if (!resumen || !resumen.ok) {
+    $("#cart-summary").hidden = true;
+    $("#cart-error").hidden = false;
+    $("#cart-error").textContent = pendiente || (resumen && resumen.error) || "";
+    $("#pay-mp").disabled = true;
+    $("#pay-modo").disabled = true;
+    $("#checkout").disabled = true;
+    return;
+  }
+
+  $("#cart-error").hidden = !pendiente;
+  if (pendiente) $("#cart-error").textContent = pendiente;
   $("#cart-summary").hidden = false;
-  $("#pay-mp").disabled = false;
-  $("#pay-modo").disabled = false;
-  $("#checkout").disabled = false;
+  $("#pay-mp").disabled = Boolean(pendiente);
+  $("#pay-modo").disabled = Boolean(pendiente);
+  $("#checkout").disabled = Boolean(pendiente);
 
-  $("#cart-subtotal").textContent = formatear(calc.subtotal);
+  const opActiva = metodoEntrega() === "envio" ? opcionElegida() : null;
+  $("#cart-subtotal").textContent = formatear(resumen.subtotal);
 
-  $("#shipping-row").hidden = !calc.envioCosto;
-  $("#cart-shipping").textContent = formatear(calc.envioCosto);
+  const mostrarEnvio = metodoEntrega() === "envio";
+  $("#shipping-row").hidden = !mostrarEnvio;
+  if (mostrarEnvio) {
+    $("#cart-shipping").textContent = pendiente
+      ? (envioQuote.cargando ? "Calculando…" : "A definir")
+      : opActiva && opActiva.gratis
+        ? "Gratis"
+        : formatear(resumen.envioCosto);
+  }
 
-  $("#discount-row").hidden = calc.descuentoCantidad === 0;
-  $("#cart-discount").textContent = "-" + formatear(calc.descuentoCantidad);
+  $("#discount-row").hidden = resumen.descuentoCantidad === 0;
+  $("#cart-discount").textContent = "-" + formatear(resumen.descuentoCantidad);
 
-  $("#coupon-row").hidden = calc.descuentoCupon === 0;
-  $("#coupon-row-label").textContent = `Cupón ${calc.cupon || ""}`;
-  $("#cart-coupon-discount").textContent = "-" + formatear(calc.descuentoCupon);
+  $("#coupon-row").hidden = resumen.descuentoCupon === 0;
+  $("#coupon-row-label").textContent = `Cupón ${resumen.cupon || ""}`;
+  $("#cart-coupon-discount").textContent = "-" + formatear(resumen.descuentoCupon);
 
-  $("#points-row").hidden = calc.descuentoPuntos === 0;
-  $("#cart-points-discount").textContent = "-" + formatear(calc.descuentoPuntos);
+  $("#points-row").hidden = resumen.descuentoPuntos === 0;
+  $("#cart-points-discount").textContent = "-" + formatear(resumen.descuentoPuntos);
 
-  $("#cart-total").textContent = formatear(calc.total);
+  $("#cart-total").textContent = formatear(resumen.total) + (pendiente ? " + envío" : "");
 
-  $("#cart-transf").hidden = false;
-  $("#cart-transf").innerHTML = `${icono("billete")} Por transferencia: <strong>${formatear(totalTransferencia(calc))}</strong> (${CONFIG.transferencia.descuento}% OFF${calc.envioCosto ? " en productos" : ""}, pedilo por WhatsApp)`;
+  $("#cart-transf").hidden = Boolean(pendiente);
+  if (!pendiente) {
+    $("#cart-transf").innerHTML = `${icono("billete")} Por transferencia: <strong>${formatear(totalTransferencia(resumen))}</strong> (${CONFIG.transferencia.descuento}% OFF${resumen.envioCosto ? " en productos" : ""}, pedilo por WhatsApp)`;
+  }
 
   const cfg = DATOS.config;
-  const faltan = cfg.descuentoCantidad - calc.unidadesSueltas;
-  $("#discount-hint").textContent =
-    calc.descuentoCantidad > 0
-      ? `¡Tenés el ${cfg.descuentoPorcentaje}% de descuento por cantidad!`
-      : calc.unidadesSueltas > 0 && faltan <= 2
-        ? `Agregá ${faltan} unidad${faltan > 1 ? "es" : ""} suelta${faltan > 1 ? "s" : ""} más y llevate ${cfg.descuentoPorcentaje}% OFF`
-        : "";
+  const faltan = cfg.descuentoCantidad - resumen.unidadesSueltas;
+  const gratisDesde = Number(cfg.envio && cfg.envio.gratisDesde) || 0;
+  const avisos = [];
+  if (resumen.descuentoCantidad > 0) {
+    avisos.push(`¡Tenés el ${cfg.descuentoPorcentaje}% de descuento por cantidad!`);
+  } else if (resumen.unidadesSueltas > 0 && faltan <= 2) {
+    avisos.push(`Agregá ${faltan} unidad${faltan > 1 ? "es" : ""} suelta${faltan > 1 ? "s" : ""} más y llevate ${cfg.descuentoPorcentaje}% OFF`);
+  }
+  if (gratisDesde > 0) {
+    const faltaGratis = gratisDesde - resumen.subtotal;
+    avisos.push(faltaGratis <= 0
+      ? "¡Tenés envío gratis en este pedido!"
+      : `Te faltan ${formatear(faltaGratis)} para tener envío gratis`);
+  }
+  $("#discount-hint").textContent = avisos.join(" · ");
 
   $("#cart-earn").textContent = emailValido(emailCliente())
-    ? `Al confirmar tu pago sumás ${calc.puntosGanados} puntos Club Merla`
-    : `Dejá tu email y sumá ${calc.puntosGanados} puntos Club Merla al confirmar el pago`;
+    ? `Al confirmar tu pago sumás ${resumen.puntosGanados} puntos Club Merla`
+    : `Dejá tu email y sumá ${resumen.puntosGanados} puntos Club Merla al confirmar el pago`;
 
   $("#modo-test-note").hidden = (DATOS.config.pagoAmbiente || "test") !== "test";
 }
@@ -1376,6 +1429,7 @@ function datosEntrega() {
     opcionGrupo: op ? op.grupo : "",
     opcionTipo: esSucursal ? "sucursal" : "domicilio",
     transportista: op ? op.transportista : "",
+    cotizacionToken: op && op.cotizacionToken ? op.cotizacionToken : "",
     sucursal: sucursal ? { id: sucursal.id, descripcion: sucursal.descripcion, direccion: sucursal.direccion } : null,
   };
 }
@@ -1396,10 +1450,11 @@ function validarEntrega() {
   return null;
 }
 
-// Muestra u oculta el formulario de envío según el método elegido
+// Muestra u oculta el formulario de envío y la nota de retiro según el método
 function actualizarEntrega() {
   const esEnvio = metodoEntrega() === "envio";
   $("#envio-form").hidden = !esEnvio;
+  if ($("#retiro-nota")) $("#retiro-nota").hidden = esEnvio;
   $("#envio-nombre").placeholder = esEnvio ? "Nombre y apellido" : "Nombre y apellido (opcional)";
   renderCarrito();
 }
@@ -1555,15 +1610,19 @@ function actualizarEnvioCostoEstado(items) {
     // Expreso): sin el nombre y el plazo, son dos filas iguales con distinto
     // precio y no se entiende por qué una sale más.
     const detalle = [o.servicio, o.plazo].filter(Boolean).join(" · ");
+    const badgeLocal = o.local ? `<span class="envio-opcion__badge">Local</span>` : "";
+    const precioHtml = o.gratis
+      ? `${o.precioOriginal ? `<span class="envio-opcion__tachado">${formatear(o.precioOriginal)}</span>` : ""}<span class="envio-opcion__precio--gratis">Gratis</span>`
+      : formatear(o.precio);
     return `<label class="envio-opcion">
         <span class="envio-opcion__label">
           <input type="radio" name="envio-opcion" value="${o.clave}" ${marcada ? "checked" : ""}>
           <span class="envio-opcion__texto">
-            ${escaparHtml(o.transportista)}
+            <span>${escaparHtml(o.transportista)}${badgeLocal}</span>
             ${detalle ? `<span class="envio-opcion__servicio">${escaparHtml(detalle)}</span>` : ""}
           </span>
         </span>
-        <span class="envio-opcion__precio">${formatear(o.precio)}</span>
+        <span class="envio-opcion__precio">${precioHtml}</span>
       </label>`;
   }).join("");
 
@@ -1593,11 +1652,12 @@ function tarjetasModalidad() {
     const dibujo = icono(tipo === "sucursal" ? "pin" : "camion");
     const titulo = tipo === "sucursal" ? "A sucursal" : "A domicilio";
     const detalle = tipo === "sucursal" ? "Lo retirás vos" : "Te lo llevan";
+    const textoDesde = desde === 0 ? "Gratis" : `desde ${formatear(desde)}`;
     return `<label class="modalidad${activa ? " modalidad--activa" : ""}">
         <input type="radio" name="envio-modalidad" value="${tipo}" ${activa ? "checked" : ""}>
         <span class="modalidad__datos">
           <span class="modalidad__titulo">${dibujo} ${titulo}</span>
-          <span class="modalidad__detalle">${detalle} · desde ${formatear(desde)}</span>
+          <span class="modalidad__detalle">${detalle} · ${textoDesde}</span>
         </span>
       </label>`;
   }).join("");

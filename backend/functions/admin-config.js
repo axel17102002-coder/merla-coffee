@@ -18,10 +18,12 @@ const paqar = require("../lib/paqar.js");
 
 const CLAVES_VALIDAS = [
   "margen_unidad", "gramos_por_bag", "pack_unidades", "pack_descuento",
-  "peso_drip_bag_g", "peso_cafe_bolsa_g", "peso_merch_g", "comision_mercadopago",
+  "peso_drip_bag_g", "peso_cafe_bolsa_g", "peso_merch_g", "peso_caja_g",
+  "envio_local_precio", "envio_gratis_desde",
+  "comision_mercadopago",
   "comision_mp_dinero", "comision_mp_debito", "comision_mp_credito",
   "comision_mp_prepaga", "comision_mp_cuotas_sin_tarjeta",
-  ...Object.keys(CLAVES_PROVEEDOR_ENVIO), // envio_zipnova, envio_andreani, envio_paqar (1/0)
+  ...Object.keys(CLAVES_PROVEEDOR_ENVIO), // envio_local, envio_zipnova, envio_andreani, envio_paqar (1/0)
 ];
 
 // Reaplica el margen objetivo a todos los cafés que tengan costo cargado.
@@ -68,6 +70,7 @@ exports.handler = async (event) => {
           // (tiene credenciales) y `activo` (prendida desde el panel). Cotiza
           // solo si están los dos; las tarifas se mezclan ordenadas por precio.
           proveedoresEnvio: {
+            local: { conectado: true, activo: cfg.proveedoresEnvio.local },
             zipnova: { conectado: zipnova.disponible(), activo: cfg.proveedoresEnvio.zipnova },
             andreani: { conectado: andreani.disponible(), activo: cfg.proveedoresEnvio.andreani },
             paqar: { conectado: paqar.disponible(), activo: cfg.proveedoresEnvio.paqar },

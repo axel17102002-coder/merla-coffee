@@ -33,7 +33,7 @@ const nombreCliente = (pedido) => String((pedido.envio && pedido.envio.nombre) |
 function bloqueEntrega(envio) {
   if (!envio || !envio.metodo) return "";
   if (envio.metodo === "retiro") {
-    return `<p style="margin:14px 0 0;color:${GRIS};">🏪 <strong style="color:${VERDE};">Retiro en el local</strong> — te avisamos cuando esté listo.</p>`;
+    return `<p style="margin:14px 0 0;color:${GRIS};">🏪 <strong style="color:${VERDE};">Retiro sin cargo en La Plata</strong> (zona centro) — cuando esté listo te escribimos para coordinar día y horario.</p>`;
   }
   const correo = [envio.transportista, envio.servicio].filter(Boolean).map(escapar).join(" · ");
   const detalleCorreo = [correo, envio.plazo && escapar(envio.plazo)].filter(Boolean).join(" — ");
@@ -46,9 +46,12 @@ function bloqueEntrega(envio) {
       ${punto ? `<strong>${punto}</strong><br>` : ""}${loc ? `${loc}<br>` : ""}Retira: ${escapar(envio.nombre)}${envio.telefono ? `<br>Tel: ${escapar(envio.telefono)}` : ""}${envio.notas ? `<br>${escapar(envio.notas)}` : ""}</p>`;
   }
 
+  const esLocal = envio.proveedor === "local" || envio.opcionGrupo === "local:laplata";
+  const iconoTitulo = esLocal ? "🛵" : "📦";
+  const titulo = esLocal ? "Envío en La Plata" : "Envío a domicilio";
   const dir = [envio.direccion, envio.ciudad, envio.provincia, envio.cp && `CP ${envio.cp}`]
     .filter(Boolean).map(escapar).join(", ");
-  return `<p style="margin:14px 0 0;color:${GRIS};">📦 <strong style="color:${VERDE};">Envío a domicilio${detalleCorreo ? ` (${detalleCorreo})` : ""}</strong><br>
+  return `<p style="margin:14px 0 0;color:${GRIS};">${iconoTitulo} <strong style="color:${VERDE};">${titulo}${detalleCorreo && !esLocal ? ` (${detalleCorreo})` : esLocal && envio.plazo ? ` (${escapar(envio.plazo)})` : ""}</strong><br>
     ${escapar(envio.nombre)}${dir ? ` — ${dir}` : ""}${envio.telefono ? `<br>Tel: ${escapar(envio.telefono)}` : ""}${envio.notas ? `<br>${escapar(envio.notas)}` : ""}</p>`;
 }
 
@@ -98,6 +101,8 @@ function resumen(pedido) {
       ? `Envío (${escapar(pedido.envio.transportista)})`
       : "Envío";
     desc.push(`<tr><td style="padding:4px 0;color:${GRIS};">${labelEnvio}</td><td style="padding:4px 0;text-align:right;color:#22301f;">${pesos(pedido.envio_costo)}</td></tr>`);
+  } else if (pedido.envio && pedido.envio.metodo === "envio" && pedido.envio.gratis) {
+    desc.push(`<tr><td style="padding:4px 0;color:${CARAMELO};">Envío${pedido.envio.transportista ? ` (${escapar(pedido.envio.transportista)})` : ""}</td><td style="padding:4px 0;text-align:right;color:${CARAMELO};font-weight:bold;">Gratis</td></tr>`);
   }
   return `<table style="width:100%;border-collapse:collapse;">
     ${filasItems(pedido.items)}

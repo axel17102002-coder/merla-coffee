@@ -4,6 +4,7 @@
 
 const { obtenerCatalogo, sb } = require("../lib/supabase.js");
 const { ambienteMp } = require("../lib/mercadopago.js");
+const { obtenerCostos } = require("../lib/costos.js");
 const { CONFIG } = require("../../public/motor.js");
 
 // `obtenerCatalogo()` trae la fila entera de productos (la usan también el
@@ -36,8 +37,13 @@ async function resenasPublicadas() {
 
 exports.handler = async () => {
   try {
-    const [catalogo, resenas] = await Promise.all([obtenerCatalogo(), resenasPublicadas()]);
+    const [catalogo, resenas, costos] = await Promise.all([
+      obtenerCatalogo(),
+      resenasPublicadas(),
+      obtenerCostos(),
+    ]);
     const productos = catalogo.map(sinCostos);
+    const cfg = costos && costos.cfg ? costos.cfg : {};
     return {
       statusCode: 200,
       headers: {
@@ -48,9 +54,8 @@ exports.handler = async () => {
         productos,
         resenas,
         // pagoAmbiente le avisa al frontend si el cobro online es de prueba
-        // Lista explícita: NO mandamos todo CONFIG para no filtrar nada
-        // sensible sin querer (los costos y márgenes viven en la base y son
-        // solo del panel).
+        // Lista explícita: NO mandamos todo CONFIG ni costos/márgenes internos
+        // (solo los datos públicos de entrega: La Plata y umbral de envío gratis).
         config: {
           pagos: CONFIG.pagos,
           descuentoCantidad: CONFIG.descuentoCantidad,
@@ -58,6 +63,12 @@ exports.handler = async () => {
           transferencia: CONFIG.transferencia,
           pack: CONFIG.pack,
           fidelidad: CONFIG.fidelidad,
+          envio: {
+            localActivo: !cfg.proveedoresEnvio || cfg.proveedoresEnvio.local !== false,
+            localPrecio: Number(cfg.envioLocalPrecio != null ? cfg.envioLocalPrecio : 1500),
+            gratisDesde: Number(cfg.envioGratisDesde) || 0,
+            retiroNota: "Retiro sin cargo en La Plata (zona centro). Al confirmar coordinamos día y horario por WhatsApp.",
+          },
           pagoAmbiente: CONFIG.pagos.mercadopago ? await ambienteMp() : process.env.MODO_ENV || "test",
         },
       }),

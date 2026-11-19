@@ -49,31 +49,34 @@ function selectorMetodoMp(p) {
     </div>`;
 }
 
-const NOMBRES_PROVEEDOR = { zipnova: "Zipnova", andreani: "Andreani", paqar: "Paqar" };
+const NOMBRES_PROVEEDOR = { local: "Cadetería propia", zipnova: "Zipnova", andreani: "Andreani", paqar: "Paqar" };
 
 function proveedorDeEnvio(envio) {
   if (!envio) return "";
   if (envio.proveedor && NOMBRES_PROVEEDOR[envio.proveedor]) return NOMBRES_PROVEEDOR[envio.proveedor];
   const grupo = String(envio.opcionGrupo || "");
+  if (grupo.startsWith("local:")) return "Cadetería propia";
   if (grupo.startsWith("paqar:")) return "Paqar";
   if (grupo.startsWith("andreani:")) return "Andreani";
   if (grupo) return "Zipnova";
   return "";
 }
 
-// Línea de entrega para la tarjeta del pedido (retiro, domicilio o sucursal)
+// Línea de entrega para la tarjeta del pedido (retiro, local La Plata, domicilio o sucursal)
 function renderEntrega(envio, envioCosto) {
   if (!envio || !envio.metodo) return "";
-  if (envio.metodo === "retiro") return `<p class="pedido__extra">🏪 Retiro en el local</p>`;
+  if (envio.metodo === "retiro") return `<p class="pedido__extra">🏪 Retiro sin cargo (La Plata)</p>`;
   const esSucursal = envio.opcionTipo === "sucursal";
+  const esLocal = envio.proveedor === "local" || String(envio.opcionGrupo || "").startsWith("local:");
   const prov = proveedorDeEnvio(envio);
   const correo = [envio.transportista, envio.servicio].filter(Boolean).map(escapar).join(" · ");
+  const costoTexto = envio.gratis ? "Gratis" : Number(envioCosto) > 0 ? formato.format(envioCosto) : "";
   const metaCorreo = [
-    correo,
-    prov && `vía ${escapar(prov)}`,
-    Number(envioCosto) > 0 && formato.format(envioCosto),
+    esLocal ? "" : correo,
+    prov && !esLocal && `vía ${escapar(prov)}`,
+    costoTexto,
   ].filter(Boolean).join(" · ");
-  const titulo = esSucursal ? "🏤 Envío a sucursal" : "📦 Envío a domicilio";
+  const titulo = esLocal ? "🛵 Envío en La Plata" : esSucursal ? "🏤 Envío a sucursal" : "📦 Envío a domicilio";
   const cabecera = metaCorreo ? `<strong>${titulo}</strong> (${metaCorreo})` : `<strong>${titulo}</strong>`;
 
   if (esSucursal) {
@@ -2062,6 +2065,9 @@ async function cargarPrecios() {
     $("#cfg-peso-drip").value = cfgPrecios.pesoDripBagG;
     $("#cfg-peso-cafe14").value = cfgPrecios.pesoCafeBolsaG;
     $("#cfg-peso-merch").value = cfgPrecios.pesoMerchG;
+    if ($("#cfg-peso-caja")) $("#cfg-peso-caja").value = cfgPrecios.pesoCajaG != null ? cfgPrecios.pesoCajaG : 80;
+    if ($("#cfg-envio-local-precio")) $("#cfg-envio-local-precio").value = cfgPrecios.envioLocalPrecio != null ? cfgPrecios.envioLocalPrecio : 1500;
+    if ($("#cfg-envio-gratis")) $("#cfg-envio-gratis").value = cfgPrecios.envioGratisDesde != null ? cfgPrecios.envioGratisDesde : 0;
     proveedoresEnvioCache = dataConfig.proveedoresEnvio || {};
     renderProveedoresEnvio();
     mensaje("#precio-message", dataConfig.desdeLaBase ? "" : "⚠️ Falta correr supabase/migracion-insumos.sql: mientras tanto se usan los valores anteriores y los insumos no se pueden editar.");
@@ -2076,6 +2082,7 @@ async function cargarPrecios() {
 // (`activo`). Apagarla no borra los secretos: se deja de consultar y las
 // opciones que había dado dejan de poder cobrarse.
 const PROVEEDORES_ENVIO = {
+  local: { nombre: "Envío en La Plata", clave: "envio_local", falta: "" },
   zipnova: { nombre: "Zipnova", clave: "envio_zipnova", falta: "ZIPNOVA_TOKEN, ZIPNOVA_SECRET y ZIPNOVA_ACCOUNT_ID" },
   andreani: { nombre: "Andreani", clave: "envio_andreani", falta: "ANDREANI_USUARIO, ANDREANI_PASSWORD, ANDREANI_CLIENTE, ANDREANI_SUCURSAL_ORIGEN y algún ANDREANI_CONTRATO_*" },
   paqar: { nombre: "Paqar", clave: "envio_paqar", falta: "PAQAR_USER_TOKEN, PAQAR_PASSWORD_TOKEN, PAQAR_CUSTOMER_ID y PAQAR_CP_ORIGEN" },

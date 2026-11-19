@@ -73,6 +73,7 @@ function normalizarOpcion(o, indice) {
   return {
     clave: `${grupoOpcion(o)}:${indice}`,
     grupo: grupoOpcion(o),
+    proveedor: "zipnova",
     tipo: esSucursal ? "sucursal" : "domicilio",
     transportista: (o.carrier && o.carrier.name) || "Transportista",
     precio: Math.round(o.amounts.price_incl_tax),
@@ -83,8 +84,11 @@ function normalizarOpcion(o, indice) {
   };
 }
 
-async function pedirCotizacion({ cred, cp, ciudad, provincia, pesoGramos, valorDeclarado }) {
+async function pedirCotizacion({ cred, cp, ciudad, provincia, pesoGramos, paquete, valorDeclarado }) {
   const auth = Buffer.from(`${cred.token}:${cred.secret}`).toString("base64");
+  const medidas = paquete
+    ? { height: paquete.alto, width: paquete.ancho, length: paquete.largo }
+    : PAQUETE_CM;
   const cuerpo = {
     account_id: Number(cred.accountId),
     source: "merla-coffee-web",
@@ -95,7 +99,7 @@ async function pedirCotizacion({ cred, cp, ciudad, provincia, pesoGramos, valorD
       state: String(provincia || "").trim(),
     },
     packages: [{
-      ...PAQUETE_CM,
+      ...medidas,
       weight: Math.max(1, Math.round(Number(pesoGramos) || 0)),
       classification_id: CLASIFICACION_GENERAL,
     }],
@@ -140,7 +144,7 @@ async function pedirCotizacion({ cred, cp, ciudad, provincia, pesoGramos, valorD
 // Todas las opciones de envío disponibles (a domicilio y a sucursal, de
 // todos los transportistas), ordenadas de más barata a más cara.
 // Devuelve { ok:true, opciones } o { ok:false, error } — nunca tira.
-async function cotizarOpciones({ cp, ciudad, provincia, pesoGramos, valorDeclarado }) {
+async function cotizarOpciones({ cp, ciudad, provincia, pesoGramos, paquete, valorDeclarado }) {
   const cred = credenciales();
   if (!cred) {
     return { ok: false, error: "El envío no está disponible en este momento. Probá con retiro o escribinos por WhatsApp." };
@@ -148,7 +152,7 @@ async function cotizarOpciones({ cp, ciudad, provincia, pesoGramos, valorDeclara
 
   let crudas;
   try {
-    crudas = await pedirCotizacion({ cred, cp, ciudad, provincia, pesoGramos, valorDeclarado });
+    crudas = await pedirCotizacion({ cred, cp, ciudad, provincia, pesoGramos, paquete, valorDeclarado });
   } catch (err) {
     console.error("zipnova: la cotización falló:", err.status || "", err.causa || JSON.stringify(err.data || err.message));
     // Distinguimos las dos causas: si el servicio no responde, mandar al
@@ -179,8 +183,8 @@ async function cotizarOpciones({ cp, ciudad, provincia, pesoGramos, valorDeclara
 // eligió el cliente, la opción más barata disponible en ese momento — nunca
 // se confía en el precio que vio en el carrito. Si el grupo ya no está
 // disponible, hay que elegir de nuevo.
-async function precioDeOpcion({ grupo, cp, ciudad, provincia, pesoGramos, valorDeclarado }) {
-  const resultado = await cotizarOpciones({ cp, ciudad, provincia, pesoGramos, valorDeclarado });
+async function precioDeOpcion({ grupo, cp, ciudad, provincia, pesoGramos, paquete, valorDeclarado }) {
+  const resultado = await cotizarOpciones({ cp, ciudad, provincia, pesoGramos, paquete, valorDeclarado });
   if (!resultado.ok) return resultado;
   const opcion = resultado.opciones.find((o) => o.grupo === grupo); // ya vienen ordenadas de más barata a más cara
   if (!opcion) {
