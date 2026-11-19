@@ -163,11 +163,50 @@
     return tmp; // RGBA en Float32 (el alfa queda como estaba)
   }
 
-  // Grano de la foto: ruido determinístico suave
-  function ruido(x, y, c) {
-    let h = (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(c, 83492791)) >>> 0;
+  // Número pseudoaleatorio determinístico en [-0,5, 0,5) para (x, y, canal):
+  // la misma etiqueta siempre da la misma foto
+  function azar(x, y, c) {
+    let h = (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(c + 1, 83492791)) >>> 0;
     h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
-    return ((h & 0xffff) / 65535 - 0.5) * 5;
+    h = (h ^ (h >>> 16)) >>> 0;
+    return (h & 0xffff) / 65536 - 0.5;
+  }
+
+  // Grano de la foto. La cámara mete grano de luz (igual en los tres canales) y
+  // apenas de color; el grano de luz no es de un píxel, así que se suaviza un
+  // poco. Devuelve { luz, color }: luz (w×h) y color (w×h×3), con el desvío
+  // estándar pedido (grano.luz y grano.color de la calibración).
+  function campoDeGrano(w, h, grano) {
+    const luz = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      // suma de tres: más parecido a una campana que el azar plano
+      luz[y * w + x] = azar(x, y, 0) + azar(x, y, 7) + azar(x, y, 13);
+    }
+    const suave = desenfocarUno(luz, w, h);
+    let suma = 0;
+    for (let i = 0; i < suave.length; i++) suma += suave[i] * suave[i];
+    const escala = (grano.luz || 0) / Math.sqrt(suma / suave.length || 1);
+    for (let i = 0; i < suave.length; i++) suave[i] *= escala;
+    const color = new Float32Array(w * h * 3);
+    const ec = (grano.color || 0) / 0.2887; // σ del azar plano = 1/√12
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) for (let c = 0; c < 3; c++) {
+      color[(y * w + x) * 3 + c] = azar(x, y, 20 + c) * ec;
+    }
+    return { luz: suave, color };
+  }
+
+  // Suavizado [1 2 1]/4 en x y en y, de un solo canal
+  function desenfocarUno(v, w, h) {
+    const a = new Float32Array(v.length), b = new Float32Array(v.length);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      a[i] = x > 0 && x < w - 1 ? (v[i - 1] + 2 * v[i] + v[i + 1]) / 4 : v[i];
+    }
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      b[i] = y > 0 && y < h - 1 ? (a[i - w] + 2 * a[i] + a[i + w]) / 4 : a[i];
+    }
+    return b;
   }
 
   // Monta la etiqueta (ImageData del tamaño de la etiqueta) y devuelve el lienzo de la foto
@@ -182,6 +221,7 @@
     const salida = new ImageData(new Uint8ClampedArray(limpia.data), W, H);
     const out = salida.data, base = limpia.data;
     const etq = suavizarCamara(etiqueta, EW, EH);
+    const grano = campoDeGrano(EW, EH, cal.grano || { luz: 4.5, color: 1 });
 
     const ganancia = (x, y) => {
       const fx = x / PASO, fy = y / PASO;
@@ -205,8 +245,9 @@
         if (m <= 0) continue;
         const g = ganancia(x, y);
         const i = ((Y0 + y) * W + X0 + x) * 4;
+        const gl = grano.luz[y * EW + x];
         for (let c = 0; c < 3; c++) {
-          const pred = Math.max(0, Math.min(255, g * (A[c] * etq[j + c] + B[c]) + ruido(x, y, c)));
+          const pred = Math.max(0, Math.min(255, g * (A[c] * etq[j + c] + B[c]) + gl + grano.color[(y * EW + x) * 3 + c]));
           out[i + c] = m * pred + (1 - m) * base[i + c];
         }
       }
