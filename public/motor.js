@@ -18,6 +18,7 @@ const CONFIG = {
   descuentoPorcentaje: 5, // % de descuento sobre las unidades sueltas
   transferencia: {
     descuento: 10, // % OFF pagando por transferencia o depósito (se coordina por WhatsApp)
+    redondeo: 10,  // múltiplo al que se redondea (10: $1.781 → $1.780; 50: → $1.800; 1 = sin redondeo)
   },
   drip: {
     gramosPorUnidad: 12, // gramos de café por drip bag (confirmado con el packaging)
@@ -36,10 +37,12 @@ const CONFIG = {
   },
 };
 
-// Precio pagando por transferencia/depósito (solo informativo: el cobro se
-// coordina por WhatsApp; MODO cobra el precio de lista)
-function precioTransferencia(monto) {
-  return Math.round((monto * (100 - CONFIG.transferencia.descuento)) / 100);
+// Precio pagando por transferencia/depósito, redondeado al múltiplo elegido
+// (por defecto de a $10, configurable en /admin → Precios → Configuración).
+function precioTransferencia(monto, multiplo = CONFIG.transferencia.redondeo) {
+  const bruto = (Number(monto) * (100 - CONFIG.transferencia.descuento)) / 100;
+  const m = Number(multiplo);
+  return Number.isFinite(m) && m > 1 ? redondearPrecio(bruto, m) : Math.round(bruto);
 }
 
 // Número de pedido legible: 7 → "#0007"
@@ -388,7 +391,7 @@ function calcularPedido(items, opciones, datos) {
 // dos veces. Se aplican en el mismo orden que la tienda: cantidad, cupón y, sobre
 // lo que queda, transferencia. Lo usan el formulario (para mostrar) y el backend.
 //   lineas: [{ precioUnitario, qty, unidades, esPack }]
-function calcularDescuentosManual(lineas, { cupon = null, aplicarCantidad = false, aplicarTransferencia = false } = {}) {
+function calcularDescuentosManual(lineas, { cupon = null, aplicarCantidad = false, aplicarTransferencia = false, redondeoTransferencia } = {}) {
   // El precio acordado puede tener centavos ($1.166,67 c/u), pero los pedidos se
   // guardan en pesos enteros: cada línea se redondea, y los totales salen de ahí.
   const totalLinea = (l) => Math.round(l.precioUnitario * l.qty);
@@ -429,7 +432,7 @@ function calcularDescuentosManual(lineas, { cupon = null, aplicarCantidad = fals
   }
 
   const resto = base - descuentoCupon;
-  const descuentoPago = aplicarTransferencia ? resto - precioTransferencia(resto) : 0;
+  const descuentoPago = aplicarTransferencia ? resto - precioTransferencia(resto, redondeoTransferencia) : 0;
   return { ok: true, subtotal, descuentoCantidad, descuentoCupon, descuentoPago, total: resto - descuentoPago };
 }
 

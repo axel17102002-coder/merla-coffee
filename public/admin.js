@@ -2259,6 +2259,11 @@ async function cargarPrecios() {
     renderInsumos();
     $("#cfg-gramos").value = cfgPrecios.gramosPorBag;
     $("#cfg-pack-desc").value = cfgPrecios.packDescuento;
+    if ($("#cfg-redondeo-transf")) {
+      const red = Number(cfgPrecios.redondeoTransferencia) || 10;
+      $("#cfg-redondeo-transf").value = String(red);
+      CONFIG.transferencia.redondeo = red;
+    }
     $("#cfg-comision-mp").value = cfgPrecios.comisionMp != null ? cfgPrecios.comisionMp : 0;
     renderComisionesMp();
     const metodosCargados = Object.values(cfgPrecios.comisionMpMetodos || {}).filter((v) => Number(v) > 0).length;
@@ -2598,12 +2603,19 @@ const configPendientes = new Map();
 // Delegado: las comisiones por método de MP se renderizan después (ver
 // renderComisionesMp), así que no alcanza con enganchar los inputs del HTML.
 document.addEventListener("input", (e) => {
-  const input = e.target.closest(".px-config [data-clave]");
+  const input = e.target.closest(".px-config input[data-clave]");
   if (!input) return;
   const fila = input.closest(".px-config__fila");
   ponerEstado(fila, "Guardando…");
   clearTimeout(configPendientes.get(input.dataset.clave));
   configPendientes.set(input.dataset.clave, setTimeout(() => guardarConfigGlobal(input, fila), 800));
+});
+document.addEventListener("change", (e) => {
+  const select = e.target.closest(".px-config select[data-clave]");
+  if (!select) return;
+  const fila = select.closest(".px-config__fila");
+  ponerEstado(fila, "Guardando…");
+  guardarConfigGlobal(select, fila);
 });
 
 async function guardarConfigGlobal(input, fila) {
@@ -2634,6 +2646,10 @@ async function guardarConfigGlobal(input, fila) {
       // Claves sin efecto sobre precios (pesos de envío, comisión MP): solo se
       // guardan. La comisión sí impacta en la contribución de Insights, así que
       // actualizamos su valor local para que se refleje sin recargar.
+      if (clave === "redondeo_transferencia") {
+        cfgPrecios.redondeoTransferencia = valor;
+        CONFIG.transferencia.redondeo = valor;
+      }
       if (clave === "comision_mercadopago") {
         cfgPrecios.comisionMp = valor;
         cfgComisionMp.comisionMp = valor;

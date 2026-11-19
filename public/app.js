@@ -829,6 +829,10 @@ function estadoPedido() {
 // Refleja en la tienda el precio del envío local en La Plata y la nota del
 // punto de retiro que vienen de la base (sin quedar desfasados con /admin).
 function aplicarConfigEnvio() {
+  const transf = DATOS && DATOS.config && DATOS.config.transferencia;
+  if (transf && Number(transf.redondeo) >= 1) {
+    CONFIG.transferencia.redondeo = Number(transf.redondeo);
+  }
   const cfgEnvio = DATOS && DATOS.config && DATOS.config.envio;
   if (!cfgEnvio) return;
   if (Number.isFinite(cfgEnvio.localPrecio) && cfgEnvio.localPrecio >= 0) {

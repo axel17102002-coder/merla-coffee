@@ -316,6 +316,21 @@
                     <span class="px-estado" data-estado></span>
                   </div>
                 </div>
+                <div class="px-config__fila">
+                  <div class="px-config__info">
+                    <strong>Redondeo de transferencia</strong>
+                    <span>A qué múltiplo se redondea el precio pagando por transferencia (10% OFF), para evitar números como $1.781.</span>
+                  </div>
+                  <div class="px-config__control">
+                    <select id="cfg-redondeo-transf" data-clave="redondeo_transferencia" aria-label="Redondeo de precios por transferencia">
+                      <option value="1">Sin redondeo ($1.781)</option>
+                      <option value="10">De a $10 ($1.780)</option>
+                      <option value="50">De a $50 ($1.800)</option>
+                      <option value="100">De a $100 ($1.800)</option>
+                    </select>
+                    <span class="px-estado" data-estado></span>
+                  </div>
+                </div>
               </div>
             </section>
 

@@ -17,7 +17,7 @@ const andreani = require("../lib/andreani.js");
 const paqar = require("../lib/paqar.js");
 
 const CLAVES_VALIDAS = [
-  "margen_unidad", "gramos_por_bag", "pack_unidades", "pack_descuento",
+  "margen_unidad", "gramos_por_bag", "pack_unidades", "pack_descuento", "redondeo_transferencia",
   "peso_drip_bag_g", "peso_cafe_bolsa_g", "peso_merch_g", "peso_caja_g",
   "envio_local_precio", "envio_gratis_desde",
   "comision_mercadopago",

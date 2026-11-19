@@ -588,6 +588,14 @@ button:disabled { opacity: .55; cursor: wait; }
   background: #fff;
 }
 .sim-opcion__meta { color: var(--gris); font-size: .8rem; }
+.px-config__control select {
+  border: 1px solid var(--borde);
+  border-radius: 9px;
+  padding: 8px 10px;
+  background: #fff;
+  font-size: .88rem;
+  font-weight: 600;
+}
 .prod-foto--etiqueta input { border-style: solid; background: #fdf6ec; }
 .prod-foto em { font-style: normal; font-weight: 400; }
 .prod-thumb--grande { max-width: 240px; }

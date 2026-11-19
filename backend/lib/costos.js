@@ -19,6 +19,7 @@ const RESPALDO = {
   gramosPorBag: 12,
   packUnidades: 5,
   packDescuento: 10,
+  redondeoTransferencia: 10,
   // Peso estimado por tipo de producto y embalaje (gramos), para cotizar envíos
   pesoDripBagG: 18,
   pesoCafeBolsaG: 270,
@@ -49,6 +50,7 @@ const CLAVES = {
   gramos_por_bag: "gramosPorBag",
   pack_unidades: "packUnidades",
   pack_descuento: "packDescuento",
+  redondeo_transferencia: "redondeoTransferencia",
   peso_drip_bag_g: "pesoDripBagG",
   peso_cafe_bolsa_g: "pesoCafeBolsaG",
   peso_merch_g: "pesoMerchG",

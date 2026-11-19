@@ -15,7 +15,7 @@
 
 const { sb, sbRpc, obtenerCatalogo, obtenerCupon, cuponYaUsado } = require("../lib/supabase.js");
 const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
-const { itemsConCosto } = require("../lib/costos.js");
+const { itemsConCosto, obtenerCostos } = require("../lib/costos.js");
 const { CONFIG, METODOS_MP, METODOS_PAGO_MANUAL, ESTADOS_ENTREGA, urlTracking, ORIGENES_MANUALES, calcularDescuentosManual } = require("../../public/motor.js");
 
 const CAMPOS = "id,numero,origen,items,total,descuento_cantidad,cupon,descuento_cupon,cliente_email,estado,creado,puntos_ganados,puntos_canjeados,envio,envio_costo";
@@ -136,10 +136,12 @@ async function crearPedidoManual(body) {
     if (await cuponYaUsado(cupon.codigo, email)) return falla(409, "Este email ya usó ese cupón");
   }
 
+  const { cfg } = await obtenerCostos();
   const descuentos = calcularDescuentosManual(lineas, {
     cupon,
     aplicarCantidad: Boolean(body.aplicarCantidad),
     aplicarTransferencia: metodoPago === "transferencia" && Boolean(body.aplicarTransferencia),
+    redondeoTransferencia: cfg && cfg.redondeoTransferencia,
   });
   if (!descuentos.ok) return falla(400, descuentos.error);
   const { total } = descuentos;

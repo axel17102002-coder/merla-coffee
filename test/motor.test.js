@@ -71,8 +71,14 @@ test("redondearPrecio va al múltiplo más cercano, para arriba o para abajo", (
   assert.equal(redondearPrecio(10400, 50), 10400);
 });
 
-test("el precio por transferencia aplica el descuento de CONFIG", () => {
+test("el precio por transferencia aplica el descuento de CONFIG y redondea al múltiplo elegido", () => {
   assert.equal(precioTransferencia(10000), 10000 * (100 - CONFIG.transferencia.descuento) / 100);
+  // $1.979 × 0,90 = $1.781,10 → por defecto (de a $10) queda en $1.780
+  assert.equal(precioTransferencia(1979), 1780);
+  assert.equal(precioTransferencia(1979, 10), 1780);
+  assert.equal(precioTransferencia(1979, 50), 1800);
+  assert.equal(precioTransferencia(1979, 100), 1800);
+  assert.equal(precioTransferencia(1979, 1), 1781);
 });
 
 test("el número de pedido se muestra con cuatro dígitos", () => {

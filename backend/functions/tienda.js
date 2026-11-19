@@ -60,7 +60,10 @@ exports.handler = async () => {
           pagos: CONFIG.pagos,
           descuentoCantidad: CONFIG.descuentoCantidad,
           descuentoPorcentaje: CONFIG.descuentoPorcentaje,
-          transferencia: CONFIG.transferencia,
+          transferencia: {
+            ...CONFIG.transferencia,
+            redondeo: Number(cfg.redondeoTransferencia) || CONFIG.transferencia.redondeo,
+          },
           pack: CONFIG.pack,
           fidelidad: CONFIG.fidelidad,
           envio: {
