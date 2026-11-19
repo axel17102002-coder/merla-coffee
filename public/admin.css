@@ -599,3 +599,15 @@ button:disabled { opacity: .55; cursor: wait; }
 .prod-foto--etiqueta input { border-style: solid; background: #fdf6ec; }
 .prod-foto em { font-style: normal; font-weight: 400; }
 .prod-thumb--grande { max-width: 240px; }
+
+/* Mini indicadores dentro de un panel de Insights (visitas, carritos, recompras) */
+.mini-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 4px 0 14px; }
+.mini-kpis--borde { border-top: 1px solid var(--borde); padding-top: 14px; margin-top: 16px; margin-bottom: 0; }
+.mini-kpi { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.mini-kpi__label { color: var(--gris); font-size: .76rem; font-weight: 700; }
+.mini-kpi__valor { font-family: "Baloo 2", sans-serif; font-size: 1.45rem; line-height: 1.05; color: var(--verde); }
+.mini-kpi__nota { color: var(--gris); font-size: .74rem; }
+.mini-kpi .delta { align-self: flex-start; }
+.mini-kpi--spark .spark { width: 100%; height: 34px; }
+.stats-panel__sub--seccion { margin-top: 6px; font-weight: 700; color: var(--texto); }
+@media (max-width: 560px) { .mini-kpis { grid-template-columns: 1fr 1fr; } }

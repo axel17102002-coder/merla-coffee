@@ -167,6 +167,15 @@ create table if not exists resenas (
 );
 create unique index if not exists resenas_pedido_idx on resenas (pedido_id) where pedido_id is not null;
 
+-- Métricas diarias para Insights (visitas por fuente, carritos vencidos y
+-- recuperados). Solo totales del día, nada de las personas.
+create table if not exists metricas_dia (
+  fecha date not null,
+  clave text not null check (char_length(clave) between 1 and 60),
+  valor numeric not null default 0,
+  primary key (fecha, clave)
+);
+
 -- ---------- Seguridad ----------
 -- RLS activado sin políticas públicas: solo la service_role key (las funciones
 -- de Netlify) puede leer/escribir. El navegador nunca toca la base directo.
@@ -178,6 +187,7 @@ alter table cupones_usados enable row level security;
 alter table clientes enable row level security;
 alter table pedidos enable row level security;
 alter table resenas enable row level security;
+alter table metricas_dia enable row level security;
 
 -- ---------- Función atómica: aprobar pedido ----------
 -- La llama el webhook de MODO (o la confirmación del navegador) cuando el pago
@@ -412,6 +422,20 @@ begin
   end loop;
 end;
 $$;
+
+-- Suma al contador de hoy (hora de Argentina) de una métrica de Insights
+create or replace function sumar_metrica(p_clave text, p_valor numeric default 1)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  insert into metricas_dia (fecha, clave, valor)
+  values ((now() at time zone 'America/Argentina/Buenos_Aires')::date, p_clave, p_valor)
+  on conflict (fecha, clave) do update set valor = metricas_dia.valor + excluded.valor;
+$$;
+revoke execute on function sumar_metrica(text, numeric) from public, anon, authenticated;
+grant execute on function sumar_metrica(text, numeric) to service_role;
 
 -- Nota: la limpieza de carritos abandonados (pendientes > 48 h) la hace el cron
 -- del Worker (src/worker.js → backend/lib/mantenimiento.js), no un RPC.

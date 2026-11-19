@@ -23,6 +23,8 @@ import { handler as adminStock } from "../backend/functions/admin-stock.js";
 import { handler as adminCupones } from "../backend/functions/admin-cupones.js";
 import { handler as adminResenas } from "../backend/functions/admin-resenas.js";
 import { handler as resena } from "../backend/functions/resena.js";
+import { handler as visita } from "../backend/functions/visita.js";
+import { handler as adminMetricas } from "../backend/functions/admin-metricas.js";
 import { handler as adminMail } from "../backend/functions/admin-mail.js";
 import { handler as adminProductos } from "../backend/functions/admin-productos.js";
 import { handler as adminImagen } from "../backend/functions/admin-imagen.js";
@@ -52,6 +54,8 @@ const rutas = {
   "admin-cupones": adaptar(adminCupones),
   "admin-resenas": adaptar(adminResenas),
   "resena": adaptar(resena),
+  "visita": adaptar(visita),
+  "admin-metricas": adaptar(adminMetricas),
   "admin-mail": adaptar(adminMail),
   "admin-productos": adaptar(adminProductos),
   "admin-imagen": adaptar(adminImagen),

@@ -350,10 +350,22 @@ function pedidosParaInsights() {
   return pedidosInsights || pedidosCache;
 }
 
+// Contadores diarios (visitas por fuente, carritos vencidos y recuperados).
+// null = todavía no cargaron; { falta } = falta la migración.
+let metricasDia = null;
+async function cargarMetricas() {
+  try {
+    const data = await api("/api/admin-metricas");
+    metricasDia = { filas: data.metricas || [], falta: data.falta || null };
+  } catch (err) {
+    metricasDia = { filas: [], falta: null, error: err.message };
+  }
+}
+
 async function cargarPedidosInsights({ forzar = false } = {}) {
   if (pedidosInsights && !forzar) return;
   try {
-    const data = await api(`/api/admin-pedidos?limite=${LIMITE_INSIGHTS}`);
+    const [data] = await Promise.all([api(`/api/admin-pedidos?limite=${LIMITE_INSIGHTS}`), cargarMetricas()]);
     pedidosInsights = data.pedidos;
     insightsTruncado = !!data.truncado;
     renderInsights();
@@ -646,6 +658,8 @@ function renderInsights() {
 
   renderPulso(i, prev);
   renderTendencia(i.aprobados);
+  renderVisitas(i, prev);
+  renderCarritos();
   renderClientes(i);
   renderOrigen(i.rendimientoOrigen);
   renderTopProductos(i.topProductos);
@@ -741,6 +755,128 @@ function renderTendencia(aprobados) {
     </div>` + cuerpo;
 }
 
+// ===== Visitas y carritos (contadores diarios de metricas_dia) =====
+const FUENTES_VISITA = {
+  directo: "Directo", instagram: "Instagram", facebook: "Facebook", google: "Google",
+  whatsapp: "WhatsApp", mail: "Mails", otros: "Otros sitios",
+};
+const ORIGENES_WEB = ["mercadopago", "whatsapp", "modo"]; // pedidos hechos en la tienda (no cargados a mano)
+
+// Fecha local "AAAA-MM-DD" (las métricas se guardan por día de Argentina)
+function diaLocal(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// Suma de una métrica entre dos fechas (Date o null = sin límite; hasta excluido)
+function sumaMetrica(clave, desde, hasta) {
+  if (!metricasDia) return 0;
+  const d = desde ? diaLocal(desde) : null, h = hasta ? diaLocal(hasta) : null;
+  return metricasDia.filas.reduce((t, f) =>
+    f.clave === clave && (!d || f.fecha >= d) && (!h || f.fecha < h) ? t + Number(f.valor || 0) : t, 0);
+}
+
+// Rango actual y anterior como fechas (para las métricas, que no son pedidos)
+function rangoFechas() {
+  const desde = inicioDeRango(insightsRango);
+  if (!desde) return { desde: null, prevDesde: null };
+  return { desde, prevDesde: new Date(desde.getTime() - (Date.now() - desde.getTime())) };
+}
+
+function renderVisitas(i, prev) {
+  const caja = $("#stats-visitas");
+  if (!caja) return;
+  const titulo = `<h3 class="stats-panel__titulo">Visitas</h3>`;
+  if (!metricasDia) { caja.innerHTML = titulo + `<div class="vacio">Cargando…</div>`; return; }
+  if (metricasDia.falta) {
+    caja.innerHTML = titulo + `<div class="vacio">Para contar visitas falta correr <b>supabase/${escapar(metricasDia.falta)}</b> en Supabase.</div>`;
+    return;
+  }
+  const { desde, prevDesde } = rangoFechas();
+  const visitas = sumaMetrica("visitas", desde, null);
+  const visitasPrev = desde ? sumaMetrica("visitas", prevDesde, desde) : null;
+  if (!visitas && !metricasDia.filas.some((f) => f.clave === "visitas")) {
+    caja.innerHTML = titulo + `<div class="vacio">Todavía no hay visitas registradas: se empiezan a contar desde que se publicó el contador.</div>`;
+    return;
+  }
+  const web = i.aprobados.filter((p) => ORIGENES_WEB.includes(p.origen)).length;
+  const conversion = visitas ? (web / visitas) * 100 : null;
+  const prevWeb = prev ? prev.aprobados.filter((p) => ORIGENES_WEB.includes(p.origen)).length : null;
+  const convPrev = visitasPrev ? (prevWeb / visitasPrev) * 100 : null;
+
+  // Visitas por día, últimos 30 días (para la mini tendencia)
+  const serie = [];
+  for (let n = 29; n >= 0; n--) {
+    const d = new Date(); d.setDate(d.getDate() - n);
+    const clave = diaLocal(d);
+    serie.push(metricasDia.filas.filter((f) => f.clave === "visitas" && f.fecha === clave).reduce((t, f) => t + Number(f.valor), 0));
+  }
+
+  const fuentes = Object.keys(FUENTES_VISITA)
+    .map((f) => ({ f, n: sumaMetrica(`visitas:${f}`, desde, null) }))
+    .filter((x) => x.n > 0)
+    .sort((a, b) => b.n - a.n);
+  const max = Math.max(1, ...fuentes.map((x) => x.n));
+  const ranking = fuentes.length
+    ? `<div class="rank">` + fuentes.map(({ f, n }) => `<div class="rank__fila">
+        <span class="rank__nombre">${escapar(FUENTES_VISITA[f])}</span>
+        <span class="rank__valor">${n} · ${Math.round((n / visitas) * 100)}%</span>
+        <div class="rank__track"><div class="rank__barra" style="width:${(n / max) * 100}%"></div></div>
+      </div>`).join("") + `</div>`
+    : "";
+
+  caja.innerHTML = titulo +
+    `<p class="stats-panel__sub">Una por sesión, contadas en la tienda (anónimas: sin IP ni cookies)</p>
+     <div class="mini-kpis">
+       <div class="mini-kpi"><span class="mini-kpi__label">Visitas</span>
+         <strong class="mini-kpi__valor">${visitas.toLocaleString("es-AR")}</strong>${chipDelta(visitasPrev ? variacion(visitas, visitasPrev) : null)}</div>
+       <div class="mini-kpi"><span class="mini-kpi__label">Conversión</span>
+         <strong class="mini-kpi__valor">${conversion != null ? conversion.toFixed(1).replace(".", ",") + "%" : "—"}</strong>${chipDelta(conversion != null && convPrev != null ? Math.round((conversion - convPrev) * 10) / 10 : null, { sufijo: " pts" })}
+         <span class="mini-kpi__nota">${web} compra${web === 1 ? "" : "s"} en la tienda</span></div>
+       <div class="mini-kpi mini-kpi--spark"><span class="mini-kpi__label">Últimos 30 días</span>${sparkline(serie) || "<span class=\"mini-kpi__nota\">—</span>"}</div>
+     </div>
+     <p class="stats-panel__sub stats-panel__sub--seccion">De dónde vienen</p>` + ranking;
+}
+
+function renderCarritos() {
+  const caja = $("#stats-carritos");
+  if (!caja) return;
+  // Ahora: pedidos empezados y no pagados (los cargados a mano no cuentan)
+  const pendientes = pedidosParaInsights().filter((p) => p.estado === "pendiente" && ORIGENES_WEB.includes(p.origen));
+  const enJuego = pendientes.reduce((t, p) => t + (Number(p.total) || 0), 0);
+  const conRecordatorio = pendientes.filter((p) => p.recordatorio_enviado).length;
+
+  // En el período: los que vencieron a las 48 h y cuántos de esos igual compraron
+  const { desde } = rangoFechas();
+  const hayMetricas = metricasDia && !metricasDia.falta;
+  const vencidos = hayMetricas ? sumaMetrica("carritos_vencidos", desde, null) : 0;
+  const monto = hayMetricas ? sumaMetrica("carritos_vencidos_monto", desde, null) : 0;
+  const recuperados = hayMetricas ? sumaMetrica("carritos_recuperados", desde, null) : 0;
+
+  const lista = pendientes.slice(0, 4).map((p) => {
+    const horas = Math.max(0, Math.round((Date.now() - new Date(p.creado)) / 3600000));
+    return `<div class="rank__fila">
+      <span class="rank__nombre">${escapar(numeroDe(p))} · ${escapar(p.cliente_email || "sin email")}</span>
+      <span class="rank__valor">${formato.format(Number(p.total) || 0)} · hace ${horas < 1 ? "menos de 1 h" : horas + " h"}${p.recordatorio_enviado ? " · ✉️" : ""}</span>
+    </div>`;
+  }).join("");
+
+  caja.innerHTML =
+    `<h3 class="stats-panel__titulo">Carritos pendientes</h3>
+     <p class="stats-panel__sub">Pedidos empezados y no pagados. Se borran a las 48 h; antes, el cron les manda un recordatorio.</p>
+     <div class="mini-kpis">
+       <div class="mini-kpi"><span class="mini-kpi__label">Ahora</span>
+         <strong class="mini-kpi__valor">${pendientes.length}</strong>
+         <span class="mini-kpi__nota">${formato.format(enJuego)} en juego${pendientes.length ? ` · ${conRecordatorio} con recordatorio` : ""}</span></div>
+       <div class="mini-kpi"><span class="mini-kpi__label">Vencidos en el período</span>
+         <strong class="mini-kpi__valor">${hayMetricas ? vencidos : "—"}</strong>
+         <span class="mini-kpi__nota">${hayMetricas ? `${formato.format(monto)} que no se cobraron` : "falta migracion-metricas.sql"}</span></div>
+       <div class="mini-kpi"><span class="mini-kpi__label">Recuperados</span>
+         <strong class="mini-kpi__valor">${hayMetricas && vencidos ? Math.round((recuperados / vencidos) * 100) + "%" : "—"}</strong>
+         <span class="mini-kpi__nota">${hayMetricas ? `${recuperados} igual compraron después` : ""}</span></div>
+     </div>
+     ${lista ? `<p class="stats-panel__sub stats-panel__sub--seccion">Los últimos</p><div class="rank">${lista}</div>` : ""}`;
+}
+
 // Primera compra (fecha) por email en toda la cache: sirve para separar clientes
 // nuevos de recurrentes.
 function primeraCompraPorEmail() {
@@ -783,7 +919,48 @@ function renderClientes(i) {
        </div>`;
   $("#stats-clientes").innerHTML =
     `<h3 class="stats-panel__titulo">Clientes</h3>
-     <p class="stats-panel__sub">Nuevos vs recurrentes en el período · recompra ${i.tasaRecompra != null ? i.tasaRecompra + "%" : "—"}</p>` + cuerpo;
+     <p class="stats-panel__sub">Nuevos vs recurrentes en el período · recompra ${i.tasaRecompra != null ? i.tasaRecompra + "%" : "—"}</p>` + cuerpo + bloqueRecompras(i, primera);
+}
+
+// Recompras: cada cuánto vuelven (sobre todo el histórico) y cuánto de lo
+// facturado en el período viene de clientes que ya habían comprado antes.
+function bloqueRecompras(i, primera) {
+  const compras = {};
+  for (const p of pedidosParaInsights()) {
+    if (p.estado !== "aprobado") continue;
+    const email = (p.cliente_email || "").trim().toLowerCase();
+    const d = new Date(p.creado);
+    if (!email || isNaN(d)) continue;
+    (compras[email] = compras[email] || []).push(d);
+  }
+  const intervalos = [];
+  let tresOMas = 0;
+  for (const fechas of Object.values(compras)) {
+    fechas.sort((a, b) => a - b);
+    if (fechas.length >= 3) tresOMas++;
+    for (let k = 1; k < fechas.length; k++) intervalos.push((fechas[k] - fechas[k - 1]) / 86400000);
+  }
+  const dias = intervalos.length ? Math.round(intervalos.reduce((t, x) => t + x, 0) / intervalos.length) : null;
+
+  let deRecurrentes = 0;
+  for (const p of i.aprobados) {
+    const email = (p.cliente_email || "").trim().toLowerCase();
+    const d = new Date(p.creado);
+    if (email && primera[email] && d > primera[email]) deRecurrentes += Number(p.total) || 0;
+  }
+  const pct = i.facturacion > 0 ? Math.round((deRecurrentes / i.facturacion) * 100) : null;
+
+  return `<div class="mini-kpis mini-kpis--borde">
+      <div class="mini-kpi"><span class="mini-kpi__label">Vuelven cada</span>
+        <strong class="mini-kpi__valor">${dias != null ? dias + " días" : "—"}</strong>
+        <span class="mini-kpi__nota">${intervalos.length ? `promedio entre compras` : "todavía nadie repitió"}</span></div>
+      <div class="mini-kpi"><span class="mini-kpi__label">Facturación de recompras</span>
+        <strong class="mini-kpi__valor">${pct != null ? pct + "%" : "—"}</strong>
+        <span class="mini-kpi__nota">${formato.format(Math.round(deRecurrentes))} en el período</span></div>
+      <div class="mini-kpi"><span class="mini-kpi__label">Fieles</span>
+        <strong class="mini-kpi__valor">${tresOMas}</strong>
+        <span class="mini-kpi__nota">con 3 compras o más</span></div>
+    </div>`;
 }
 
 // ④ Por canal, como ranking (dónde entran los pedidos)

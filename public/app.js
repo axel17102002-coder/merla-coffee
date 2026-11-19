@@ -53,6 +53,10 @@ if (CONFIG.pagos.modo) {
 // filtroRegion  -> Región actualmente seleccionada.
 // saldoPuntos   -> Puntos disponibles del cliente.
 // ============================================================================
+// La URL con la que entró el visitante, antes de que la tienda la limpie
+// (?retomar=, ?resena=, ?pago= se borran al leerlos). La usa contarVisita.
+const BUSQUEDA_DE_ENTRADA = location.search;
+
 let carrito = JSON.parse(localStorage.getItem("merla-carrito") || "{}");
 // Los carritos del formato viejo (claves "producto:presentacion") se descartan
 if (Object.keys(carrito).some((k) => k.includes(":"))) {
@@ -2491,6 +2495,25 @@ document.addEventListener("submit", (e) => {
   e.preventDefault();
   enviarFormResena();
 });
+
+// ===== Visitas (para Insights en /admin) =====
+// Una vez por sesión se avisa que alguien entró y de dónde vino (Instagram,
+// Google, un mail…). Es anónimo: el servidor solo suma 1 al contador del día,
+// no guarda IP, email ni cookies.
+(function contarVisita() {
+  try {
+    if (sessionStorage.getItem("merla-visita")) return;
+    sessionStorage.setItem("merla-visita", "1");
+  } catch {
+    return; // sin sessionStorage no sabemos si ya contó: mejor no contar de más
+  }
+  const qp = new URLSearchParams(BUSQUEDA_DE_ENTRADA);
+  const datos = JSON.stringify({ ref: document.referrer || "", utm: qp.get("utm_source") || "", params: BUSQUEDA_DE_ENTRADA });
+  try {
+    if (navigator.sendBeacon) navigator.sendBeacon("/api/visita", new Blob([datos], { type: "application/json" }));
+    else fetch("/api/visita", { method: "POST", body: datos, keepalive: true, headers: { "Content-Type": "application/json" } });
+  } catch { /* contar visitas nunca puede romper la tienda */ }
+})();
 
 // ===== Inicio =====
 const emailGuardado = emailCliente();

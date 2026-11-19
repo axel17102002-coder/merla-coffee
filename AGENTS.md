@@ -162,6 +162,11 @@ una regla de precio/punto, va acá y aplica en ambos lados a la vez.
   (posición, color, luz y reflejo). Si cambia la foto maestra, se regeneran
   los dos con `herramientas/calibrar-maestra.swift`. pdf.js se carga de cdnjs
   junto con su worker en la misma página (un Worker de otro dominio se cuelga).
+- **Métricas de Insights** (`metricas_dia`, migración `migracion-metricas.sql`):
+  contadores por día, sin datos de personas. `app.js` avisa una visita por
+  sesión (`/api/visita`, con la fuente: Instagram, Google, mail…; los robots no
+  cuentan) y el cron anota los carritos vencidos y cuántos de esos clientes
+  igual compraron (`registrarCarritosVencidos`). Los lee `/api/admin-metricas`.
 - **Íconos**: sprite SVG al principio de `index.html` (`<symbol id="i-...">`),
   se usan con `icono("nombre")` en `app.js`. Para uno nuevo, sumá el `<symbol>`.
 - **Pasarelas de pago**: se prenden/apagan en `motor.js` → `CONFIG.pagos`. Hoy

@@ -8,6 +8,7 @@ const { mailCarritoAbandonado, mailPedidoResena } = require("./mails.js");
 const { enlaceResena, elegirPedidosParaResena, DIAS_DESDE, DIAS_HASTA, DIAS_ENTRE_PEDIDOS } = require("./resenas.js");
 const { buscarPagosMp } = require("./mercadopago.js");
 const { acreditarPagoMp } = require("./cobro.js");
+const { sumarMetrica } = require("./metricas.js");
 const { ORIGENES_MANUALES } = require("../../public/motor.js");
 
 // Los pedidos cargados a mano se cobran por fuera de la web: no son carritos
@@ -91,20 +92,57 @@ function sinPagoConfirmado(pedido, conciliacion) {
 // Devuelve cuántos borró.
 async function limpiarPedidosPendientes(conciliacion = null) {
   const vencidos = `pedidos?estado=eq.pendiente&creado=lt.${encodeURIComponent(haceHoras(HORAS_PENDIENTE))}`;
+  const borradosTodos = [];
   const borrar = async (filtro) => {
     const borrados = await sb(`${vencidos}${filtro}`, { method: "DELETE", headers: { Prefer: "return=representation" } });
+    if (Array.isArray(borrados)) borradosTodos.push(...borrados);
     return Array.isArray(borrados) ? borrados.length : 0;
   };
 
-  // Sin Mercado Pago configurado no hay pagos que proteger: se borra todo junto
-  if (!conciliacion) return borrar(SIN_MANUALES);
-
-  // Los que no son de Mercado Pago (WhatsApp) no tienen pago online que perder
-  let total = await borrar(`&origen=not.in.(${[...ORIGENES_MANUALES, "mercadopago"].join(",")})`);
-  // Los de Mercado Pago, solo los que MP confirmó sin pago (los ids son uuid)
-  const ids = [...conciliacion.sinPago];
-  if (ids.length) total += await borrar(`&origen=eq.mercadopago&id=in.(${ids.join(",")})`);
+  let total;
+  if (!conciliacion) {
+    // Sin Mercado Pago configurado no hay pagos que proteger: se borra todo junto
+    total = await borrar(SIN_MANUALES);
+  } else {
+    // Los que no son de Mercado Pago (WhatsApp) no tienen pago online que perder
+    total = await borrar(`&origen=not.in.(${[...ORIGENES_MANUALES, "mercadopago"].join(",")})`);
+    // Los de Mercado Pago, solo los que MP confirmó sin pago (los ids son uuid)
+    const ids = [...conciliacion.sinPago];
+    if (ids.length) total += await borrar(`&origen=eq.mercadopago&id=in.(${ids.join(",")})`);
+  }
+  await registrarCarritosVencidos(borradosTodos);
   return total;
+}
+
+// Para Insights: cuántos carritos vencieron hoy, por cuánta plata, y cuántos
+// de esos clientes igual terminaron comprando (otro pedido, cobrado después).
+// Sin esto se perdía el rastro: a las 48 h el pendiente se borra.
+async function registrarCarritosVencidos(borrados) {
+  if (!borrados.length) return;
+  const monto = borrados.reduce((t, p) => t + (Number(p.total) || 0), 0);
+  let recuperados = 0;
+  const conEmail = borrados.filter((p) => p.cliente_email);
+  if (conEmail.length) {
+    try {
+      const emails = [...new Set(conEmail.map((p) => String(p.cliente_email).toLowerCase()))];
+      const desde = conEmail.reduce((min, p) => (p.creado < min ? p.creado : min), conEmail[0].creado);
+      const lista = emails.map((e) => `"${e.replace(/"/g, "")}"`).join(",");
+      const compras = await sb(
+        `pedidos?select=cliente_email,creado&estado=eq.aprobado&creado=gt.${encodeURIComponent(desde)}` +
+        `&cliente_email=in.(${encodeURIComponent(lista)})&limit=1000`
+      );
+      recuperados = conEmail.filter((p) => compras.some((c) =>
+        String(c.cliente_email).toLowerCase() === String(p.cliente_email).toLowerCase() && c.creado > p.creado
+      )).length;
+    } catch (err) {
+      console.warn("mantenimiento: no pude ver si los carritos vencidos se recuperaron:", err.message);
+    }
+  }
+  await Promise.all([
+    sumarMetrica("carritos_vencidos", borrados.length),
+    sumarMetrica("carritos_vencidos_monto", monto),
+    recuperados ? sumarMetrica("carritos_recuperados", recuperados) : null,
+  ]);
 }
 
 // Cupón de regalo para el recordatorio (opcional). Se activa cargando el código

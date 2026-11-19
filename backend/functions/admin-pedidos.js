@@ -56,6 +56,7 @@ async function traerPedidos(busqueda, limite) {
   const filtro = filtroBusqueda(busqueda);
   const orden = `${filtro}&order=creado.desc&limit=${limite}`;
   const intentos = [
+    ",mp_metodo,confirmacion_enviada,metodo_pago,descuento_pago,estado_entrega,tracking_codigo,tracking_url,despachado_en,envio_costo_real,recordatorio_enviado",
     ",mp_metodo,confirmacion_enviada,metodo_pago,descuento_pago,estado_entrega,tracking_codigo,tracking_url,despachado_en,envio_costo_real",
     ",mp_metodo,confirmacion_enviada,metodo_pago,descuento_pago",
     ",mp_metodo,confirmacion_enviada",
