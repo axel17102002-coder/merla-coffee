@@ -156,6 +156,12 @@ una regla de precio/punto, va acá y aplica en ambos lados a la vez.
   `migracion-perfil.sql`), se editan en el panel. La tienda los usa para las
   barritas y para "¿Cuál es para vos?" (`GUSTOS` en `app.js`); un café sin los
   tres valores no muestra perfil ni entra en la recomendación.
+- **Foto de producto desde la etiqueta**: en el panel (Productos → Editar) se
+  sube el PDF o PNG de la etiqueta y `public/etiqueta.js` la monta en el
+  navegador sobre `img/maestra/bolsa-limpia.jpg` usando `calibracion.json`
+  (posición, color, luz y reflejo). Si cambia la foto maestra, se regeneran
+  los dos con `herramientas/calibrar-maestra.swift`. pdf.js se carga de cdnjs
+  junto con su worker en la misma página (un Worker de otro dominio se cuelga).
 - **Íconos**: sprite SVG al principio de `index.html` (`<symbol id="i-...">`),
   se usan con `icono("nombre")` en `app.js`. Para uno nuevo, sumá el `<symbol>`.
 - **Pasarelas de pago**: se prenden/apagan en `motor.js` → `CONFIG.pagos`. Hoy

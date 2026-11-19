@@ -1419,8 +1419,12 @@ function formularioDatosProducto(p) {
       </div>` : ""}` : ""}
       <label class="pm__campo">Descripción
         <textarea data-ed="descripcion" maxlength="600" rows="3">${escapar(p.descripcion)}</textarea></label>
+      ${p.tipo !== "simple" ? `<label class="prod-foto prod-foto--etiqueta">
+        <span>🏷️ Crear la foto desde la etiqueta <em>(el PDF o PNG de Canva: se monta sola sobre la bolsa)</em></span>
+        <input data-ed-etiqueta type="file" accept="application/pdf,image/png,image/jpeg" aria-label="Etiqueta de ${escapar(p.nombre)}">
+      </label>` : ""}
       <label class="prod-foto">
-        <span>📷 ${p.imagen ? "Cambiar la foto" : "Agregar una foto"}</span>
+        <span>📷 ${p.imagen ? "Cambiar la foto" : "Agregar una foto"}${p.tipo !== "simple" ? " (o subir una propia)" : ""}</span>
         <input data-ed-foto type="file" accept="image/webp,image/jpeg,image/png,image/avif" aria-label="Foto de ${escapar(p.nombre)}">
       </label>
       <img class="prod-thumb" data-ed-thumb src="${escapar(p.imagen)}" alt=""${p.imagen ? "" : " hidden"}>
@@ -1504,13 +1508,42 @@ function leerComoDataUrl(archivo) {
   });
 }
 
+// Fotos armadas desde la etiqueta, a la espera de "Guardar cambios" (por formulario)
+const fotosDeEtiqueta = new WeakMap();
+
 // Vista previa de la foto nueva en el editor
-$("#productos-columnas").addEventListener("change", (e) => {
+$("#productos-columnas").addEventListener("change", async (e) => {
   const foto = e.target.closest("[data-ed-foto]");
-  if (!foto || !foto.files[0]) return;
-  const miniatura = foto.closest("[data-editor]").querySelector("[data-ed-thumb]");
-  miniatura.src = URL.createObjectURL(foto.files[0]);
-  miniatura.hidden = false;
+  if (foto && foto.files[0]) {
+    const form = foto.closest("[data-editor]");
+    fotosDeEtiqueta.delete(form); // una foto propia gana sobre la armada
+    const miniatura = form.querySelector("[data-ed-thumb]");
+    miniatura.src = URL.createObjectURL(foto.files[0]);
+    miniatura.hidden = false;
+    return;
+  }
+
+  // Etiqueta → foto del producto, armada en el navegador (ver etiqueta.js)
+  const etiqueta = e.target.closest("[data-ed-etiqueta]");
+  if (!etiqueta || !etiqueta.files[0]) return;
+  const form = etiqueta.closest("[data-editor]");
+  const aviso = form.querySelector("[data-ed-mensaje]");
+  const miniatura = form.querySelector("[data-ed-thumb]");
+  aviso.textContent = "Armando la foto con la etiqueta…";
+  etiqueta.disabled = true;
+  try {
+    const blob = await window.MerlaEtiqueta.fotoDesdeEtiqueta(etiqueta.files[0]);
+    fotosDeEtiqueta.set(form, new File([blob], "foto-etiqueta.jpg", { type: "image/jpeg" }));
+    form.querySelector("[data-ed-foto]").value = "";
+    miniatura.src = URL.createObjectURL(blob);
+    miniatura.hidden = false;
+    miniatura.classList.add("prod-thumb--grande");
+    aviso.textContent = "✅ Foto lista. Revisala y tocá «Guardar cambios» para publicarla.";
+  } catch (err) {
+    aviso.textContent = `⚠️ ${err.message}`;
+  } finally {
+    etiqueta.disabled = false;
+  }
 });
 
 // Guardar los datos editados de un producto
@@ -1525,7 +1558,7 @@ $("#productos-columnas").addEventListener("submit", async (e) => {
   try {
     const cuerpo = { id };
     form.querySelectorAll("[data-ed]").forEach((c) => { cuerpo[c.dataset.ed] = c.value; });
-    const archivo = form.querySelector("[data-ed-foto]").files[0];
+    const archivo = form.querySelector("[data-ed-foto]").files[0] || fotosDeEtiqueta.get(form);
     if (archivo) {
       if (archivo.size > 5 * 1024 * 1024) throw new Error("La foto supera los 5 MB");
       aviso.textContent = "Subiendo la foto…";
