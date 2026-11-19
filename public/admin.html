@@ -112,6 +112,7 @@
           </form>
           <div class="filtros" id="filtros">
             <button data-filtro="todos" class="filtro-activo">Todos</button>
+            <button data-filtro="por_despachar" id="filtro-despacho">📦 Por despachar</button>
             <button data-filtro="mercadopago">Mercado Pago</button>
             <button data-filtro="whatsapp">WhatsApp</button>
             <button data-filtro="mayorista">Mayorista</button>
@@ -425,6 +426,51 @@
                     <span class="px-estado" data-estado></span>
                   </div>
                 </div>
+              </div>
+
+              <!-- Simulador de cotización en vivo: prueba todas las APIs activas y
+                   muestra qué ve el cliente y cuánto tardó cada proveedor. -->
+              <div class="px-config px-config--simulador">
+                <div class="px-config__fila px-config__fila--nota">
+                  <div class="px-config__info">
+                    <strong>🧪 Simulador de cotización</strong>
+                    <span>Probá cualquier destino sin armar un carrito en la tienda. Muestra qué responde cada proveedor, cuánto tarda y qué lista final ve el cliente.</span>
+                  </div>
+                </div>
+                <form class="sim-form" id="simulador-envio">
+                  <input id="sim-cp" placeholder="CP (ej. 1900 o 5000)" value="1900" required aria-label="Código postal">
+                  <input id="sim-ciudad" placeholder="Ciudad" value="La Plata" required aria-label="Ciudad">
+                  <select id="sim-provincia" required aria-label="Provincia">
+                    <option value="Buenos Aires" selected>Buenos Aires</option>
+                    <option value="Ciudad Autónoma de Buenos Aires">CABA</option>
+                    <option value="Catamarca">Catamarca</option>
+                    <option value="Chaco">Chaco</option>
+                    <option value="Chubut">Chubut</option>
+                    <option value="Córdoba">Córdoba</option>
+                    <option value="Corrientes">Corrientes</option>
+                    <option value="Entre Ríos">Entre Ríos</option>
+                    <option value="Formosa">Formosa</option>
+                    <option value="Jujuy">Jujuy</option>
+                    <option value="La Pampa">La Pampa</option>
+                    <option value="La Rioja">La Rioja</option>
+                    <option value="Mendoza">Mendoza</option>
+                    <option value="Misiones">Misiones</option>
+                    <option value="Neuquén">Neuquén</option>
+                    <option value="Río Negro">Río Negro</option>
+                    <option value="Salta">Salta</option>
+                    <option value="San Juan">San Juan</option>
+                    <option value="San Luis">San Luis</option>
+                    <option value="Santa Cruz">Santa Cruz</option>
+                    <option value="Santa Fe">Santa Fe</option>
+                    <option value="Santiago del Estero">Santiago del Estero</option>
+                    <option value="Tierra del Fuego">Tierra del Fuego</option>
+                    <option value="Tucumán">Tucumán</option>
+                  </select>
+                  <input id="sim-peso" type="number" min="50" step="10" value="260" placeholder="Peso (g)" aria-label="Peso en gramos">
+                  <input id="sim-valor" type="number" min="100" step="500" value="20000" placeholder="Valor ($)" aria-label="Valor declarado en pesos">
+                  <button type="submit" class="px-btn" id="sim-btn">Probar cotización</button>
+                </form>
+                <div class="sim-resultado" id="sim-resultado"></div>
               </div>
             </section>
           </div>

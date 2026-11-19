@@ -30,6 +30,7 @@ import { handler as adminConfig } from "../backend/functions/admin-config.js";
 import { handler as whatsappPedido } from "../backend/functions/whatsapp-pedido.js";
 import { handler as adminPrecios } from "../backend/functions/admin-precios.js";
 import { handler as adminTransportistas } from "../backend/functions/admin-transportistas.js";
+import { handler as adminEnvioSimular } from "../backend/functions/admin-envio-simular.js";
 import { handler as cotizarEnvio } from "../backend/functions/cotizar-envio.js";
 import { handler as feed } from "../backend/functions/feed.js";
 
@@ -46,6 +47,7 @@ const rutas = {
   "confirmar-pedido": adaptar(confirmarPedido),
   "admin-pedidos": adaptar(adminPedidos),
   "admin-transportistas": adaptar(adminTransportistas),
+  "admin-envio-simular": adaptar(adminEnvioSimular),
   "admin-stock": adaptar(adminStock),
   "admin-cupones": adaptar(adminCupones),
   "admin-resenas": adaptar(adminResenas),

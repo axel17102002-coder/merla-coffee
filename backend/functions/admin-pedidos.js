@@ -16,7 +16,7 @@
 const { sb, sbRpc, obtenerCatalogo, obtenerCupon, cuponYaUsado } = require("../lib/supabase.js");
 const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
 const { itemsConCosto } = require("../lib/costos.js");
-const { CONFIG, METODOS_MP, METODOS_PAGO_MANUAL, ORIGENES_MANUALES, calcularDescuentosManual } = require("../../public/motor.js");
+const { CONFIG, METODOS_MP, METODOS_PAGO_MANUAL, ESTADOS_ENTREGA, urlTracking, ORIGENES_MANUALES, calcularDescuentosManual } = require("../../public/motor.js");
 
 const CAMPOS = "id,numero,origen,items,total,descuento_cantidad,cupon,descuento_cupon,cliente_email,estado,creado,puntos_ganados,puntos_canjeados,envio,envio_costo";
 
@@ -50,12 +50,18 @@ function limitePedido(valor) {
   return Math.min(n, LIMITE_MAXIMO);
 }
 
-// `mp_metodo`, `confirmacion_enviada`, `metodo_pago` y `descuento_pago` pueden no existir todavía: si falta alguna
-// migración, el panel sigue andando sin esas columnas.
+// Columnas agregadas por migraciones: si falta alguna, el panel sigue andando
+// degradando el SELECT al conjunto anterior.
 async function traerPedidos(busqueda, limite) {
   const filtro = filtroBusqueda(busqueda);
   const orden = `${filtro}&order=creado.desc&limit=${limite}`;
-  const intentos = [",mp_metodo,confirmacion_enviada,metodo_pago,descuento_pago", ",mp_metodo,confirmacion_enviada", ",mp_metodo", ""];
+  const intentos = [
+    ",mp_metodo,confirmacion_enviada,metodo_pago,descuento_pago,estado_entrega,tracking_codigo,tracking_url,despachado_en,envio_costo_real",
+    ",mp_metodo,confirmacion_enviada,metodo_pago,descuento_pago",
+    ",mp_metodo,confirmacion_enviada",
+    ",mp_metodo",
+    "",
+  ];
   for (const [i, extras] of intentos.entries()) {
     try {
       return await sb(`pedidos?select=${CAMPOS}${extras}${orden}`);
@@ -249,12 +255,91 @@ exports.handler = async (event) => {
       return { statusCode: 200, headers, body: JSON.stringify(resultado) };
     }
 
-    // Corregir a mano el método de pago de MP (el webhook lo completa solo en
-    // los pedidos nuevos; los viejos y los que MP informa raro se ajustan acá).
+    // Actualizar método de pago de MP o datos de despacho (estado_entrega,
+    // tracking_codigo, tracking_url, envio_costo_real).
     if (event.httpMethod === "PATCH") {
-      const { id, mp_metodo: metodo } = JSON.parse(event.body || "{}");
+      const body = JSON.parse(event.body || "{}");
+      const { id } = body;
+      if (!id) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "Falta el id del pedido" }) };
+      }
+
+      const esDespacho = ["estado_entrega", "tracking_codigo", "tracking_url", "envio_costo_real"]
+        .some((k) => k in body);
+
+      if (esDespacho) {
+        const cambios = {};
+        if ("estado_entrega" in body) {
+          if (!ESTADOS_ENTREGA.some((e) => e.clave === body.estado_entrega)) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: "Estado de entrega inválido" }) };
+          }
+          cambios.estado_entrega = body.estado_entrega;
+        }
+        if ("tracking_codigo" in body) {
+          cambios.tracking_codigo = String(body.tracking_codigo || "").trim().slice(0, 120) || null;
+        }
+        if ("tracking_url" in body) {
+          const url = String(body.tracking_url || "").trim().slice(0, 400);
+          if (url && !/^https?:\/\//i.test(url)) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: "El link de seguimiento debe empezar con https://" }) };
+          }
+          cambios.tracking_url = url || null;
+        }
+        if ("envio_costo_real" in body) {
+          const v = body.envio_costo_real === "" || body.envio_costo_real == null ? null : Math.round(Number(body.envio_costo_real));
+          if (v !== null && (!Number.isFinite(v) || v < 0)) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: "Costo real de envío inválido" }) };
+          }
+          cambios.envio_costo_real = v;
+        }
+
+        try {
+          const [actual] = await sb(`pedidos?id=eq.${encodeURIComponent(id)}&select=id,envio,despachado_en,tracking_url&limit=1`);
+          if (!actual) {
+            return { statusCode: 404, headers, body: JSON.stringify({ error: "Pedido inexistente" }) };
+          }
+          if (
+            ["despachado", "listo_retiro", "entregado"].includes(cambios.estado_entrega) &&
+            !actual.despachado_en
+          ) {
+            cambios.despachado_en = new Date().toISOString();
+          }
+          // Si se carga código de seguimiento sin URL explícita, armamos la oficial del correo
+          if ("tracking_codigo" in cambios && !("tracking_url" in cambios)) {
+            const transportista = actual.envio && actual.envio.transportista;
+            cambios.tracking_url = cambios.tracking_codigo ? (urlTracking(transportista, cambios.tracking_codigo) || null) : null;
+          }
+
+          const [pedido] = await sb(`pedidos?id=eq.${encodeURIComponent(id)}`, {
+            method: "PATCH",
+            headers: { Prefer: "return=representation" },
+            body: cambios,
+          });
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+              ok: true,
+              estado_entrega: pedido.estado_entrega,
+              tracking_codigo: pedido.tracking_codigo,
+              tracking_url: pedido.tracking_url,
+              despachado_en: pedido.despachado_en,
+              envio_costo_real: pedido.envio_costo_real,
+            }),
+          };
+        } catch (err) {
+          console.warn("admin-pedidos PATCH despacho:", err.message);
+          return {
+            statusCode: 409,
+            headers,
+            body: JSON.stringify({ error: "Falta correr supabase/migracion-despacho.sql en Supabase" }),
+          };
+        }
+      }
+
+      const metodo = body.mp_metodo;
       const valido = metodo == null || metodo === "" || METODOS_MP.some((m) => m.clave === metodo);
-      if (!id || !valido) {
+      if (!valido) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: "Método de pago inválido" }) };
       }
       try {

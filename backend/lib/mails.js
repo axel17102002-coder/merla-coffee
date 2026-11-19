@@ -1,7 +1,7 @@
 // Plantillas de los mails de Merla Coffee (HTML inline: los clientes de correo
 // no cargan hojas de estilo externas).
 
-const { CONFIG, METODOS_PAGO_MANUAL, numeroPedido } = require("../../public/motor.js");
+const { CONFIG, METODOS_PAGO_MANUAL, numeroPedido, urlTracking } = require("../../public/motor.js");
 
 const VERDE = "#2f4a36";
 const CREMA = "#f2ead8";
@@ -305,4 +305,66 @@ function mailPagoRaro(motivo, pago, pedido) {
   };
 }
 
-module.exports = { mailAvisoAdmin, mailConfirmacionCliente, mailCarritoAbandonado, mailPagoRaro, mailCodigoCanje, mailPedidoResena, mailResenaNueva, enlaceRetomar };
+// Aviso al cliente de que su pedido ya fue despachado (con tracking) o está
+// listo para retirar en La Plata. Se dispara desde /admin → Pedidos.
+function mailDespachoCliente(pedido) {
+  const nombre = nombreCliente(pedido);
+  const numero = numeroPedido(pedido.numero);
+  const envio = pedido.envio || {};
+  const esRetiro = envio.metodo === "retiro" || pedido.estado_entrega === "listo_retiro";
+  const esLocal = envio.proveedor === "local" || envio.opcionGrupo === "local:laplata";
+  const codigo = String(pedido.tracking_codigo || "").trim();
+  const link = String(pedido.tracking_url || "").trim() || urlTracking(envio.transportista, codigo);
+  const saludo = nombre ? `, ${escapar(nombre.split(/\s+/)[0])}` : "";
+
+  if (esRetiro) {
+    return {
+      asunto: `¡Tu pedido ${numero} está listo para retirar! ☕`,
+      html: envoltorio(
+        `¡Tu pedido ${numero} está listo${saludo}!`,
+        `<p style="margin:0 0 14px;color:${GRIS};">Ya preparamos tu café en <strong style="color:${VERDE};">La Plata (zona centro)</strong>. Escribinos por WhatsApp para coordinar el horario de retiro.</p>
+         <a href="https://wa.me/${WHATSAPP}?text=${encodeURIComponent(`¡Hola Merla Coffee! Ya me llegó el aviso de que mi pedido ${numero} está listo para retirar. ¿Cuándo puedo pasar?`)}" style="display:block;background:#25d366;color:#0b3d20;font-weight:bold;text-align:center;text-decoration:none;padding:13px 18px;border-radius:10px;margin:16px 0;">Coordinar retiro por WhatsApp</a>
+         ${resumen(pedido)}`
+      ),
+    };
+  }
+
+  if (esLocal) {
+    return {
+      asunto: `¡Tu pedido ${numero} salió en camino! 🛵`,
+      html: envoltorio(
+        `¡Tu pedido ${numero} está en camino${saludo}!`,
+        `<p style="margin:0 0 14px;color:${GRIS};">Ya despachamos tu pedido con nuestra cadetería en La Plata. Si necesitamos coordinar la entrega, te escribimos al teléfono que dejaste.</p>
+         ${bloqueEntrega(envio)}
+         <p style="margin:18px 0 0;"><a href="https://wa.me/${WHATSAPP}?text=${encodeURIComponent(`¡Hola Merla Coffee! Te escribo por el envío de mi pedido ${numero}`)}" style="display:block;background:#25d366;color:#0b3d20;font-weight:bold;text-align:center;text-decoration:none;padding:13px 18px;border-radius:10px;">Escribinos por WhatsApp</a></p>`
+      ),
+    };
+  }
+
+  const correo = [envio.transportista, envio.servicio].filter(Boolean).join(" · ") || "el correo";
+  const cajaTracking = codigo
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;background:#f6f0e2;border-radius:12px;">
+         <tr><td style="padding:14px 16px;text-align:center;">
+           <span style="display:block;font-size:12px;color:${GRIS};margin-bottom:4px;">Código de seguimiento (${escapar(correo)})</span>
+           <strong style="font-size:20px;letter-spacing:1.5px;color:${VERDE};">${escapar(codigo)}</strong>
+         </td></tr>
+       </table>`
+    : "";
+  const botonTracking = link
+    ? `<p style="margin:16px 0;"><a href="${escapar(link)}" style="display:block;background:${VERDE};color:#fff;font-weight:bold;text-align:center;text-decoration:none;padding:13px 18px;border-radius:10px;">Seguir mi envío</a></p>`
+    : "";
+
+  return {
+    asunto: `¡Despachamos tu pedido ${numero}! 📦`,
+    html: envoltorio(
+      `¡Tu pedido ${numero} está en camino${saludo}!`,
+      `<p style="margin:0 0 12px;color:${GRIS};">Ya despachamos tu compra por <strong style="color:${VERDE};">${escapar(correo)}</strong>.${codigo ? " Podés seguir el recorrido con este código:" : ""}</p>
+       ${cajaTracking}
+       ${botonTracking}
+       ${bloqueEntrega(envio)}
+       <p style="margin:20px 0 10px;color:${GRIS};font-size:13px;">El seguimiento puede demorar unas horas en actualizarse en la web del correo. ¿Alguna duda? Respondé este mail o escribinos por WhatsApp.</p>`
+    ),
+  };
+}
+
+module.exports = { mailAvisoAdmin, mailConfirmacionCliente, mailDespachoCliente, mailCarritoAbandonado, mailPagoRaro, mailCodigoCanje, mailPedidoResena, mailResenaNueva, enlaceRetomar };

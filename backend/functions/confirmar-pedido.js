@@ -4,10 +4,33 @@
 // así nadie puede confirmar un pedido que no pagó. Es idempotente: si el
 // webhook ya lo procesó, no pasa nada.
 
-const { sbRpc } = require("../lib/supabase.js");
+const { sb, sbRpc } = require("../lib/supabase.js");
 const { obtenerPago } = require("../lib/modo.js");
 const { obtenerPagoMp } = require("../lib/mercadopago.js");
 const { acreditarPagoMp } = require("../lib/cobro.js");
+
+async function resumenPedido(ref) {
+  try {
+    const [fila] = await sb(
+      `pedidos?modo_id=eq.${encodeURIComponent(ref)}&select=numero,total,envio_costo,envio&limit=1`
+    );
+    if (!fila) return null;
+    const e = fila.envio || {};
+    return {
+      numero: fila.numero,
+      total: fila.total,
+      envio_costo: fila.envio_costo || 0,
+      metodo: e.metodo || "retiro",
+      opcionTipo: e.opcionTipo || null,
+      transportista: e.transportista || "",
+      servicio: e.servicio || "",
+      proveedor: e.proveedor || "",
+      sucursal: e.sucursal ? e.sucursal.descripcion || e.sucursal.direccion || "" : "",
+    };
+  } catch {
+    return null;
+  }
+}
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json" };
@@ -29,7 +52,8 @@ exports.handler = async (event) => {
       }
       // Mismo camino que el webhook (idempotente: si ya lo procesó, no repite)
       const r = await acreditarPagoMp(pago);
-      return { statusCode: 200, headers, body: JSON.stringify(r) };
+      const pedido = r && r.ok ? await resumenPedido(String(pago.external_reference)) : null;
+      return { statusCode: 200, headers, body: JSON.stringify(pedido ? { ...r, pedido } : r) };
     }
 
     // Pago con MODO
@@ -45,7 +69,8 @@ exports.handler = async (event) => {
     }
 
     const r = await sbRpc("aprobar_pedido", { p_modo_id: String(id) });
-    return { statusCode: 200, headers, body: JSON.stringify(r) };
+    const pedido = r && r.ok ? await resumenPedido(String(id)) : null;
+    return { statusCode: 200, headers, body: JSON.stringify(pedido ? { ...r, pedido } : r) };
   } catch (err) {
     console.error("confirmar-pedido:", err);
     return { statusCode: 502, headers, body: JSON.stringify({ error: "Error confirmando el pedido" }) };

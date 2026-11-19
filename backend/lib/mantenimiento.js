@@ -210,12 +210,17 @@ async function pedirResenas() {
 
   let candidatos, recientes;
   try {
-    candidatos = await sb(
-      `pedidos?select=id,numero,origen,cliente_email,items,envio,actualizado&estado=eq.aprobado` +
-      `&cliente_email=not.is.null&resena_pedida=is.null` +
+    // Si ya se corrió migracion-despacho.sql, leemos también estado_entrega y
+    // despachado_en para no pedir reseña de un envío que todavía no salió (o
+    // recién se despachó ayer). Si falta la migración, seguimos igual que antes.
+    const filtro = `&estado=eq.aprobado&cliente_email=not.is.null&resena_pedida=is.null` +
       `&actualizado=lt.${encodeURIComponent(haceHoras(DIAS_DESDE * 24))}` +
-      `&actualizado=gt.${encodeURIComponent(haceHoras(DIAS_HASTA * 24))}&order=actualizado.asc&limit=100`
-    );
+      `&actualizado=gt.${encodeURIComponent(haceHoras(DIAS_HASTA * 24))}&order=actualizado.asc&limit=100`;
+    try {
+      candidatos = await sb(`pedidos?select=id,numero,origen,cliente_email,items,envio,actualizado,estado_entrega,despachado_en${filtro}`);
+    } catch {
+      candidatos = await sb(`pedidos?select=id,numero,origen,cliente_email,items,envio,actualizado${filtro}`);
+    }
     recientes = await sb(
       `pedidos?select=cliente_email&resena_pedida=gt.${encodeURIComponent(haceHoras(DIAS_ENTRE_PEDIDOS * 24))}&limit=5000`
     );
@@ -224,8 +229,22 @@ async function pedirResenas() {
     return 0;
   }
 
+  // En pedidos con envío que usan seguimiento de despacho: esperamos al menos
+  // DIAS_DESDE días desde que se despachó (y nunca pedimos si todavía está sin despachar).
+  const ahora = Date.now();
+  const listosParaResena = candidatos.filter((p) => {
+    const esEnvio = p.envio && p.envio.metodo === "envio";
+    if (!esEnvio || p.estado_entrega === undefined) return true;
+    if (p.estado_entrega === "pendiente" || p.estado_entrega === "preparando") return false;
+    if (p.despachado_en) {
+      const diasDesdeDespacho = (ahora - new Date(p.despachado_en).getTime()) / (24 * 3600 * 1000);
+      return diasDesdeDespacho >= DIAS_DESDE;
+    }
+    return true;
+  });
+
   const yaPedidas = new Set(recientes.map((p) => String(p.cliente_email || "").trim().toLowerCase()));
-  const elegidos = elegirPedidosParaResena(candidatos, yaPedidas).slice(0, MAX_PEDIDOS_RESENA);
+  const elegidos = elegirPedidosParaResena(listosParaResena, yaPedidas).slice(0, MAX_PEDIDOS_RESENA);
 
   let enviados = 0;
   for (const pedido of elegidos) {

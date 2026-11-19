@@ -481,3 +481,110 @@ button:disabled { opacity: .55; cursor: wait; }
 .fila__editor-perfil-titulo { font-weight: 700; font-size: .86rem; color: var(--verde); margin-bottom: 6px; }
 .fila__editor-perfil-titulo span { font-weight: 400; color: var(--gris); }
 .fila__editor select { border: 1px solid var(--borde); border-radius: 9px; padding: 10px 11px; width: 100%; background: #fff; }
+
+/* Bloque de despacho y seguimiento dentro de cada pedido cobrado */
+.pedido__despacho {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  background: var(--crema);
+  display: grid;
+  gap: 8px;
+}
+.pedido__despacho-fila {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pedido__despacho-label { font-size: .82rem; font-weight: 700; color: var(--verde); }
+.pedido__despacho select {
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: #fff;
+  font-size: .84rem;
+  font-weight: 600;
+}
+.pedido__tracking {
+  display: flex;
+  gap: 6px;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.pedido__tracking input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: #fff;
+  font-size: .84rem;
+}
+.pedido__despacho-btn {
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: #fff;
+  color: var(--verde);
+  font-size: .8rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pedido__despacho-btn:hover { background: #eef3ec; }
+.pedido__despacho-btn--primario { background: var(--verde); border-color: var(--verde); color: #fff; }
+.pedido__despacho-btn--primario:hover { opacity: .92; background: var(--verde); }
+.pedido__tracking-link { font-size: .8rem; font-weight: 700; color: var(--verde); }
+.despacho-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 700;
+  background: #f5ead6;
+  color: #8a5420;
+}
+.despacho-chip--despachado, .despacho-chip--listo_retiro { background: #e3eef7; color: #1d5780; }
+.despacho-chip--entregado { background: #e1f0e5; color: #1f5c31; }
+
+/* Simulador de cotización en /admin → Envío */
+.sim-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  padding: 12px 14px;
+}
+.sim-form input, .sim-form select {
+  border: 1px solid var(--borde);
+  border-radius: 9px;
+  padding: 9px 10px;
+  background: #fff;
+  font-size: .88rem;
+  min-width: 0;
+}
+.sim-resultado { padding: 0 14px 14px; display: grid; gap: 10px; font-size: .88rem; }
+.sim-resultado:empty { display: none; }
+.sim-provs { display: flex; flex-wrap: wrap; gap: 6px; }
+.sim-prov {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: .78rem;
+  font-weight: 600;
+  background: #e1f0e5;
+  color: #1f5c31;
+}
+.sim-prov--error { background: #fdecea; color: #a13c2f; }
+.sim-tabla { display: grid; gap: 6px; }
+.sim-opcion {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--borde);
+  border-radius: 9px;
+  background: #fff;
+}
+.sim-opcion__meta { color: var(--gris); font-size: .8rem; }

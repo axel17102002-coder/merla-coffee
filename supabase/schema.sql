@@ -86,6 +86,12 @@ create table if not exists pedidos (
   confirmacion_enviada timestamptz,  -- última vez que se envió el mail de confirmación
   mp_pago_id text,                   -- payment_id de Mercado Pago, para cruzar con su panel
   resena_pedida timestamptz,         -- cuándo se le pidió al cliente que opine (mail del cron)
+  estado_entrega text not null default 'pendiente'
+    check (estado_entrega in ('pendiente', 'preparando', 'listo_retiro', 'despachado', 'entregado')),
+  tracking_codigo text,              -- código de seguimiento del correo
+  tracking_url text,                 -- link directo de seguimiento
+  despachado_en timestamptz,         -- cuándo se despachó o quedó listo para retirar
+  envio_costo_real integer,          -- lo que salió realmente el envío (opcional, para margen)
   estado text not null default 'pendiente'
     check (estado in ('pendiente', 'aprobado', 'rechazado', 'cancelado')),
   creado timestamptz not null default now(),
@@ -108,6 +114,15 @@ alter table pedidos add column if not exists descuento_pago integer not null def
 alter table pedidos add column if not exists recordatorio_enviado timestamptz;
 alter table pedidos add column if not exists mp_pago_id text;
 alter table pedidos add column if not exists resena_pedida timestamptz;
+alter table pedidos add column if not exists estado_entrega text not null default 'pendiente';
+alter table pedidos drop constraint if exists pedidos_estado_entrega_check;
+alter table pedidos add constraint pedidos_estado_entrega_check
+  check (estado_entrega in ('pendiente', 'preparando', 'listo_retiro', 'despachado', 'entregado'));
+alter table pedidos add column if not exists tracking_codigo text;
+alter table pedidos add column if not exists tracking_url text;
+alter table pedidos add column if not exists despachado_en timestamptz;
+alter table pedidos add column if not exists envio_costo_real integer;
+create index if not exists pedidos_despacho_idx on pedidos (estado, estado_entrega);
 alter table pedidos drop constraint if exists pedidos_estado_check;
 alter table pedidos add constraint pedidos_estado_check
   check (estado in ('pendiente', 'aprobado', 'rechazado', 'cancelado'));

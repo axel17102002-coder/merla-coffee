@@ -381,3 +381,16 @@ test("una cotización firmada se verifica en el checkout y rechaza manipulacione
     else process.env.ADMIN_TOKEN = previo;
   }
 });
+
+// ===== Links de seguimiento (tracking) =====
+
+const { urlTracking } = require("../public/motor.js");
+
+test("arma el link oficial de seguimiento según el correo o respeta una URL completa", () => {
+  assert.match(urlTracking("Correo Argentino", "000123456"), /correoargentino\.com\.ar.*000123456/);
+  assert.match(urlTracking("Andreani", "360000123456789"), /andreani\.com\/envio\/360000123456789/);
+  assert.match(urlTracking("OCA", "1234567890"), /oca\.com\.ar.*1234567890/);
+  assert.equal(urlTracking("Otro", "https://mi-tracking.test/abc"), "https://mi-tracking.test/abc");
+  assert.equal(urlTracking("Envío en La Plata", "ABC"), "");
+  assert.equal(urlTracking("Correo Argentino", ""), "");
+});

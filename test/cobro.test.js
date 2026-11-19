@@ -26,7 +26,7 @@ const {
   limpiarPedidosPendientes,
   elegirRecordatorios,
 } = require("../backend/lib/mantenimiento.js");
-const { enlaceRetomar, mailCarritoAbandonado, mailConfirmacionCliente, mailAvisoAdmin } = require("../backend/lib/mails.js");
+const { enlaceRetomar, mailCarritoAbandonado, mailConfirmacionCliente, mailAvisoAdmin, mailDespachoCliente } = require("../backend/lib/mails.js");
 
 // Reemplaza `fetch`. `reglas` es una lista de [patrón, respuesta]: gana la
 // primera cuyo patrón coincide con "MÉTODO url". La respuesta es { status, json }
@@ -433,4 +433,77 @@ test("el mail de envío a domicilio muestra el correo, servicio y la dirección"
   assert.match(html, /Andreani/);
   assert.match(html, /Calle 7 1234/);
   assert.match(html, /8\.200/);
+});
+
+// ===== Mail de despacho y PATCH de seguimiento en /admin =====
+
+test("el mail de despacho incluye el código de seguimiento y el link del correo", () => {
+  const p = pedido({
+    estado: "aprobado",
+    estado_entrega: "despachado",
+    tracking_codigo: "AR987654321",
+    envio: {
+      metodo: "envio",
+      opcionTipo: "domicilio",
+      transportista: "Correo Argentino",
+      servicio: "PAQ.AR Clásico",
+      nombre: "Ana Pérez",
+      direccion: "Av. Colón 500",
+      ciudad: "Córdoba",
+      provincia: "Córdoba",
+      cp: "5000",
+    },
+  });
+  const m = mailDespachoCliente(p);
+  assert.match(m.asunto, /#0012/);
+  assert.match(m.html, /AR987654321/);
+  assert.match(m.html, /Seguir mi envío/);
+  assert.match(m.html, /correoargentino\.com\.ar/);
+});
+
+test("el mail de despacho adapta el mensaje para retiro y envío local en La Plata", () => {
+  const retiro = mailDespachoCliente(pedido({ estado: "aprobado", envio: { metodo: "retiro", nombre: "Sofía" } }));
+  assert.match(retiro.asunto, /listo para retirar/i);
+  assert.match(retiro.html, /Coordinar retiro por WhatsApp/);
+
+  const local = mailDespachoCliente(pedido({
+    estado: "aprobado",
+    envio: { metodo: "envio", proveedor: "local", opcionGrupo: "local:laplata", nombre: "Sofía", direccion: "Calle 7 100", ciudad: "La Plata", provincia: "Buenos Aires", cp: "1900" },
+  }));
+  assert.match(local.asunto, /salió en camino/i);
+  assert.match(local.html, /cadetería en La Plata/i);
+});
+
+test("PATCH de despacho guarda tracking con URL automática y registra despachado_en", async () => {
+  const llamadas = simularRed([
+    [/GET .*pedidos\?id=eq\..*select=id,envio,despachado_en,tracking_url/, {
+      json: [{ id: ID_PEDIDO, envio: { metodo: "envio", transportista: "Andreani" }, despachado_en: null, tracking_url: null }],
+    }],
+    [/PATCH .*pedidos\?id=eq\./, (llamada) => ({
+      json: [{ id: ID_PEDIDO, ...llamada.body }],
+    })],
+  ]);
+  const r = await adminPedidos({
+    httpMethod: "PATCH",
+    headers: { "x-admin-token": "token-admin-de-prueba" },
+    queryStringParameters: {},
+    body: JSON.stringify({ id: ID_PEDIDO, estado_entrega: "despachado", tracking_codigo: "360000111222" }),
+  });
+  assert.equal(r.statusCode, 200);
+  const cuerpo = JSON.parse(r.body);
+  assert.equal(cuerpo.estado_entrega, "despachado");
+  assert.equal(cuerpo.tracking_codigo, "360000111222");
+  assert.match(cuerpo.tracking_url, /andreani\.com\/envio\/360000111222/);
+  assert.ok(cuerpo.despachado_en);
+  assert.equal(cuantas(llamadas, /PATCH/), 1);
+});
+
+test("PATCH rechaza un estado de entrega inválido", async () => {
+  const r = await adminPedidos({
+    httpMethod: "PATCH",
+    headers: { "x-admin-token": "token-admin-de-prueba" },
+    queryStringParameters: {},
+    body: JSON.stringify({ id: ID_PEDIDO, estado_entrega: "volando" }),
+  });
+  assert.equal(r.statusCode, 400);
 });

@@ -4,7 +4,7 @@
 
 const { sb, obtenerPuntos } = require("./supabase.js");
 const { enviarMail, config } = require("./brevo.js");
-const { mailAvisoAdmin, mailConfirmacionCliente, mailPagoRaro } = require("./mails.js");
+const { mailAvisoAdmin, mailConfirmacionCliente, mailDespachoCliente, mailPagoRaro } = require("./mails.js");
 
 // Confirmación con el saldo de puntos al momento de enviarla (por eso va después
 // de aprobar el pedido). Si no se puede leer el saldo, el mail sale igual sin él.
@@ -89,4 +89,10 @@ async function avisarPagoRaro(motivo, pago, pedido) {
   }
 }
 
-module.exports = { avisarAdminPorId, avisarVentaPorRef, avisarPagoRaro, enviarConfirmacion };
+// Envía el mail de despacho / listo para retirar al cliente.
+async function enviarAvisoDespacho(pedido) {
+  const { asunto, html } = mailDespachoCliente(pedido);
+  return enviarMail({ para: pedido.cliente_email, asunto, html });
+}
+
+module.exports = { avisarAdminPorId, avisarVentaPorRef, avisarPagoRaro, enviarConfirmacion, enviarAvisoDespacho };

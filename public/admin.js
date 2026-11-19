@@ -97,6 +97,67 @@ function renderEntrega(envio, envioCosto) {
   return `<p class="pedido__extra">${cabecera}: ${escapar(envio.nombre)}${dir ? ` — ${dir}` : ""}${envio.telefono ? " · Tel " + escapar(envio.telefono) : ""}${envio.notas ? " · " + escapar(envio.notas) : ""}</p>`;
 }
 
+// Texto limpio para copiar en 1 click y pegar en MiCorreo / Zipnova / Andreani
+function textoCopiarEnvio(p) {
+  const e = p.envio || {};
+  const lineas = [`Pedido ${numeroDe(p)}`];
+  if (e.nombre) lineas.push(`Destinatario: ${e.nombre}`);
+  if (e.telefono) lineas.push(`Tel: ${e.telefono}`);
+  if (p.cliente_email) lineas.push(`Email: ${p.cliente_email}`);
+  const correo = [e.transportista, e.servicio].filter(Boolean).join(" · ");
+  if (e.opcionTipo === "sucursal") {
+    lineas.push(`Modalidad: Sucursal${correo ? ` (${correo})` : ""}`);
+    if (e.sucursal) {
+      const suc = [e.sucursal.descripcion, e.sucursal.direccion].filter(Boolean).join(" — ");
+      if (suc) lineas.push(`Sucursal: ${suc}`);
+    }
+  } else {
+    lineas.push(`Modalidad: Domicilio${correo ? ` (${correo})` : ""}`);
+    if (e.direccion) lineas.push(`Dirección: ${e.direccion}`);
+  }
+  const loc = [e.ciudad, e.provincia, e.cp && `CP ${e.cp}`].filter(Boolean).join(", ");
+  if (loc) lineas.push(`Localidad: ${loc}`);
+  if (e.notas) lineas.push(`Notas: ${e.notas}`);
+  return lineas.join("\n");
+}
+
+// Bloque operativo de despacho en cada pedido cobrado: estado de entrega,
+// código de tracking, botón de copiar datos y envío de mail de despacho.
+function panelDespacho(p) {
+  if (p.estado !== "aprobado") return "";
+  const envio = p.envio || {};
+  const esEnvio = envio.metodo === "envio";
+  const esLocal = envio.proveedor === "local" || String(envio.opcionGrupo || "").startsWith("local:");
+  const tieneMigracion = p.estado_entrega !== undefined;
+  if (!esEnvio && !tieneMigracion) return "";
+
+  const estadoActual = p.estado_entrega || "pendiente";
+  const opcionesEstado = ESTADOS_ENTREGA
+    .filter((e) => (esEnvio ? e.clave !== "listo_retiro" : e.clave !== "despachado"))
+    .map((e) => `<option value="${e.clave}"${estadoActual === e.clave ? " selected" : ""}>${escapar(e.etiqueta)}</option>`)
+    .join("");
+
+  const linkTracking = p.tracking_url || urlTracking(envio.transportista, p.tracking_codigo);
+  const textoAviso = esEnvio ? (esLocal ? "🛵 Avisar en camino" : "🚚 Avisar despacho") : "🏪 Avisar listo";
+
+  return `<div class="pedido__despacho" data-despacho="${escapar(p.id)}">
+      <div class="pedido__despacho-fila">
+        ${tieneMigracion ? `<span class="pedido__despacho-label">Entrega</span>
+        <select data-estado-entrega data-id="${escapar(p.id)}" aria-label="Estado de entrega">${opcionesEstado}</select>
+        <span class="pedido__metodo-estado" data-despacho-estado></span>` : ""}
+        ${esEnvio ? `<button type="button" class="pedido__despacho-btn" data-action="copiar-envio" data-id="${escapar(p.id)}">📋 Copiar envío</button>` : ""}
+        ${p.cliente_email ? `<button type="button" class="pedido__despacho-btn pedido__despacho-btn--primario" data-action="avisar-despacho" data-id="${escapar(p.id)}">${textoAviso}</button>` : ""}
+      </div>
+      ${tieneMigracion && esEnvio && !esLocal ? `<div class="pedido__despacho-fila">
+        <div class="pedido__tracking">
+          <input type="text" data-tracking-input placeholder="Código de seguimiento (ej. 0000123456)" value="${escapar(p.tracking_codigo || "")}" aria-label="Código de seguimiento">
+          <button type="button" class="pedido__despacho-btn" data-action="guardar-tracking" data-id="${escapar(p.id)}">Guardar</button>
+        </div>
+        ${linkTracking ? `<a class="pedido__tracking-link" href="${escapar(linkTracking)}" target="_blank" rel="noopener">Seguir ↗</a>` : ""}
+      </div>` : ""}
+    </div>`;
+}
+
 // Confirmación de "Cancelar" (pedidos ya cobrados), dentro de la tarjeta: dice
 // exactamente qué se revierte y deja elegir si las unidades vuelven al stock
 // (a veces el café ya se entregó o se perdió). Lo ejecuta `cancelar_pedido` en
@@ -131,11 +192,22 @@ let pedidosBusqueda = null; // null = sin búsqueda activa
 function renderPedidos() {
   const contenedor = $("#pedidos");
   const base = pedidosBusqueda || pedidosCache;
-  const lista = filtroCanal === "todos" ? base : base.filter((p) => p.origen === filtroCanal);
+
+  // Contador de pedidos cobrados que todavía faltan preparar/despachar/entregar
+  const porDespachar = pedidosCache.filter((p) => p.estado === "aprobado" && p.estado_entrega !== "entregado").length;
+  const btnDespacho = $("#filtro-despacho");
+  if (btnDespacho) btnDespacho.textContent = porDespachar ? `📦 Por despachar (${porDespachar})` : "📦 Por despachar";
+
+  const lista = filtroCanal === "todos"
+    ? base
+    : filtroCanal === "por_despachar"
+      ? base.filter((p) => p.estado === "aprobado" && p.estado_entrega !== "entregado")
+      : base.filter((p) => p.origen === filtroCanal);
   if (!lista.length) {
+    const nombreFiltro = filtroCanal === "por_despachar" ? "por despachar" : (CANALES[filtroCanal] || filtroCanal);
     contenedor.innerHTML = pedidosBusqueda
-      ? `<div class="vacio">Ningún pedido coincide con “${escapar(busqueda)}”${filtroCanal === "todos" ? "" : ` en ${CANALES[filtroCanal] || filtroCanal}`}.</div>`
-      : `<div class="vacio">No hay pedidos${filtroCanal === "todos" ? " todavía" : ` de ${CANALES[filtroCanal] || filtroCanal}`}.</div>`;
+      ? `<div class="vacio">Ningún pedido coincide con “${escapar(busqueda)}”${filtroCanal === "todos" ? "" : ` en ${nombreFiltro}`}.</div>`
+      : `<div class="vacio">No hay pedidos${filtroCanal === "todos" ? " todavía" : filtroCanal === "por_despachar" ? " pendientes de despacho 🎉" : ` de ${nombreFiltro}`}.</div>`;
     return;
   }
   contenedor.innerHTML = lista.map((p) => {
@@ -164,12 +236,19 @@ function renderPedidos() {
           ? `✅ Confirmación enviada el ${escapar(new Date(p.confirmacion_enviada).toLocaleString("es-AR", { dateStyle: "medium", timeStyle: "short" }))}`
           : "✉️ Confirmación sin enviar"}</p>`
       : "";
+    const chipEntrega = p.estado === "aprobado" && p.estado_entrega
+      ? (() => {
+          const meta = ESTADOS_ENTREGA.find((e) => e.clave === p.estado_entrega);
+          return meta ? `<span class="despacho-chip despacho-chip--${escapar(p.estado_entrega)}">${escapar(meta.etiqueta)}</span>` : "";
+        })()
+      : "";
     return `<article class="pedido pedido--${escapar(p.estado)}">
       <div class="pedido__top">
         <div class="pedido__top-izq">
           <span class="pedido__num">${escapar(numeroDe(p))}</span>
           <span class="estado">${escapar(p.estado)}</span>
           <span class="canal canal--${escapar(p.origen)}">${escapar(canal)}</span>
+          ${chipEntrega}
         </div>
         <time>${fecha}</time>
       </div>
@@ -178,7 +257,7 @@ function renderPedidos() {
         <span class="pedido__email">${escapar(p.cliente_email || "Sin email")}</span>
         <strong>${formato.format(p.total)}</strong>
       </div>
-      ${cliente}${pago}${cupon}${puntos}${entrega}${estadoMail}${selectorMetodoMp(p)}
+      ${cliente}${pago}${cupon}${puntos}${entrega}${estadoMail}${selectorMetodoMp(p)}${panelDespacho(p)}
       <div class="pedido__actions">
         <button class="borrar" data-action="eliminar" data-id="${escapar(p.id)}" title="Eliminar pedido">🗑 Eliminar</button>
         ${cancelable ? `<button class="rechazar" data-action="cancelar" title="Cancelar este pedido ya cobrado: revierte puntos, cupón y stock">Cancelar</button>` : ""}
@@ -875,6 +954,69 @@ $("#pedidos").addEventListener("click", async (e) => {
     return;
   }
 
+  // Copiar datos de envío formateados al portapapeles (1 click para despachar)
+  if (action === "copiar-envio") {
+    const pedido = (pedidosBusqueda || pedidosCache).find((p) => p.id === id);
+    if (!pedido) return;
+    const texto = textoCopiarEnvio(pedido);
+    try {
+      await navigator.clipboard.writeText(texto);
+      const orig = boton.textContent;
+      boton.textContent = "✓ Copiado";
+      setTimeout(() => { boton.textContent = orig; }, 1600);
+    } catch {
+      prompt("Copiá los datos del envío:", texto);
+    }
+    return;
+  }
+
+  // Guardar código de seguimiento del correo
+  if (action === "guardar-tracking") {
+    const caja = boton.closest("[data-despacho]");
+    const input = caja && caja.querySelector("[data-tracking-input]");
+    const codigo = input ? input.value.trim() : "";
+    boton.disabled = true;
+    try {
+      const r = await api("/api/admin-pedidos", {
+        method: "PATCH",
+        body: JSON.stringify({ id, tracking_codigo: codigo }),
+      });
+      for (const lista of [pedidosCache, pedidosInsights, pedidosBusqueda].filter(Boolean)) {
+        const copia = lista.find((p) => p.id === id);
+        if (copia) {
+          copia.tracking_codigo = r.tracking_codigo;
+          copia.tracking_url = r.tracking_url;
+        }
+      }
+      renderPedidos();
+      toast(codigo ? "✅ Código de seguimiento guardado" : "Código de seguimiento borrado");
+    } catch (err) {
+      mensaje("#panel-message", `⚠️ ${err.message}`);
+      boton.disabled = false;
+    }
+    return;
+  }
+
+  // Enviar mail de "Tu pedido fue despachado / está listo para retirar"
+  if (action === "avisar-despacho") {
+    const pedido = (pedidosBusqueda || pedidosCache).find((p) => p.id === id);
+    const esEnvio = pedido && pedido.envio && pedido.envio.metodo === "envio";
+    const pregunta = esEnvio
+      ? "¿Enviar el mail de aviso de despacho al cliente (con el código de seguimiento si lo cargaste)?"
+      : "¿Avisarle por mail al cliente que su pedido está listo para retirar?";
+    if (!confirm(pregunta)) return;
+    boton.disabled = true;
+    try {
+      const r = await api("/api/admin-mail", { method: "POST", body: JSON.stringify({ pedido_id: id, tipo: "despacho" }) });
+      toast(`✅ Aviso enviado a ${r.para}`);
+    } catch (err) {
+      mensaje("#panel-message", `⚠️ ${err.message}`);
+    } finally {
+      boton.disabled = false;
+    }
+    return;
+  }
+
   if (action === "eliminar") {
     // Borrar un pedido cobrado no revierte nada: se avisa y se ofrece el camino correcto
     const pedido = (pedidosBusqueda || pedidosCache).find((p) => p.id === id);
@@ -905,9 +1047,38 @@ $("#pedidos").addEventListener("click", async (e) => {
   }
 });
 
-// Corregir el método de pago de un pedido de MP: se guarda al elegirlo y solo
-// recalcula Insights (no re-renderiza la lista, para no perder el foco).
+// Corregir el método de pago de MP o actualizar el estado de entrega de un pedido
 $("#pedidos").addEventListener("change", async (e) => {
+  const selectEntrega = e.target.closest("[data-estado-entrega]");
+  if (selectEntrega) {
+    const id = selectEntrega.dataset.id;
+    const estadoEl = selectEntrega.parentElement.querySelector("[data-despacho-estado]");
+    const copias = [pedidosCache, pedidosInsights, pedidosBusqueda]
+      .filter(Boolean)
+      .map((lista) => lista.find((p) => p.id === id))
+      .filter(Boolean);
+    const anterior = copias[0] ? copias[0].estado_entrega : "pendiente";
+    selectEntrega.disabled = true;
+    if (estadoEl) estadoEl.textContent = "Guardando…";
+    try {
+      const r = await api("/api/admin-pedidos", {
+        method: "PATCH",
+        body: JSON.stringify({ id, estado_entrega: selectEntrega.value }),
+      });
+      for (const copia of copias) {
+        copia.estado_entrega = r.estado_entrega;
+        copia.despachado_en = r.despachado_en;
+      }
+      renderPedidos();
+      toast(`✅ Entrega actualizada`);
+    } catch (err) {
+      selectEntrega.value = anterior || "pendiente";
+      if (estadoEl) estadoEl.textContent = `⚠️ ${err.message}`;
+      selectEntrega.disabled = false;
+    }
+    return;
+  }
+
   const select = e.target.closest("[data-metodo]");
   if (!select) return;
   const estado = select.parentElement.querySelector("[data-metodo-estado]");
@@ -2187,6 +2358,59 @@ $("#transportistas").addEventListener("change", async (e) => {
     toast(`⚠️ ${err.message}`);
   }
 });
+
+// ===== Simulador de cotización en vivo (/admin → Envío) =====
+if ($("#simulador-envio")) {
+  $("#simulador-envio").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("#sim-btn");
+    const caja = $("#sim-resultado");
+    btn.disabled = true;
+    caja.innerHTML = `<p class="px-config__vacio">Consultando proveedores activos…</p>`;
+    try {
+      const r = await api("/api/admin-envio-simular", {
+        method: "POST",
+        body: JSON.stringify({
+          cp: $("#sim-cp").value.trim(),
+          ciudad: $("#sim-ciudad").value.trim(),
+          provincia: $("#sim-provincia").value,
+          pesoGramos: Number($("#sim-peso").value) || 260,
+          valorDeclarado: Number($("#sim-valor").value) || 20000,
+        }),
+      });
+      const provs = (r.porProveedor || []).map((p) => {
+        const nom = (PROVEEDORES_ENVIO[p.id] && PROVEEDORES_ENVIO[p.id].nombre) || p.id;
+        return p.ok
+          ? `<span class="sim-prov">✓ ${escapar(nom)}: ${p.cantidad} op. (${p.ms} ms)</span>`
+          : `<span class="sim-prov sim-prov--error">✕ ${escapar(nom)}: ${escapar(p.error)} (${p.ms} ms)</span>`;
+      }).join("");
+
+      const opciones = (r.opcionesCliente || []).length
+        ? r.opcionesCliente.map((o) => {
+            const mod = o.local ? "🛵 Local" : o.tipo === "sucursal" ? "🏤 Sucursal" : "📦 Domicilio";
+            const meta = [mod, o.servicio, o.plazo, `vía ${NOMBRES_PROVEEDOR[o.proveedor] || o.proveedor}`, o.sucursales ? `${o.sucursales} sucursales` : ""]
+              .filter(Boolean).map(escapar).join(" · ");
+            const precio = o.gratis
+              ? `<strong>Gratis</strong>${o.precioOriginal ? ` <small>(antes ${formato.format(o.precioOriginal)})</small>` : ""}`
+              : `<strong>${formato.format(o.precio)}</strong>`;
+            return `<div class="sim-opcion">
+                <div><strong>${escapar(o.transportista)}</strong><div class="sim-opcion__meta">${meta}</div></div>
+                <div>${precio}</div>
+              </div>`;
+          }).join("")
+        : `<p class="px-config__vacio">Ninguna opción disponible para ese destino.</p>`;
+
+      const pk = r.paquete;
+      caja.innerHTML = `<p class="sim-opcion__meta">Paquete simulado: <strong>${pk.pesoGramos} g</strong> · caja ${escapar(pk.caja)} (${pk.alto}×${pk.ancho}×${pk.largo} cm) · valor ${formato.format(r.valorDeclarado)}</p>
+        <div class="sim-provs">${provs || `<span class="sim-prov sim-prov--error">Sin proveedores activos</span>`}</div>
+        <div class="sim-tabla">${opciones}</div>`;
+    } catch (err) {
+      caja.innerHTML = `<p class="px-alerta">⚠️ ${escapar(err.message)}</p>`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
 
 // Una fila por método de pago de MP (los que tienen su propia clave de config).
 // Se guardan solas, igual que el resto de la configuración.

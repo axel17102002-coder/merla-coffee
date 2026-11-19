@@ -4,7 +4,7 @@
 
 const { sb } = require("../lib/supabase.js");
 const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
-const { enviarConfirmacion } = require("../lib/avisos.js");
+const { enviarConfirmacion, enviarAvisoDespacho } = require("../lib/avisos.js");
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
@@ -14,7 +14,7 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { pedido_id } = JSON.parse(event.body || "{}");
+    const { pedido_id, tipo = "confirmacion" } = JSON.parse(event.body || "{}");
     if (!pedido_id) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: "Falta el pedido" }) };
     }
@@ -27,11 +27,13 @@ exports.handler = async (event) => {
       return { statusCode: 400, headers, body: JSON.stringify({ error: "El pedido no tiene email del cliente" }) };
     }
 
-    const enviado = await enviarConfirmacion(pedido);
+    const enviado = tipo === "despacho"
+      ? await enviarAvisoDespacho(pedido)
+      : await enviarConfirmacion(pedido);
     if (!enviado) {
       return { statusCode: 502, headers, body: JSON.stringify({ error: "No se pudo enviar el mail (revisá BREVO_API_KEY y el remitente verificado)" }) };
     }
-    return { statusCode: 200, headers, body: JSON.stringify({ ok: true, para: pedido.cliente_email }) };
+    return { statusCode: 200, headers, body: JSON.stringify({ ok: true, para: pedido.cliente_email, tipo }) };
   } catch (err) {
     console.error("admin-mail:", err);
     return { statusCode: 502, headers, body: JSON.stringify({ error: "No se pudo enviar el mail" }) };

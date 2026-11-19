@@ -62,6 +62,37 @@ const METODOS_PAGO_MANUAL = [
   { clave: "otro", etiqueta: "Otro" },
 ];
 
+// Ciclo de vida logístico de un pedido ya cobrado (independiente del estado
+// de pago). Lo usan /admin para despachar y el cron para pedir reseñas recién
+// después de despachado.
+const ESTADOS_ENTREGA = [
+  { clave: "pendiente", etiqueta: "Por preparar" },
+  { clave: "preparando", etiqueta: "Preparando" },
+  { clave: "listo_retiro", etiqueta: "Listo para retirar" },
+  { clave: "despachado", etiqueta: "Despachado" },
+  { clave: "entregado", etiqueta: "Entregado" },
+];
+
+// Arma el link oficial de seguimiento según el transportista cuando el admin
+// carga solo el código. Si el código ya es una URL, la respeta tal cual.
+function urlTracking(transportista, codigo) {
+  const c = String(codigo || "").trim();
+  if (!c) return "";
+  if (/^https?:\/\//i.test(c)) return c;
+  const t = String(transportista || "").toLowerCase();
+  const q = encodeURIComponent(c);
+  if (t.includes("correo argentino") || t.includes("paq")) {
+    return `https://www.correoargentino.com.ar/formularios/e-commerce?id=${q}`;
+  }
+  if (t.includes("andreani")) {
+    return `https://www.andreani.com/envio/${q}`;
+  }
+  if (t.includes("oca")) {
+    return `https://www.oca.com.ar/Busquedas/Envios?numero=${q}`;
+  }
+  return "";
+}
+
 const METODOS_MP = [
   { clave: "dinero", etiqueta: "Dinero en Mercado Pago", config: "comision_mp_dinero" },
   { clave: "debito", etiqueta: "Débito", config: "comision_mp_debito" },
@@ -363,7 +394,7 @@ function calcularDescuentosManual(lineas, { cupon = null, aplicarCantidad = fals
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    CONFIG, METODOS_MP, METODOS_PAGO_MANUAL, ORIGENES_MANUALES, calcularDescuentosManual, comisionMpPorcentaje, comisionMpDe,
+    CONFIG, METODOS_MP, METODOS_PAGO_MANUAL, ESTADOS_ENTREGA, urlTracking, ORIGENES_MANUALES, calcularDescuentosManual, comisionMpPorcentaje, comisionMpDe,
     presentacionesDe, ahorroDe, precioTransferencia, numeroPedido, calcularPedido,
     precioPack, costoCafePorUnidad, costoUnidad, costoPack,
     precioUnidadDesdeCosto, costoKiloDesdePrecio, margenPack,

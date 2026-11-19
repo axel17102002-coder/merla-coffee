@@ -1883,7 +1883,48 @@ async function pagarConModo() {
   }
 }
 
-// Confirma el pedido en el servidor (verifica el pago real contra MODO,
+function mostrarConfirmacionCompra({ pedido, puntos, conEmail }) {
+  const num = pedido && pedido.numero ? numeroPedido(pedido.numero) : "";
+  const total = pedido && pedido.total ? formatear(pedido.total) : "";
+  const esLocal = pedido && pedido.proveedor === "local";
+  let textoEntrega = "Te enviamos la confirmación por mail con el detalle de tu pedido.";
+  if (pedido) {
+    if (pedido.metodo === "retiro") {
+      textoEntrega = "Elegiste retiro sin cargo en La Plata (zona centro). Te avisamos apenas esté listo para coordinar horario.";
+    } else if (esLocal) {
+      textoEntrega = "Elegiste envío en La Plata (24 a 48 hs hábiles). Coordinamos la entrega con nuestra cadetería.";
+    } else if (pedido.opcionTipo === "sucursal") {
+      const detalle = [pedido.transportista, pedido.servicio, pedido.sucursal].filter(Boolean).join(" · ");
+      textoEntrega = `Envío a sucursal${detalle ? ` (${detalle})` : ""}. Te avisamos por mail con el código de seguimiento apenas lo despachemos.`;
+    } else {
+      const detalle = [pedido.transportista, pedido.servicio].filter(Boolean).join(" · ");
+      textoEntrega = `Envío a domicilio${detalle ? ` (${detalle})` : ""}. Te avisamos por mail con el código de seguimiento apenas lo despachemos.`;
+    }
+  }
+  const textoPuntos = puntos !== null && conEmail
+    ? `<p class="form-resena__nota">⭐ Tu saldo Club Merla: <strong>${puntos} puntos</strong></p>`
+    : conEmail
+      ? `<p class="form-resena__nota">Te mandamos el detalle completo por mail.</p>`
+      : "";
+  const msgWsp = encodeURIComponent(`¡Hola Merla Coffee! Acabo de hacer mi pedido${num ? ` ${num}` : ""}.`);
+
+  $("#modal-card").classList.add("modal__card--simple");
+  $("#modal-card").innerHTML = `
+    <div class="modal__body form-resena form-resena--gracias">
+      <button type="button" class="modal__close" aria-label="Cerrar">✕</button>
+      ${icono("check", "icono--grande")}
+      <h3>¡Gracias por tu compra!</h3>
+      ${num ? `<p class="form-resena__pedido">Pedido <strong>${escaparHtml(num)}</strong>${total ? ` · ${escaparHtml(total)}` : ""}</p>` : ""}
+      <p>${escaparHtml(textoEntrega)}</p>
+      ${textoPuntos}
+      <button type="button" class="btn btn--primary btn--full modal__close-texto">Seguir mirando cafés</button>
+      <a class="btn btn--ghost btn--full" href="https://wa.me/${WHATSAPP}?text=${msgWsp}" target="_blank" rel="noopener">Consultar por WhatsApp</a>
+    </div>`;
+  $("#modal").hidden = false;
+  document.body.style.overflow = "hidden";
+}
+
+// Confirma el pedido en el servidor (verifica el pago real contra MODO/MP,
 // descuenta stock y acredita puntos). El webhook hace lo mismo por su lado;
 // la operación es idempotente.
 async function confirmarCompra(pagoId, mpPaymentId) {
@@ -1895,6 +1936,7 @@ async function confirmarCompra(pagoId, mpPaymentId) {
   const compra = DATOS ? metaDesdeCarrito() : { content_ids: [] };
   const id = pagoId || localStorage.getItem("merla-ultimo-pago");
   let puntos = null;
+  let pedidoConfirmado = null;
   if (id || mpPaymentId) {
     try {
       const res = await fetch("/api/confirmar-pedido", {
@@ -1905,6 +1947,7 @@ async function confirmarCompra(pagoId, mpPaymentId) {
       if (res.ok) {
         const data = await res.json();
         if (typeof data.puntos === "number") puntos = data.puntos;
+        if (data.pedido) pedidoConfirmado = data.pedido;
       }
     } catch (err) {
       console.error("confirmar-pedido:", err);
@@ -1923,12 +1966,7 @@ async function confirmarCompra(pagoId, mpPaymentId) {
 
   // Solo prometemos el mail si el cliente dejó su dirección
   const conEmail = emailValido(emailCliente());
-  const porMail = conEmail ? " Pronto te escribimos por mail." : "";
-  mostrarToast(
-    puntos !== null && conEmail
-      ? `✅ ¡Pago aprobado!${porMail} Tu saldo Club Merla: ${puntos} puntos ⭐`
-      : `✅ ¡Pago aprobado!${porMail} ¡Gracias por tu compra! 💚`
-  );
+  mostrarConfirmacionCompra({ pedido: pedidoConfirmado, puntos, conEmail });
 }
 
 // Si MODO nos redirige de vuelta con ?pago=ok (flujo mobile), confirmamos acá
