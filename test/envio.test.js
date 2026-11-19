@@ -10,7 +10,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 
-const { proveedorDe } = require("../backend/lib/envio-costo.js");
+const { proveedorDe, proveedorActivo } = require("../backend/lib/envio-costo.js");
 const andreani = require("../backend/lib/andreani.js");
 const { permitido } = require("../backend/lib/transportistas.js");
 
@@ -87,6 +87,44 @@ test("sin transportistas prendidos no pasa ninguno", () => {
   assert.equal(permitido("Andreani", undefined), false);
 });
 
+// ===== Interruptor de cada API de envío (/admin → Precios → Envío) =====
+// Una API cotiza solo si tiene credenciales Y está prendida en el panel.
+// `disponible()` lee process.env en cada llamada, así que alcanza con simular
+// las credenciales de Zipnova para probar las dos condiciones.
+
+function conCredencialesDeZipnova(fn) {
+  const previo = { ...process.env };
+  Object.assign(process.env, { ZIPNOVA_TOKEN: "t", ZIPNOVA_SECRET: "s", ZIPNOVA_ACCOUNT_ID: "1" });
+  try { fn(); } finally { process.env = previo; }
+}
+
+test("con credenciales y prendida, la API cotiza", () => {
+  conCredencialesDeZipnova(() => {
+    assert.equal(proveedorActivo("zipnova", { proveedoresEnvio: { zipnova: true } }), true);
+  });
+});
+
+test("apagarla desde el panel manda, aunque tenga credenciales", () => {
+  conCredencialesDeZipnova(() => {
+    assert.equal(proveedorActivo("zipnova", { proveedoresEnvio: { zipnova: false } }), false);
+  });
+});
+
+test("prenderla no alcanza si no hay credenciales cargadas", () => {
+  assert.equal(proveedorActivo("zipnova", { proveedoresEnvio: { zipnova: true } }), false);
+});
+
+test("sin la migración corrida se asume prendida: no cambia lo que ya andaba", () => {
+  conCredencialesDeZipnova(() => {
+    assert.equal(proveedorActivo("zipnova", {}), true);
+    assert.equal(proveedorActivo("zipnova", null), true);
+  });
+});
+
+test("un proveedor que no existe nunca cotiza", () => {
+  assert.equal(proveedorActivo("inventado", { proveedoresEnvio: { inventado: true } }), false);
+});
+
 // ===== paq.ar (MiCorreo) =====
 
 const paqar = require("../backend/lib/paqar.js");
@@ -138,4 +176,63 @@ test("las provincias se traducen al código que pide la API, con o sin tildes", 
   assert.equal(paqar.codigoProvincia("Ciudad Autónoma de Buenos Aires"), "C");
   assert.equal(paqar.codigoProvincia("Tierra del Fuego"), "V");
   assert.equal(paqar.codigoProvincia("No existe"), null); // sin código no se piden sucursales
+});
+
+// ===== Validación y enriquecimiento de datos de entrega =====
+
+const { sanitizarEnvio, validarEnvio, enriquecerEnvio } = require("../backend/lib/entrega.js");
+
+test("un retiro no exige dirección ni sucursal", () => {
+  assert.equal(validarEnvio(sanitizarEnvio({ metodo: "retiro" })), null);
+  assert.equal(validarEnvio(sanitizarEnvio({ metodo: "retiro", nombre: "Ana" })), null);
+});
+
+test("un envío a domicilio exige dirección, destino, nombre y teléfono", () => {
+  const base = {
+    metodo: "envio", opcionTipo: "domicilio", opcionGrupo: "paqar:D:CP",
+    nombre: "Ana Pérez", ciudad: "Córdoba", provincia: "Córdoba", cp: "5000",
+    telefono: "3511234567", direccion: "Av. Colón 500",
+  };
+  assert.equal(validarEnvio(sanitizarEnvio(base)), null);
+  assert.match(validarEnvio(sanitizarEnvio({ ...base, direccion: "" })), /dirección/i);
+  assert.match(validarEnvio(sanitizarEnvio({ ...base, nombre: "" })), /nombre/i);
+  assert.match(validarEnvio(sanitizarEnvio({ ...base, telefono: "" })), /teléfono/i);
+  assert.match(validarEnvio(sanitizarEnvio({ ...base, opcionGrupo: "" })), /opción de envío/i);
+});
+
+test("un envío a sucursal exige una sucursal elegida y no pide dirección del cliente", () => {
+  const base = {
+    metodo: "envio", opcionTipo: "sucursal", opcionGrupo: "paqar:S:CP",
+    nombre: "Ana Pérez", ciudad: "Córdoba", provincia: "Córdoba", cp: "5000",
+    telefono: "3511234567",
+    sucursal: { id: "X5000", descripcion: "Correo Córdoba Centro", direccion: "Av. Gral. Paz 201" },
+  };
+  assert.equal(validarEnvio(sanitizarEnvio(base)), null);
+  assert.match(validarEnvio(sanitizarEnvio({ ...base, sucursal: null })), /sucursal/i);
+  assert.match(validarEnvio(sanitizarEnvio({ ...base, sucursal: { id: "" } })), /sucursal/i);
+});
+
+test("al enriquecer el envío se guardan proveedor, servicio, plazo y transportista del servidor", () => {
+  const envio = sanitizarEnvio({
+    metodo: "envio", opcionTipo: "sucursal", opcionGrupo: "paqar:S:CP",
+    nombre: "Ana", ciudad: "Córdoba", provincia: "Córdoba", cp: "5000", telefono: "351000",
+    transportista: "falso",
+    sucursal: { id: "X5000", descripcion: "Centro", direccion: "Av. Gral. Paz 201" },
+  });
+  const completo = enriquecerEnvio(envio, {
+    proveedor: "paqar",
+    opcion: {
+      tipo: "sucursal",
+      transportista: "Correo Argentino",
+      servicio: "PAQ.AR Clásico",
+      plazo: "2 a 5 días hábiles",
+    },
+  });
+  assert.equal(completo.proveedor, "paqar");
+  assert.equal(completo.transportista, "Correo Argentino");
+  assert.equal(completo.servicio, "PAQ.AR Clásico");
+  assert.equal(completo.plazo, "2 a 5 días hábiles");
+  assert.equal(completo.opcionTipo, "sucursal");
+  assert.equal(completo.direccion, "");
+  assert.equal(completo.sucursal.id, "X5000");
 });

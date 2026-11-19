@@ -10,7 +10,7 @@
 const { sb, obtenerCatalogo, obtenerCupon, obtenerPuntos, cuponYaUsado } = require("../lib/supabase.js");
 const { ambienteMp, crearPreferencia } = require("../lib/mercadopago.js");
 const { CONFIG, calcularPedido } = require("../../public/motor.js");
-const { sanitizarEnvio } = require("../lib/entrega.js");
+const { sanitizarEnvio, validarEnvio, enriquecerEnvio } = require("../lib/entrega.js");
 const { resolverEnvioCosto } = require("../lib/envio-costo.js");
 const { itemsConCosto } = require("../lib/costos.js");
 const { permitir, claveDe } = require("../lib/limite.js");
@@ -87,8 +87,12 @@ exports.handler = async (event) => {
 
     // El costo de envío se cotiza en el servidor (nunca se confía en un monto
     // mandado por el navegador): retiro no cotiza nada, envío sí.
-    const envio = sanitizarEnvio(body.envio);
+    let envio = sanitizarEnvio(body.envio);
     if (envio && envio.metodo === "envio") {
+      const errorEnvio = validarEnvio(envio);
+      if (errorEnvio) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: errorEnvio }) };
+      }
       const previo = calcularPedido(body.items, opcionesPedido, { productos });
       if (!previo.ok) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: previo.error }) };
@@ -96,6 +100,11 @@ exports.handler = async (event) => {
       const resultadoEnvio = await resolverEnvioCosto(body.items, productos, envio, previo.subtotal);
       if (!resultadoEnvio.ok) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: resultadoEnvio.error }) };
+      }
+      envio = enriquecerEnvio(envio, resultadoEnvio);
+      const errorFinal = validarEnvio(envio);
+      if (errorFinal) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: errorFinal }) };
       }
       opcionesPedido.envioCosto = resultadoEnvio.costo;
     }
@@ -149,20 +158,31 @@ exports.handler = async (event) => {
     try {
       // MP no acepta ítems con monto negativo, así que si hay descuentos o
       // envío mandamos un único ítem por el total final para que la cuenta cierre.
+      const sonTodosCafes = pedido.lineas.every((l) => {
+        const prod = productos.find((p) => p.id === l.producto_id);
+        return !prod || prod.tipo !== "simple";
+      });
+      const etiquetaUnidades = sonTodosCafes
+        ? `${pedido.unidades} drip bag${pedido.unidades === 1 ? "" : "s"}`
+        : `${pedido.unidades} unidad${pedido.unidades === 1 ? "" : "es"}`;
       const itemsMp =
         pedido.total === pedido.subtotal
-          ? pedido.lineas.map((l) => ({
-              id: l.presentacion_id,
-              title: `${l.nombre} - Drip Bag (${l.presentacionNombre})`,
-              category_id: "food",
-              quantity: l.qty,
-              currency_id: "ARS",
-              unit_price: l.precioUnitario,
-            }))
+          ? pedido.lineas.map((l) => {
+              const prod = productos.find((p) => p.id === l.producto_id);
+              const esSimple = prod && prod.tipo === "simple";
+              return {
+                id: l.presentacion_id,
+                title: esSimple ? l.nombre : `${l.nombre} - Drip Bag (${l.presentacionNombre})`,
+                category_id: "food",
+                quantity: l.qty,
+                currency_id: "ARS",
+                unit_price: l.precioUnitario,
+              };
+            })
           : [
               {
                 id: "pedido",
-                title: `Pedido Merla Coffee (${pedido.unidades} drip bags${pedido.envioCosto ? " + envío" : ", descuentos aplicados"})`,
+                title: `Pedido Merla Coffee (${etiquetaUnidades}${pedido.envioCosto ? " + envío" : ", descuentos aplicados"})`,
                 category_id: "food",
                 quantity: 1,
                 currency_id: "ARS",

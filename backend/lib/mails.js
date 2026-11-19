@@ -35,9 +35,20 @@ function bloqueEntrega(envio) {
   if (envio.metodo === "retiro") {
     return `<p style="margin:14px 0 0;color:${GRIS};">🏪 <strong style="color:${VERDE};">Retiro en el local</strong> — te avisamos cuando esté listo.</p>`;
   }
+  const correo = [envio.transportista, envio.servicio].filter(Boolean).map(escapar).join(" · ");
+  const detalleCorreo = [correo, envio.plazo && escapar(envio.plazo)].filter(Boolean).join(" — ");
+
+  if (envio.opcionTipo === "sucursal") {
+    const suc = envio.sucursal || {};
+    const punto = [suc.descripcion, suc.direccion].filter(Boolean).map(escapar).join(" — ");
+    const loc = [envio.ciudad, envio.provincia, envio.cp && `CP ${envio.cp}`].filter(Boolean).map(escapar).join(", ");
+    return `<p style="margin:14px 0 0;color:${GRIS};">🏤 <strong style="color:${VERDE};">Envío a sucursal${correo ? ` (${correo})` : ""}</strong>${envio.plazo ? ` · ${escapar(envio.plazo)}` : ""}<br>
+      ${punto ? `<strong>${punto}</strong><br>` : ""}${loc ? `${loc}<br>` : ""}Retira: ${escapar(envio.nombre)}${envio.telefono ? `<br>Tel: ${escapar(envio.telefono)}` : ""}${envio.notas ? `<br>${escapar(envio.notas)}` : ""}</p>`;
+  }
+
   const dir = [envio.direccion, envio.ciudad, envio.provincia, envio.cp && `CP ${envio.cp}`]
     .filter(Boolean).map(escapar).join(", ");
-  return `<p style="margin:14px 0 0;color:${GRIS};">📦 <strong style="color:${VERDE};">Envío a domicilio</strong><br>
+  return `<p style="margin:14px 0 0;color:${GRIS};">📦 <strong style="color:${VERDE};">Envío a domicilio${detalleCorreo ? ` (${detalleCorreo})` : ""}</strong><br>
     ${escapar(envio.nombre)}${dir ? ` — ${dir}` : ""}${envio.telefono ? `<br>Tel: ${escapar(envio.telefono)}` : ""}${envio.notas ? `<br>${escapar(envio.notas)}` : ""}</p>`;
 }
 
@@ -82,6 +93,12 @@ function resumen(pedido) {
   if (pedido.descuento_cupon) desc.push(`<tr><td style="padding:4px 0;color:${CARAMELO};">Cupón ${escapar(pedido.cupon)}</td><td style="padding:4px 0;text-align:right;color:${CARAMELO};">-${pesos(pedido.descuento_cupon)}</td></tr>`);
   if (pedido.descuento_pago) desc.push(`<tr><td style="padding:4px 0;color:${CARAMELO};">Descuento por transferencia</td><td style="padding:4px 0;text-align:right;color:${CARAMELO};">-${pesos(pedido.descuento_pago)}</td></tr>`);
   if (pedido.descuento_puntos) desc.push(`<tr><td style="padding:4px 0;color:${CARAMELO};">Canje de puntos</td><td style="padding:4px 0;text-align:right;color:${CARAMELO};">-${pesos(pedido.descuento_puntos)}</td></tr>`);
+  if (Number(pedido.envio_costo) > 0) {
+    const labelEnvio = pedido.envio && pedido.envio.transportista
+      ? `Envío (${escapar(pedido.envio.transportista)})`
+      : "Envío";
+    desc.push(`<tr><td style="padding:4px 0;color:${GRIS};">${labelEnvio}</td><td style="padding:4px 0;text-align:right;color:#22301f;">${pesos(pedido.envio_costo)}</td></tr>`);
+  }
   return `<table style="width:100%;border-collapse:collapse;">
     ${filasItems(pedido.items)}
     ${desc.join("")}

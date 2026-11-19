@@ -35,6 +35,9 @@ const RESPALDO = {
     prepaga: 0,
     cuotas_sin_tarjeta: 0,
   },
+  // Qué APIs de envío se consultan, se prenden desde /admin → Precios → Envío.
+  // Prendidos por defecto: sin la migración corrida manda solo si hay credenciales.
+  proveedoresEnvio: { zipnova: true, andreani: true, paqar: true },
 };
 
 const CLAVES = {
@@ -56,6 +59,14 @@ const CLAVES_METODO_MP = {
   comision_mp_credito: "credito",
   comision_mp_prepaga: "prepaga",
   comision_mp_cuotas_sin_tarjeta: "cuotas_sin_tarjeta",
+};
+
+// Interruptor de cada API de envío: 0 = apagada. `valor` es numérico porque la
+// tabla `configuracion` guarda números, así que se lee como 1/0.
+const CLAVES_PROVEEDOR_ENVIO = {
+  envio_zipnova: "zipnova",
+  envio_andreani: "andreani",
+  envio_paqar: "paqar",
 };
 
 // Trae los insumos tolerando el esquema viejo (columna `aplica` en vez de
@@ -91,6 +102,7 @@ async function obtenerCostos() {
     const cfg = {
       ...RESPALDO,
       comisionMpMetodos: { ...RESPALDO.comisionMpMetodos },
+      proveedoresEnvio: { ...RESPALDO.proveedoresEnvio },
       fijoUnidad: suma("cant_unidad"),
       fijoPack: suma("cant_pack"),
     };
@@ -99,12 +111,18 @@ async function obtenerCostos() {
       if (nombre) cfg[nombre] = Number(fila.valor);
       const metodo = CLAVES_METODO_MP[fila.clave];
       if (metodo) cfg.comisionMpMetodos[metodo] = Number(fila.valor);
+      const proveedor = CLAVES_PROVEEDOR_ENVIO[fila.clave];
+      if (proveedor) cfg.proveedoresEnvio[proveedor] = Number(fila.valor) !== 0;
     }
     return { cfg, insumos, desdeLaBase: true };
   } catch (err) {
     console.warn("costos: uso los valores de respaldo:", err.message);
     return {
-      cfg: { ...RESPALDO, comisionMpMetodos: { ...RESPALDO.comisionMpMetodos } },
+      cfg: {
+        ...RESPALDO,
+        comisionMpMetodos: { ...RESPALDO.comisionMpMetodos },
+        proveedoresEnvio: { ...RESPALDO.proveedoresEnvio },
+      },
       insumos: [],
       desdeLaBase: false,
     };
@@ -158,4 +176,4 @@ async function itemsConCosto(lineas, productos) {
   });
 }
 
-module.exports = { obtenerCostos, RESPALDO, costoDeLinea, itemsConCosto };
+module.exports = { obtenerCostos, RESPALDO, costoDeLinea, itemsConCosto, CLAVES_PROVEEDOR_ENVIO };

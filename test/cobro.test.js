@@ -26,7 +26,7 @@ const {
   limpiarPedidosPendientes,
   elegirRecordatorios,
 } = require("../backend/lib/mantenimiento.js");
-const { enlaceRetomar, mailCarritoAbandonado } = require("../backend/lib/mails.js");
+const { enlaceRetomar, mailCarritoAbandonado, mailConfirmacionCliente, mailAvisoAdmin } = require("../backend/lib/mails.js");
 
 // Reemplaza `fetch`. `reglas` es una lista de [patrón, respuesta]: gana la
 // primera cuyo patrón coincide con "MÉTODO url". La respuesta es { status, json }
@@ -374,4 +374,63 @@ test("lo que la base rechaza (un pedido sin cobrar) llega como error claro", asy
   const r = await pedirCancelar({ id: ID_PEDIDO });
   assert.equal(r.statusCode, 409);
   assert.match(JSON.parse(r.body).error, /pedido cobrado/);
+});
+
+// ===== Mails con desglose de envío y sucursal =====
+
+test("el mail de confirmación muestra el costo de envío y la sucursal elegida (no dice 'a domicilio')", () => {
+  const p = pedido({
+    estado: "aprobado",
+    subtotal: 10000,
+    envio_costo: 6500,
+    total: 16500,
+    envio: {
+      metodo: "envio",
+      opcionTipo: "sucursal",
+      transportista: "Correo Argentino",
+      servicio: "PAQ.AR Clásico",
+      plazo: "2 a 5 días hábiles",
+      nombre: "Ana Pérez",
+      ciudad: "Córdoba",
+      provincia: "Córdoba",
+      cp: "5000",
+      telefono: "3511234567",
+      sucursal: { id: "X5000", descripcion: "Sucursal Centro", direccion: "Av. Gral. Paz 201" },
+    },
+  });
+  const cliente = mailConfirmacionCliente(p, 100).html;
+  const admin = mailAvisoAdmin(p).html;
+  for (const html of [cliente, admin]) {
+    assert.match(html, /Envío \(Correo Argentino\)/);
+    assert.match(html, /6\.500/);
+    assert.match(html, /Envío a sucursal/);
+    assert.doesNotMatch(html, /Envío a domicilio/);
+    assert.match(html, /Sucursal Centro — Av\. Gral\. Paz 201/);
+    assert.match(html, /PAQ\.AR Clásico/);
+  }
+});
+
+test("el mail de envío a domicilio muestra el correo, servicio y la dirección", () => {
+  const p = pedido({
+    estado: "aprobado",
+    envio_costo: 8200,
+    total: 12200,
+    envio: {
+      metodo: "envio",
+      opcionTipo: "domicilio",
+      transportista: "Andreani",
+      servicio: "Estándar",
+      nombre: "Ana Pérez",
+      direccion: "Calle 7 1234",
+      ciudad: "La Plata",
+      provincia: "Buenos Aires",
+      cp: "1900",
+      telefono: "2211234567",
+    },
+  });
+  const html = mailConfirmacionCliente(p, 40).html;
+  assert.match(html, /Envío a domicilio/);
+  assert.match(html, /Andreani/);
+  assert.match(html, /Calle 7 1234/);
+  assert.match(html, /8\.200/);
 });

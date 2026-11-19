@@ -11,11 +11,26 @@
 const { obtenerCatalogo } = require("../lib/supabase.js");
 const { listarOpcionesEnvio } = require("../lib/envio-costo.js");
 const { calcularPedido } = require("../../public/motor.js");
+const { permitir, claveDe } = require("../lib/limite.js");
+
+// Protege las cuotas de las APIs de envío (Zipnova, Andreani, paq.ar) contra
+// abuso automático sin molestar a un cliente real que prueba 2 o 3 direcciones.
+const MAX_POR_VENTANA = 30;
+const VENTANA_MS = 10 * 60 * 1000;
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, headers, body: JSON.stringify({ error: "Método no permitido" }) };
+  }
+
+  const tope = permitir(claveDe("cotizar-envio", event), { max: MAX_POR_VENTANA, ventanaMs: VENTANA_MS });
+  if (!tope.ok) {
+    return {
+      statusCode: 429,
+      headers: { ...headers, "Retry-After": String(tope.esperaSegundos) },
+      body: JSON.stringify({ error: "Demasiadas consultas de envío seguidas. Esperá unos minutos y probá de nuevo." }),
+    };
   }
 
   try {

@@ -49,12 +49,49 @@ function selectorMetodoMp(p) {
     </div>`;
 }
 
-// Línea de entrega para la tarjeta del pedido (retiro o dirección de envío)
-function renderEntrega(envio) {
+const NOMBRES_PROVEEDOR = { zipnova: "Zipnova", andreani: "Andreani", paqar: "Paqar" };
+
+function proveedorDeEnvio(envio) {
+  if (!envio) return "";
+  if (envio.proveedor && NOMBRES_PROVEEDOR[envio.proveedor]) return NOMBRES_PROVEEDOR[envio.proveedor];
+  const grupo = String(envio.opcionGrupo || "");
+  if (grupo.startsWith("paqar:")) return "Paqar";
+  if (grupo.startsWith("andreani:")) return "Andreani";
+  if (grupo) return "Zipnova";
+  return "";
+}
+
+// Línea de entrega para la tarjeta del pedido (retiro, domicilio o sucursal)
+function renderEntrega(envio, envioCosto) {
   if (!envio || !envio.metodo) return "";
   if (envio.metodo === "retiro") return `<p class="pedido__extra">🏪 Retiro en el local</p>`;
-  const partes = [envio.direccion, envio.ciudad, envio.provincia, envio.cp && `CP ${envio.cp}`].filter(Boolean).map(escapar).join(", ");
-  return `<p class="pedido__extra">📦 Envío a: ${escapar(envio.nombre)}${partes ? ` — ${partes}` : ""}${envio.telefono ? " · Tel " + escapar(envio.telefono) : ""}${envio.notas ? " · " + escapar(envio.notas) : ""}</p>`;
+  const esSucursal = envio.opcionTipo === "sucursal";
+  const prov = proveedorDeEnvio(envio);
+  const correo = [envio.transportista, envio.servicio].filter(Boolean).map(escapar).join(" · ");
+  const metaCorreo = [
+    correo,
+    prov && `vía ${escapar(prov)}`,
+    Number(envioCosto) > 0 && formato.format(envioCosto),
+  ].filter(Boolean).join(" · ");
+  const titulo = esSucursal ? "🏤 Envío a sucursal" : "📦 Envío a domicilio";
+  const cabecera = metaCorreo ? `<strong>${titulo}</strong> (${metaCorreo})` : `<strong>${titulo}</strong>`;
+
+  if (esSucursal) {
+    const suc = envio.sucursal || {};
+    const punto = [suc.descripcion, suc.direccion].filter(Boolean).map(escapar).join(" — ");
+    const loc = [envio.ciudad, envio.provincia, envio.cp && `CP ${envio.cp}`].filter(Boolean).map(escapar).join(", ");
+    const partes = [
+      punto,
+      loc,
+      envio.nombre && `Retira: ${escapar(envio.nombre)}`,
+      envio.telefono && `Tel ${escapar(envio.telefono)}`,
+      envio.notas && escapar(envio.notas),
+    ].filter(Boolean);
+    return `<p class="pedido__extra">${cabecera}${partes.length ? ` — ${partes.join(" · ")}` : ""}</p>`;
+  }
+
+  const dir = [envio.direccion, envio.ciudad, envio.provincia, envio.cp && `CP ${envio.cp}`].filter(Boolean).map(escapar).join(", ");
+  return `<p class="pedido__extra">${cabecera}: ${escapar(envio.nombre)}${dir ? ` — ${dir}` : ""}${envio.telefono ? " · Tel " + escapar(envio.telefono) : ""}${envio.notas ? " · " + escapar(envio.notas) : ""}</p>`;
 }
 
 // Confirmación de "Cancelar" (pedidos ya cobrados), dentro de la tarjeta: dice
@@ -111,7 +148,7 @@ function renderPedidos() {
       : "";
     const cupon = p.cupon ? `<p class="pedido__extra">Cupón ${escapar(p.cupon)}: -${formato.format(p.descuento_cupon || 0)}</p>` : "";
     const puntos = p.cliente_email ? `<p class="pedido__extra">Puntos: +${p.puntos_ganados}${p.puntos_canjeados ? ` · canje -${p.puntos_canjeados}` : ""}</p>` : "";
-    const entrega = renderEntrega(p.envio);
+    const entrega = renderEntrega(p.envio, p.envio_costo);
     const metodoPago = METODOS_PAGO_MANUAL.find((m) => m.clave === p.metodo_pago);
     const pago = [
       p.descuento_cantidad ? `Descuento por cantidad: -${formato.format(p.descuento_cantidad)}` : "",
@@ -2025,27 +2062,69 @@ async function cargarPrecios() {
     $("#cfg-peso-drip").value = cfgPrecios.pesoDripBagG;
     $("#cfg-peso-cafe14").value = cfgPrecios.pesoCafeBolsaG;
     $("#cfg-peso-merch").value = cfgPrecios.pesoMerchG;
-    // Estado de cada proveedor de tarifas: se puede tener uno, el otro o los
-    // dos (las opciones se mezclan ordenadas por precio en el carrito).
-    const prov = dataConfig.proveedoresEnvio || { zipnova: dataConfig.zipnovaDisponible, andreani: false, paqar: false };
-    const conectados = Object.entries(prov).filter(([, ok]) => ok).map(([n]) => n);
-    const faltan = {
-      zipnova: "ZIPNOVA_TOKEN, ZIPNOVA_SECRET y ZIPNOVA_ACCOUNT_ID",
-      andreani: "ANDREANI_USUARIO, ANDREANI_PASSWORD, ANDREANI_CLIENTE, ANDREANI_SUCURSAL_ORIGEN y algún ANDREANI_CONTRATO_*",
-      paqar: "PAQAR_USER_TOKEN, PAQAR_PASSWORD_TOKEN, PAQAR_CUSTOMER_ID y PAQAR_CP_ORIGEN",
-    };
-    const sinConectar = Object.entries(prov).filter(([, ok]) => !ok).map(([n]) => `${n} (faltan ${faltan[n]})`);
-    mensaje("#zipnova-estado",
-      conectados.length
-        ? `✅ Cotizando con ${conectados.join(" y ")}.${sinConectar.length ? ` Sin conectar: ${sinConectar.join("; ")}.` : ""}`
-        : `⚠️ Sin ningún proveedor conectado: el envío a domicilio no se puede cobrar. Falta configurar ${sinConectar.join("; ")}.`,
-      conectados.length > 0);
+    proveedoresEnvioCache = dataConfig.proveedoresEnvio || {};
+    renderProveedoresEnvio();
     mensaje("#precio-message", dataConfig.desdeLaBase ? "" : "⚠️ Falta correr supabase/migracion-insumos.sql: mientras tanto se usan los valores anteriores y los insumos no se pueden editar.");
     cargarTransportistas(); // no frena la carga de Precios si falla
   } catch (err) {
     mensaje("#precio-message", `⚠️ ${err.message}`);
   }
 }
+
+// ===== APIs de envío =====
+// Cada una cotiza solo si tiene credenciales (`conectado`) Y está prendida acá
+// (`activo`). Apagarla no borra los secretos: se deja de consultar y las
+// opciones que había dado dejan de poder cobrarse.
+const PROVEEDORES_ENVIO = {
+  zipnova: { nombre: "Zipnova", clave: "envio_zipnova", falta: "ZIPNOVA_TOKEN, ZIPNOVA_SECRET y ZIPNOVA_ACCOUNT_ID" },
+  andreani: { nombre: "Andreani", clave: "envio_andreani", falta: "ANDREANI_USUARIO, ANDREANI_PASSWORD, ANDREANI_CLIENTE, ANDREANI_SUCURSAL_ORIGEN y algún ANDREANI_CONTRATO_*" },
+  paqar: { nombre: "Paqar", clave: "envio_paqar", falta: "PAQAR_USER_TOKEN, PAQAR_PASSWORD_TOKEN, PAQAR_CUSTOMER_ID y PAQAR_CP_ORIGEN" },
+};
+
+let proveedoresEnvioCache = {};
+
+function renderProveedoresEnvio() {
+  const entradas = Object.entries(proveedoresEnvioCache).filter(([id]) => PROVEEDORES_ENVIO[id]);
+  $("#proveedores-envio").innerHTML = entradas.map(([id, estado]) => {
+    const meta = PROVEEDORES_ENVIO[id];
+    const cotiza = estado.conectado && estado.activo;
+    const nota = !estado.conectado ? "sin credenciales" : estado.activo ? "cotizando" : "apagada";
+    return `<label class="transportista${cotiza ? " transportista--activo" : ""}">
+        <input type="checkbox" data-proveedor="${escapar(id)}" ${estado.activo ? "checked" : ""}>
+        <span class="transportista__nombre">${escapar(meta.nombre)}</span>
+        <span class="transportista__visto">${nota}</span>
+      </label>`;
+  }).join("");
+
+  const cotizando = entradas.filter(([, e]) => e.conectado && e.activo).map(([id]) => PROVEEDORES_ENVIO[id].nombre);
+  const sinConectar = entradas.filter(([, e]) => !e.conectado).map(([id]) => `${PROVEEDORES_ENVIO[id].nombre} (faltan ${PROVEEDORES_ENVIO[id].falta})`);
+  mensaje("#zipnova-estado",
+    cotizando.length
+      ? `✅ Cotizando con ${cotizando.join(" y ")}.${sinConectar.length ? ` Sin conectar: ${sinConectar.join("; ")}.` : ""}`
+      : `⚠️ Ninguna API cotizando: el envío a domicilio no se puede cobrar y queda solo el retiro.${sinConectar.length ? ` Falta configurar ${sinConectar.join("; ")}.` : ""}`,
+    cotizando.length > 0);
+}
+
+$("#proveedores-envio").addEventListener("change", async (e) => {
+  const check = e.target.closest("[data-proveedor]");
+  if (!check) return;
+  const id = check.dataset.proveedor;
+  const activo = check.checked;
+  check.disabled = true;
+  try {
+    await api("/api/admin-config", {
+      method: "PATCH",
+      body: JSON.stringify({ clave: PROVEEDORES_ENVIO[id].clave, valor: activo ? 1 : 0 }),
+    });
+    proveedoresEnvioCache[id].activo = activo;
+    renderProveedoresEnvio();
+    toast(`${activo ? "✅" : "🚫"} ${PROVEEDORES_ENVIO[id].nombre} ${activo ? "vuelve a cotizar" : "deja de cotizar"}`);
+  } catch (err) {
+    check.checked = !activo;
+    check.disabled = false;
+    toast(`⚠️ ${err.message}`);
+  }
+});
 
 // ===== Transportistas habilitados =====
 // Se prenden y apagan de a uno; el cambio impacta en el carrito en cuanto

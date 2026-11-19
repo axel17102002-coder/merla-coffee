@@ -140,6 +140,7 @@ Hay **tres proveedores de tarifas** y se pueden usar juntos:
 
 Si están los dos configurados, se cotizan **en paralelo** y las opciones se mezclan en una sola lista ordenada por precio — al cliente le da igual de dónde sale la tarifa. Si uno falla o está caído, el otro igual responde. Qué transportistas se muestran se elige en `/admin` → Precios → Envío, y ese interruptor aplica a los dos proveedores por igual.
 
+- **Prender y apagar cada API**: en `/admin` → Precios → Envío hay un interruptor por proveedor. Apagar uno **no borra sus credenciales**: simplemente se le deja de pedir tarifas, y las opciones que ya había dado dejan de poder cobrarse. Sirve para probar un proveedor nuevo, o para sacar uno que está caro o caído sin tocar código ni desplegar. Con todos apagados queda solo el retiro. Requiere correr `supabase/migracion-proveedores-envio.sql`; sin eso los tres se asumen prendidos, como venía funcionando.
 - **Peso estimado**: cada tipo de producto (drip bag, café en bolsa de 1/4, tazas/otros) tiene un peso configurable en `/admin` → Precios → Envío. Se usa `peso × unidades del carrito` para cotizar.
 - **Retiro** no cotiza nada: el envío solo entra en juego cuando el cliente elige "Envío a domicilio" y carga su código postal.
 - **Sin credenciales** no se rompe nada: el envío a domicilio queda deshabilitado con un aviso claro (retiro y WhatsApp sin envío siguen funcionando).

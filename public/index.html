@@ -232,7 +232,7 @@
       </div>
     </section>
 
-    <section class="section" id="cafess">
+    <section class="section" id="cafes">
       <div class="section__head">
         <h2>Nuestros productos</h2>
       </div>
@@ -426,7 +426,33 @@
             <input id="envio-cp" placeholder="Código postal" autocomplete="postal-code" inputmode="numeric">
           </div>
           <div class="entrega__row">
-            <input id="envio-provincia" placeholder="Provincia" autocomplete="address-level1">
+            <select id="envio-provincia" autocomplete="address-level1" aria-label="Provincia">
+              <option value="">Provincia</option>
+              <option value="Buenos Aires">Buenos Aires</option>
+              <option value="Ciudad Autónoma de Buenos Aires">CABA</option>
+              <option value="Catamarca">Catamarca</option>
+              <option value="Chaco">Chaco</option>
+              <option value="Chubut">Chubut</option>
+              <option value="Córdoba">Córdoba</option>
+              <option value="Corrientes">Corrientes</option>
+              <option value="Entre Ríos">Entre Ríos</option>
+              <option value="Formosa">Formosa</option>
+              <option value="Jujuy">Jujuy</option>
+              <option value="La Pampa">La Pampa</option>
+              <option value="La Rioja">La Rioja</option>
+              <option value="Mendoza">Mendoza</option>
+              <option value="Misiones">Misiones</option>
+              <option value="Neuquén">Neuquén</option>
+              <option value="Río Negro">Río Negro</option>
+              <option value="Salta">Salta</option>
+              <option value="San Juan">San Juan</option>
+              <option value="San Luis">San Luis</option>
+              <option value="Santa Cruz">Santa Cruz</option>
+              <option value="Santa Fe">Santa Fe</option>
+              <option value="Santiago del Estero">Santiago del Estero</option>
+              <option value="Tierra del Fuego">Tierra del Fuego</option>
+              <option value="Tucumán">Tucumán</option>
+            </select>
             <input id="envio-telefono" placeholder="Teléfono" autocomplete="tel" inputmode="tel">
           </div>
           <p class="entrega__aviso" id="envio-costo-estado">Ingresá tu código postal, ciudad y provincia para ver las opciones de envío.</p>

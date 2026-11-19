@@ -10,7 +10,7 @@
 
 const { sb } = require("../lib/supabase.js");
 const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
-const { obtenerCostos } = require("../lib/costos.js");
+const { obtenerCostos, CLAVES_PROVEEDOR_ENVIO } = require("../lib/costos.js");
 const { precioPack, precioUnidadDesdeCosto } = require("../../public/motor.js");
 const zipnova = require("../lib/zipnova.js");
 const andreani = require("../lib/andreani.js");
@@ -21,6 +21,7 @@ const CLAVES_VALIDAS = [
   "peso_drip_bag_g", "peso_cafe_bolsa_g", "peso_merch_g", "comision_mercadopago",
   "comision_mp_dinero", "comision_mp_debito", "comision_mp_credito",
   "comision_mp_prepaga", "comision_mp_cuotas_sin_tarjeta",
+  ...Object.keys(CLAVES_PROVEEDOR_ENVIO), // envio_zipnova, envio_andreani, envio_paqar (1/0)
 ];
 
 // Reaplica el margen objetivo a todos los cafés que tengan costo cargado.
@@ -63,13 +64,13 @@ exports.handler = async (event) => {
           insumos,
           desdeLaBase, // false = falta correr la migración (se usan los valores viejos)
           totales: { unidad: cfg.fijoUnidad, pack: cfg.fijoPack },
-          zipnovaDisponible: zipnova.disponible(),
-          // Cada proveedor de envío por separado: se puede tener uno, el otro
-          // o los dos, y las tarifas se mezclan ordenadas por precio.
+          // Cada API de envío por separado, con sus dos estados: `conectado`
+          // (tiene credenciales) y `activo` (prendida desde el panel). Cotiza
+          // solo si están los dos; las tarifas se mezclan ordenadas por precio.
           proveedoresEnvio: {
-            zipnova: zipnova.disponible(),
-            andreani: andreani.disponible(),
-            paqar: paqar.disponible(),
+            zipnova: { conectado: zipnova.disponible(), activo: cfg.proveedoresEnvio.zipnova },
+            andreani: { conectado: andreani.disponible(), activo: cfg.proveedoresEnvio.andreani },
+            paqar: { conectado: paqar.disponible(), activo: cfg.proveedoresEnvio.paqar },
           },
         }),
       };

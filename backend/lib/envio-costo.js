@@ -26,8 +26,15 @@ function proveedorDe(grupo) {
   return PROVEEDORES[id] ? { id, mod: PROVEEDORES[id] } : { id: "zipnova", mod: zipnova };
 }
 
-function proveedoresActivos() {
-  return Object.entries(PROVEEDORES).filter(([, mod]) => mod.disponible());
+// Un proveedor cotiza solo si tiene credenciales Y está prendido en
+// /admin → Precios → Envío (`configuracion.envio_<proveedor>`).
+function proveedorActivo(id, cfg) {
+  const mod = PROVEEDORES[id];
+  return !!mod && mod.disponible() && ((cfg && cfg.proveedoresEnvio) || {})[id] !== false;
+}
+
+function proveedoresActivos(cfg) {
+  return Object.keys(PROVEEDORES).filter((id) => proveedorActivo(id, cfg));
 }
 
 // Peso estimado de una línea del pedido, según qué tipo de producto es esa
@@ -63,19 +70,19 @@ async function listarOpcionesEnvio(items, productos, destino, valorDeclarado) {
   }
   const { cfg } = await obtenerCostos();
   const peso = pesoTotalGramos(items, productos, cfg);
-  const activos = proveedoresActivos();
+  const activos = proveedoresActivos(cfg);
   if (!activos.length) {
     return { ok: false, error: "El envío no está disponible en este momento. Probá con retiro o escribinos por WhatsApp." };
   }
 
   const consulta = { cp: destino.cp, ciudad: destino.ciudad, provincia: destino.provincia, pesoGramos: peso, valorDeclarado };
-  const resultados = await Promise.allSettled(activos.map(([, mod]) => mod.cotizarOpciones(consulta)));
+  const resultados = await Promise.allSettled(activos.map((id) => PROVEEDORES[id].cotizarOpciones(consulta)));
 
   // Un proveedor caído no puede dejar sin envío al cliente si el otro contestó
   const opciones = [];
   const errores = [];
   resultados.forEach((r, i) => {
-    const nombre = activos[i][0];
+    const nombre = activos[i];
     if (r.status === "fulfilled" && r.value.ok) opciones.push(...r.value.opciones);
     else {
       const motivo = r.status === "fulfilled" ? r.value.error : r.reason && r.reason.message;
@@ -107,14 +114,18 @@ async function resolverEnvioCosto(items, productos, envio, valorDeclarado) {
   const { cfg } = await obtenerCostos();
   const peso = pesoTotalGramos(items, productos, cfg);
   // Se le vuelve a preguntar al MISMO proveedor que dio la opción elegida
-  const { mod } = proveedorDe(envio.opcionGrupo);
+  const { id, mod } = proveedorDe(envio.opcionGrupo);
+  // El carrito pudo quedar abierto desde antes de apagar esa API
+  if (!proveedorActivo(id, cfg)) {
+    return { ok: false, error: "Esa opción de envío ya no está disponible. Volvé a elegir en el carrito." };
+  }
   const resultado = await mod.precioDeOpcion({
     grupo: envio.opcionGrupo,
     cp: envio.cp, ciudad: envio.ciudad, provincia: envio.provincia,
     pesoGramos: peso, valorDeclarado,
   });
   if (!resultado.ok) return { ok: false, error: resultado.error };
-  return { ok: true, costo: resultado.opcion.precio, opcion: resultado.opcion };
+  return { ok: true, costo: resultado.opcion.precio, opcion: resultado.opcion, proveedor: id };
 }
 
-module.exports = { listarOpcionesEnvio, resolverEnvioCosto, pesoTotalGramos, proveedorDe };
+module.exports = { listarOpcionesEnvio, resolverEnvioCosto, pesoTotalGramos, proveedorDe, proveedorActivo, proveedoresActivos };

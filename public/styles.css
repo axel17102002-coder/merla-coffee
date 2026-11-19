@@ -928,12 +928,17 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 .cart .cart__divider::before,
 .cart .cart__divider::after { background: var(--panel-borde); }
 
-/* Campos de texto: fondo elevado y texto crema */
+/* Campos de texto y select: fondo elevado y texto crema */
 .cart .cart__email input,
 .cart .cart__coupon input,
-.cart .entrega__form input {
+.cart .entrega__form input,
+.cart .entrega__form select {
   background: var(--panel-alto);
   border-color: var(--panel-borde);
+  color: var(--panel-texto);
+}
+.cart .entrega__form select option {
+  background: var(--panel);
   color: var(--panel-texto);
 }
 
@@ -1533,12 +1538,14 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 .entrega__op input { accent-color: var(--verde); }
 .entrega__form { display: grid; gap: 8px; margin-top: 10px; }
 .entrega__row { display: flex; gap: 8px; }
-.entrega__form input {
+.entrega__form input,
+.entrega__form select {
   width: 100%; border: 1.5px solid var(--crema-borde); border-radius: 12px;
   padding: 9px 14px; font-family: var(--fuente-texto); font-size: 0.86rem;
   background: var(--crema-suave); color: var(--tinta);
 }
-.entrega__form input:focus { outline: 2px solid var(--caramelo); border-color: var(--caramelo); }
+.entrega__form input:focus,
+.entrega__form select:focus { outline: 2px solid var(--caramelo); border-color: var(--caramelo); }
 .entrega__aviso { font-size: 0.78rem; color: var(--caramelo); font-weight: 600; margin: 2px 0 0; }
 
 /* Opciones de envío (los correos de la modalidad elegida) */

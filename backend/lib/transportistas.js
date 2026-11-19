@@ -65,4 +65,8 @@ async function filtrarOpciones(opciones) {
   return opciones.filter((o) => permitido(o.transportista, activos));
 }
 
-module.exports = { estado, permitido, fichar, filtrarOpciones, RESPALDO_PERMITIDOS };
+function invalidarCache() {
+  cache = { hasta: 0, activos: null, conocidos: new Set() };
+}
+
+module.exports = { estado, permitido, fichar, filtrarOpciones, invalidarCache, RESPALDO_PERMITIDOS };

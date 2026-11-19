@@ -160,5 +160,12 @@ una regla de precio/punto, va acá y aplica en ambos lados a la vez.
   se usan con `icono("nombre")` en `app.js`. Para uno nuevo, sumá el `<symbol>`.
 - **Pasarelas de pago**: se prenden/apagan en `motor.js` → `CONFIG.pagos`. Hoy
   Mercado Pago activo, MODO implementado pero apagado.
+- **APIs de envío**: se prenden/apagan desde `/admin → Precios → Envío` (claves
+  `envio_zipnova` / `envio_andreani` / `envio_paqar` en `configuracion`, 1/0).
+  Cotizan solo si tienen credenciales **y** están prendidas; el filtro se aplica
+  en `envio-costo.js`, también al recobrar, así un carrito viejo no puede pagar
+  por una API apagada. Es distinto del interruptor de **transportistas** (qué
+  correo se muestra, tabla `transportistas`): uno elige a quién le preguntamos
+  la tarifa, el otro cuál de las tarifas se ofrece.
 - **Sin credenciales de un servicio no se rompe nada**: mails (Brevo) y envío a
   domicilio (Zipnova) se degradan con aviso; el resto sigue funcionando.

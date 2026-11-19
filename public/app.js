@@ -71,6 +71,8 @@ let saldoPuntos = null; // saldo conocido del email actual (null = sin consultar
 let envioQuote = { clave: "", firma: "", opciones: [], cargando: false, error: null };
 let envioOpcionElegida = null; // clave de la opción elegida (carrier+servicio)
 let envioSucursalElegida = null; // id de la sucursal, solo si la opción es tipo 'sucursal'
+let envioAbort = null; // cancela cotizaciones viejas si el cliente cambia destino o carrito
+let envioSeq = 0; // descarta respuestas que lleguen fuera de orden
 // A domicilio o a sucursal: se elige ANTES de ver transportistas, para no
 // mezclar las dos listas. Si el destino solo tiene una modalidad, se asigna
 // sola y no se le pregunta al cliente algo que no es una decisión real.
@@ -128,27 +130,32 @@ const emailValido = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 //
 // Si ocurre un error se muestra un botón para reintentar.
 // ============================================================================
-async function cargarTienda() {
-  $("#product-grid").innerHTML = `<p class="grid__estado">Cargando cafés… ☕</p>`;
-  try {
-    const res = await fetch("/api/tienda");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    DATOS = await res.json();
-    renderFiltros();
-    renderProductos();
-    renderCarrito();
-    renderParaVos();
-    renderResenas();
-    datosEstructuradosProductos(); // para que Google muestre precio y stock
-    abrirProductoDeURL(); // deep-link ?producto=<id> (lo usan los feeds de ads)
-    retomarPedidoDeURL(); // ?retomar=... (botón del mail de carrito abandonado)
-  } catch (err) {
-    console.error("No se pudo cargar la tienda:", err);
-    $("#product-grid").innerHTML = `
-      <p class="grid__estado">⚠️ No pudimos cargar los cafés.
-      <button class="grid__retry" id="retry-tienda">Reintentar</button></p>`;
-    $("#retry-tienda").addEventListener("click", cargarTienda);
-  }
+let cargaTienda = null;
+
+function cargarTienda() {
+  cargaTienda = (async () => {
+    $("#product-grid").innerHTML = `<p class="grid__estado">Cargando cafés… ☕</p>`;
+    try {
+      const res = await fetch("/api/tienda");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      DATOS = await res.json();
+      renderFiltros();
+      renderProductos();
+      renderCarrito();
+      renderParaVos();
+      renderResenas();
+      datosEstructuradosProductos(); // para que Google muestre precio y stock
+      abrirProductoDeURL(); // deep-link ?producto=<id> (lo usan los feeds de ads)
+      retomarPedidoDeURL(); // ?retomar=... (botón del mail de carrito abandonado)
+    } catch (err) {
+      console.error("No se pudo cargar la tienda:", err);
+      $("#product-grid").innerHTML = `
+        <p class="grid__estado">⚠️ No pudimos cargar los cafés.
+        <button class="grid__retry" id="retry-tienda">Reintentar</button></p>`;
+      $("#retry-tienda").addEventListener("click", cargarTienda);
+    }
+  })();
+  return cargaTienda;
 }
 
 // ===== Retomar un pedido desde el mail de carrito abandonado =====
@@ -818,6 +825,13 @@ function estadoPedido() {
     : { items, calc: null, error: calc.error, pendiente: null };
 }
 
+// El descuento por transferencia aplica sobre los productos, no sobre el flete
+// que se le paga al correo.
+function totalTransferencia(calc) {
+  const envio = Number(calc.envioCosto) || 0;
+  return precioTransferencia(calc.total - envio) + envio;
+}
+
 /**
  * Renderiza completamente el carrito.
  *
@@ -917,7 +931,7 @@ function renderCarrito() {
   $("#cart-total").textContent = formatear(calc.total);
 
   $("#cart-transf").hidden = false;
-  $("#cart-transf").innerHTML = `${icono("billete")} Por transferencia: <strong>${formatear(precioTransferencia(calc.total))}</strong> (${CONFIG.transferencia.descuento}% OFF, pedilo por WhatsApp)`;
+  $("#cart-transf").innerHTML = `${icono("billete")} Por transferencia: <strong>${formatear(totalTransferencia(calc))}</strong> (${CONFIG.transferencia.descuento}% OFF${calc.envioCosto ? " en productos" : ""}, pedilo por WhatsApp)`;
 
   const cfg = DATOS.config;
   const faltan = cfg.descuentoCantidad - calc.unidadesSueltas;
@@ -1299,17 +1313,19 @@ async function checkoutWhatsApp() {
     msg += `\nEnvío: ${formatear(calc.envioCosto)}`;
   }
   msg += `\n*Total: ${formatear(calc.total)}*`;
-  msg += `\n💵 Pagando por transferencia o depósito: *${formatear(precioTransferencia(calc.total))}* (${CONFIG.transferencia.descuento}% OFF)`;
+  msg += `\n💵 Pagando por transferencia o depósito: *${formatear(totalTransferencia(calc))}* (${CONFIG.transferencia.descuento}% OFF${calc.envioCosto ? " en productos" : ""})`;
 
   const entrega = datosEntrega();
+  const op = opcionElegida();
+  const correoDetalle = [entrega.transportista, op && op.servicio].filter(Boolean).join(" · ");
   if (entrega.metodo === "envio" && entrega.opcionTipo === "sucursal") {
-    msg += `\n\n🏤 *Envío a sucursal (${entrega.transportista})*`;
+    msg += `\n\n🏤 *Envío a sucursal (${correoDetalle})*`;
     msg += `\n${entrega.nombre}`;
     if (entrega.sucursal) msg += `\n${entrega.sucursal.descripcion || entrega.sucursal.direccion}`;
     msg += `\nTel: ${entrega.telefono}`;
     if (entrega.notas) msg += `\nNotas: ${entrega.notas}`;
   } else if (entrega.metodo === "envio") {
-    msg += `\n\n📦 *Envío a domicilio (${entrega.transportista})*`;
+    msg += `\n\n📦 *Envío a domicilio (${correoDetalle})*`;
     msg += `\n${entrega.nombre} — ${entrega.direccion}`;
     msg += `\n${entrega.ciudad}${entrega.provincia ? ", " + entrega.provincia : ""}${entrega.cp ? " (CP " + entrega.cp + ")" : ""}`;
     msg += `\nTel: ${entrega.telefono}`;
@@ -1428,14 +1444,18 @@ function envioCostoActual(items) {
 
 // Pide una cotización nueva si hace falta (destino completo, carrito no
 // vacío, y no hay ya una cotización o una petición en curso para ese mismo
-// destino+carrito). No bloquea: solo dispara el fetch y vuelve a renderizar
-// cuando termina. Al llegar, preselecciona la opción más barata.
+// destino+carrito). Cancela la petición anterior si cambia el destino o el
+// carrito, para que una respuesta vieja nunca pise una más nueva.
 async function actualizarCotizacionEnvio(items) {
   const destino = destinoEnvio();
   if (metodoEntrega() !== "envio" || destino.cp.length < 4 || !destino.ciudad || !destino.provincia || !items.length) return;
   const clave = claveDestino(destino);
   const firma = firmaCarrito(items);
   if (envioQuote.clave === clave && envioQuote.firma === firma) return; // ya cotizado o pedido en curso
+
+  if (envioAbort) envioAbort.abort();
+  envioAbort = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const seq = ++envioSeq;
 
   envioQuote = { clave, firma, opciones: [], cargando: true, error: null };
   envioOpcionElegida = null;
@@ -1447,8 +1467,10 @@ async function actualizarCotizacionEnvio(items) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ items, ...destino }),
+      signal: envioAbort ? envioAbort.signal : undefined,
     });
     const data = await res.json().catch(() => ({}));
+    if (seq !== envioSeq) return; // ya salió una cotización más nueva
     if (!res.ok) throw new Error(data.error || "No pudimos calcular el envío");
     envioQuote = { clave, firma, opciones: data.opciones || [], cargando: false, error: null };
     envioOpcionElegida = null;
@@ -1459,6 +1481,7 @@ async function actualizarCotizacionEnvio(items) {
     envioModalidad = tipos.length === 1 ? tipos[0] : null;
     if (envioModalidad) preseleccionarMasBarata();
   } catch (err) {
+    if (seq !== envioSeq || (err && err.name === "AbortError")) return;
     envioQuote = { clave, firma, opciones: [], cargando: false, error: err.message };
   }
   renderCarrito();
@@ -1641,11 +1664,45 @@ $("#envio-sucursales").addEventListener("change", (e) => {
   envioSucursalElegida = e.target.value;
   renderCarrito();
 });
-["#envio-cp", "#envio-ciudad", "#envio-provincia"].forEach((sel) => {
+// Recuerda los datos de envío del cliente en este navegador para no volver a
+// pedirlos en la próxima compra (nunca guarda datos sensibles ni pagos).
+const CAMPOS_ENVIO_GUARDADOS = ["nombre", "ciudad", "cp", "provincia", "telefono", "direccion"];
+function guardarDatosEnvio() {
+  try {
+    const datos = {};
+    for (const c of CAMPOS_ENVIO_GUARDADOS) {
+      const el = $(`#envio-${c}`);
+      if (el) datos[c] = el.value.trim();
+    }
+    localStorage.setItem("merla-envio", JSON.stringify(datos));
+  } catch {}
+}
+function restaurarDatosEnvio() {
+  try {
+    const datos = JSON.parse(localStorage.getItem("merla-envio") || "null");
+    if (!datos || typeof datos !== "object") return;
+    for (const c of CAMPOS_ENVIO_GUARDADOS) {
+      const el = $(`#envio-${c}`);
+      if (el && typeof datos[c] === "string" && datos[c]) el.value = datos[c];
+    }
+  } catch {}
+}
+
+let envioDebounce = null;
+["#envio-cp", "#envio-ciudad"].forEach((sel) => {
   $(sel).addEventListener("input", () => {
-    clearTimeout($(sel)._debounce);
-    $(sel)._debounce = setTimeout(() => renderCarrito(), 500);
+    guardarDatosEnvio();
+    clearTimeout(envioDebounce);
+    envioDebounce = setTimeout(() => renderCarrito(), 500);
   });
+});
+$("#envio-provincia").addEventListener("change", () => {
+  guardarDatosEnvio();
+  clearTimeout(envioDebounce);
+  renderCarrito();
+});
+["#envio-nombre", "#envio-telefono", "#envio-direccion"].forEach((sel) => {
+  $(sel).addEventListener("change", guardarDatosEnvio);
 });
 
 // ===== Checkout con Mercado Pago (Checkout Pro) =====
@@ -1770,9 +1827,12 @@ async function pagarConModo() {
 // descuenta stock y acredita puntos). El webhook hace lo mismo por su lado;
 // la operación es idempotente.
 async function confirmarCompra(pagoId, mpPaymentId) {
+  // Si el catálogo todavía está cargando (al volver de MP), esperamos para que
+  // metaDesdeCarrito() tenga precios/ids reales antes de vaciar el carrito.
+  if (!DATOS && cargaTienda) await cargaTienda;
   // Se captura antes de vaciar el carrito; si está vacío (recarga del success)
   // no se dispara, así no cuenta la compra dos veces.
-  const compra = metaDesdeCarrito();
+  const compra = DATOS ? metaDesdeCarrito() : { content_ids: [] };
   const id = pagoId || localStorage.getItem("merla-ultimo-pago");
   let puntos = null;
   if (id || mpPaymentId) {
@@ -2035,7 +2095,8 @@ document.addEventListener("click", (e) => {
     filtroRegion = filtro.dataset.region;
     renderFiltros();
     renderProductos();
-    centrarPill($("#region-filtros").querySelector(".activo")); // desliza al centro
+    const panelVisible = document.querySelector(".cat-panel:not([hidden]), .catalogo__extra:not([hidden])");
+    centrarPill(panelVisible && panelVisible.querySelector(".region-filtros .activo")); // desliza al centro
     return;
   }
 
@@ -2332,6 +2393,7 @@ document.addEventListener("submit", (e) => {
 // ===== Inicio =====
 const emailGuardado = emailCliente();
 if ($("#club-email") && emailGuardado) $("#club-email").value = emailGuardado;
+restaurarDatosEnvio();
 cargarTienda();
 abrirResenaDeURL();
 observarReveals();

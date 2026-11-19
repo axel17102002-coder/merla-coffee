@@ -4,7 +4,7 @@
 
 const { sb, obtenerCatalogo, obtenerCupon, obtenerPuntos, cuponYaUsado } = require("../lib/supabase.js");
 const { calcularPedido, numeroPedido: formatearNumero } = require("../../public/motor.js");
-const { sanitizarEnvio } = require("../lib/entrega.js");
+const { sanitizarEnvio, validarEnvio, enriquecerEnvio } = require("../lib/entrega.js");
 const { resolverEnvioCosto } = require("../lib/envio-costo.js");
 const { avisarAdminPorId } = require("../lib/avisos.js");
 const { itemsConCosto } = require("../lib/costos.js");
@@ -65,8 +65,12 @@ exports.handler = async (event) => {
 
     // El costo de envío se cotiza en el servidor (nunca se confía en un monto
     // mandado por el navegador): retiro no cotiza nada, envío sí.
-    const envio = sanitizarEnvio(body.envio);
+    let envio = sanitizarEnvio(body.envio);
     if (envio && envio.metodo === "envio") {
+      const errorEnvio = validarEnvio(envio);
+      if (errorEnvio) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: errorEnvio }) };
+      }
       const previo = calcularPedido(body.items, opcionesPedido, { productos });
       if (!previo.ok) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: previo.error }) };
@@ -74,6 +78,11 @@ exports.handler = async (event) => {
       const resultadoEnvio = await resolverEnvioCosto(body.items, productos, envio, previo.subtotal);
       if (!resultadoEnvio.ok) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: resultadoEnvio.error }) };
+      }
+      envio = enriquecerEnvio(envio, resultadoEnvio);
+      const errorFinal = validarEnvio(envio);
+      if (errorFinal) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: errorFinal }) };
       }
       opcionesPedido.envioCosto = resultadoEnvio.costo;
     }

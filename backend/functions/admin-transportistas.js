@@ -8,6 +8,7 @@
 
 const { sb } = require("../lib/supabase.js");
 const { esAdmin, respuestaNoAutorizado } = require("../lib/admin.js");
+const { invalidarCache } = require("../lib/transportistas.js");
 
 exports.handler = async (event) => {
   const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
@@ -33,6 +34,7 @@ exports.handler = async (event) => {
       if (!fila) {
         return { statusCode: 404, headers, body: JSON.stringify({ error: "Transportista inexistente" }) };
       }
+      invalidarCache();
       return { statusCode: 200, headers, body: JSON.stringify({ ok: true, transportista: fila }) };
     }
 

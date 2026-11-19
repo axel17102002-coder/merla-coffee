@@ -326,10 +326,22 @@
               <header class="px-cabecera">
                 <div>
                   <h3 class="px-titulo">🚚 Envío</h3>
-                  <p class="px-desc">El envío a domicilio se cotiza en vivo con Zipnova, según el peso estimado de lo que se compra. Los pesos se guardan solos al cambiarlos.</p>
+                  <p class="px-desc">El envío se cotiza en vivo con las APIs conectadas y prendidas (Zipnova, Andreani y Paqar), según el peso estimado del pedido. Los pesos se guardan solos al cambiarlos.</p>
                 </div>
               </header>
               <p class="mensaje" id="zipnova-estado"></p>
+
+              <!-- A qué APIs se les piden tarifas. Apagar una no borra sus
+                   credenciales: simplemente se deja de consultar. -->
+              <div class="px-config px-config--transportistas">
+                <div class="px-config__fila px-config__fila--nota">
+                  <div class="px-config__info">
+                    <strong>APIs de envío</strong>
+                    <span>Cuáles se consultan al cotizar. Apagar una no borra sus credenciales, solo deja de pedirle tarifas. Con todas apagadas queda únicamente el retiro.</span>
+                  </div>
+                </div>
+                <div id="proveedores-envio"></div>
+              </div>
 
               <!-- Qué correos ve el cliente. La lista se completa sola con lo
                    que Zipnova va devolviendo; los nuevos entran apagados. -->
