@@ -274,6 +274,7 @@ function calcularPedido(items, opciones, datos) {
       nombre: producto.nombre,
       presentacionNombre: pres.nombre,
       esPack: pres.unidades_stock > 1,
+      esDrip: producto.tipo !== "simple" && pres.unidades_stock === 1,
       precioUnitario: pres.precio,
       qty,
       unidades,
@@ -306,11 +307,32 @@ function calcularPedido(items, opciones, datos) {
         error: `El cupón ${c.codigo} es para pedidos desde $${c.minimo.toLocaleString("es-AR")}`,
       };
     }
-    // Ningún cupón descuenta más que el pedido, aunque esté mal cargado (150%)
-    descuentoCupon = Math.max(
-      0,
-      Math.min(base, c.tipo === "porcentaje" ? Math.round((base * c.valor) / 100) : c.valor)
-    );
+    if (c.tipo === "2x1_drip") {
+      // 2×1 en drip bags individuales: exige al menos 2 drip bags sueltas y
+      // bonifica la(s) más barata(s), hasta `c.valor` (1 = una sola drip bag).
+      const preciosDrip = [];
+      for (const l of lineas) {
+        if (!l.esDrip) continue;
+        for (let i = 0; i < l.qty; i++) preciosDrip.push(l.precioUnitario);
+      }
+      if (preciosDrip.length < 2) {
+        return {
+          ok: false,
+          error: `El cupón ${c.codigo} es 2×1 en drip bags: agregá al menos 2 drip bags individuales`,
+        };
+      }
+      preciosDrip.sort((a, b) => a - b);
+      const tope = Math.max(1, Math.floor(Number(c.valor) || 1));
+      const gratis = Math.min(Math.floor(preciosDrip.length / 2), tope);
+      const suma = preciosDrip.slice(0, gratis).reduce((t, p) => t + p, 0);
+      descuentoCupon = Math.max(0, Math.min(base, Math.round(suma)));
+    } else {
+      // Ningún cupón descuenta más que el pedido, aunque esté mal cargado (150%)
+      descuentoCupon = Math.max(
+        0,
+        Math.min(base, c.tipo === "porcentaje" ? Math.round((base * c.valor) / 100) : c.valor)
+      );
+    }
     cupon = c.codigo;
   }
 
@@ -384,7 +406,26 @@ function calcularDescuentosManual(lineas, { cupon = null, aplicarCantidad = fals
     if (base < (cupon.minimo || 0)) {
       return { ok: false, error: `El cupón ${cupon.codigo} es para pedidos desde $${cupon.minimo.toLocaleString("es-AR")}` };
     }
-    descuentoCupon = Math.max(0, Math.min(base, cupon.tipo === "porcentaje" ? Math.round((base * cupon.valor) / 100) : cupon.valor));
+    if (cupon.tipo === "2x1_drip") {
+      const preciosDrip = [];
+      for (const l of lineas) {
+        if (!l.esDrip) continue;
+        for (let i = 0; i < l.qty; i++) preciosDrip.push(l.precioUnitario);
+      }
+      if (preciosDrip.length < 2) {
+        return {
+          ok: false,
+          error: `El cupón ${cupon.codigo} es 2×1 en drip bags: agregá al menos 2 drip bags individuales`,
+        };
+      }
+      preciosDrip.sort((a, b) => a - b);
+      const tope = Math.max(1, Math.floor(Number(cupon.valor) || 1));
+      const gratis = Math.min(Math.floor(preciosDrip.length / 2), tope);
+      const suma = preciosDrip.slice(0, gratis).reduce((t, p) => t + p, 0);
+      descuentoCupon = Math.max(0, Math.min(base, Math.round(suma)));
+    } else {
+      descuentoCupon = Math.max(0, Math.min(base, cupon.tipo === "porcentaje" ? Math.round((base * cupon.valor) / 100) : cupon.valor));
+    }
   }
 
   const resto = base - descuentoCupon;

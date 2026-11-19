@@ -27,29 +27,38 @@ exports.handler = async (event) => {
       if (!/^[A-Z0-9_-]{2,40}$/.test(codigo)) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: "Código inválido (2-40 letras, números, - o _)" }) };
       }
-      if (!["porcentaje", "monto"].includes(tipo)) {
-        return { statusCode: 400, headers, body: JSON.stringify({ error: "Tipo inválido (porcentaje o monto)" }) };
+      if (!["porcentaje", "monto", "2x1_drip"].includes(tipo)) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: "Tipo inválido (porcentaje, monto o 2x1_drip)" }) };
       }
-      if (!(valor > 0)) {
+      const valorFinal = tipo === "2x1_drip" ? (Number.isFinite(valor) && valor > 0 ? Math.round(valor) : 1) : Math.round(valor);
+      if (!(valorFinal > 0)) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: "El valor debe ser mayor a 0" }) };
       }
-      if (tipo === "porcentaje" && valor > 100) {
+      if (tipo === "porcentaje" && valorFinal > 100) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: "Un porcentaje no puede ser mayor a 100" }) };
       }
 
       // Upsert: si el código ya existe, se edita; si no, se crea.
-      const [cupon] = await sb("cupones", {
-        method: "POST",
-        headers: { Prefer: "resolution=merge-duplicates,return=representation" },
-        body: {
-          codigo,
-          tipo,
-          valor: Math.round(valor),
-          minimo: Math.max(0, Math.round(minimo)),
-          descripcion: String(body.descripcion || "").trim() || null,
-          activo: body.activo === undefined ? true : Boolean(body.activo),
-        },
-      });
+      let cupon;
+      try {
+        [cupon] = await sb("cupones", {
+          method: "POST",
+          headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+          body: {
+            codigo,
+            tipo,
+            valor: valorFinal,
+            minimo: Math.max(0, Math.round(minimo)),
+            descripcion: String(body.descripcion || "").trim() || null,
+            activo: body.activo === undefined ? true : Boolean(body.activo),
+          },
+        });
+      } catch (err) {
+        if (String(err.message).includes("cupones_tipo_check")) {
+          return { statusCode: 409, headers, body: JSON.stringify({ error: "Falta correr supabase/migracion-cupon-2x1.sql en Supabase" }) };
+        }
+        throw err;
+      }
       return { statusCode: 200, headers, body: JSON.stringify({ cupon }) };
     }
 

@@ -158,6 +158,58 @@ test("un cupón desactivado no se aplica", () => {
   assert.equal(r.ok, false);
 });
 
+test("el cupón 2x1 en drip bag exige al menos 2 drip bags sueltas y descuenta la más barata", () => {
+  const productos = [
+    ...catalogo(),
+    {
+      id: "cafe2", nombre: "Oldfashion", tipo: "cafe", activo: true, stock: 50,
+      presentaciones: [{ id: "u2", nombre: "Unidad", unidades_stock: 1, precio: 2500, activo: true }],
+    },
+  ];
+  const cupon = { codigo: "DRIP2X1", tipo: "2x1_drip", valor: 1, minimo: 0, activo: true };
+
+  // 1 drip ($2.000) + 1 drip ($2.500) → descuenta la más barata ($2.000)
+  const dos = calcularPedido([{ presentacion: "u", qty: 1 }, { presentacion: "u2", qty: 1 }], { cupon }, { productos });
+  assert.equal(dos.ok, true);
+  assert.equal(dos.descuentoCupon, 2000);
+  assert.equal(dos.total, 2500);
+
+  // Aunque lleve 4 drip bags, con valor=1 bonifica UNA sola (la más barata)
+  const cuatro = calcularPedido([{ presentacion: "u", qty: 2 }, { presentacion: "u2", qty: 2 }], { cupon }, { productos });
+  assert.equal(cuatro.ok, true);
+  assert.equal(cuatro.descuentoCupon, 2000);
+
+  // Con valor=2 y 4 drip bags, bonifica las 2 más baratas
+  const tope2 = calcularPedido(
+    [{ presentacion: "u", qty: 2 }, { presentacion: "u2", qty: 2 }],
+    { cupon: { ...cupon, valor: 2 } },
+    { productos }
+  );
+  assert.equal(tope2.ok, true);
+  assert.equal(tope2.descuentoCupon, 4000);
+
+  // 1 drip + 1 taza (producto simple) → no alcanza, faltan drip bags
+  const conTaza = calcularPedido([{ presentacion: "u", qty: 1 }, { presentacion: "t", qty: 1 }], { cupon }, { productos });
+  assert.equal(conTaza.ok, false);
+  assert.match(conTaza.error, /2 drip bags/i);
+
+  // 1 pack x5 + 1 drip suelta → el pack no entra en el 2x1 de individuales
+  const conPack = calcularPedido([{ presentacion: "p", qty: 1 }, { presentacion: "u", qty: 1 }], { cupon }, { productos });
+  assert.equal(conPack.ok, false);
+
+  // En pedidos manuales también funciona igual
+  const manual = calcularDescuentosManual(
+    [
+      { precioUnitario: 2000, qty: 1, unidades: 1, esPack: false, esDrip: true },
+      { precioUnitario: 2500, qty: 1, unidades: 1, esPack: false, esDrip: true },
+    ],
+    { cupon }
+  );
+  assert.equal(manual.ok, true);
+  assert.equal(manual.descuentoCupon, 2000);
+  assert.equal(manual.total, 2500);
+});
+
 // ===== calcularPedido: puntos, envío y validaciones =====
 
 test("el canje de puntos exige tener los puntos y un pedido que lo justifique", () => {

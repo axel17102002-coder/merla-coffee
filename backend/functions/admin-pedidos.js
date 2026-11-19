@@ -120,6 +120,7 @@ async function crearPedidoManual(body) {
       unidades,
       precioUnitario: precio,
       esPack: presentacion.unidades_stock > 1,
+      esDrip: producto.tipo !== "simple" && presentacion.unidades_stock === 1,
     });
   }
 

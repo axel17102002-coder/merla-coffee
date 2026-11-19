@@ -46,13 +46,16 @@ create table if not exists presentaciones (
 
 create table if not exists cupones (
   codigo text primary key,
-  tipo text not null check (tipo in ('porcentaje', 'monto')),
+  tipo text not null check (tipo in ('porcentaje', 'monto', '2x1_drip')),
   valor integer not null check (valor > 0),
   minimo integer not null default 0,
   activo boolean not null default true,
   descripcion text,
   creado timestamptz not null default now()
 );
+alter table cupones drop constraint if exists cupones_tipo_check;
+alter table cupones add constraint cupones_tipo_check
+  check (tipo in ('porcentaje', 'monto', '2x1_drip'));
 
 create table if not exists clientes (
   id uuid primary key default gen_random_uuid(),

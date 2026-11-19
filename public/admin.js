@@ -1175,7 +1175,8 @@ function precioEscrito(texto) {
 function lineasManual() {
   return [...document.querySelectorAll("#pm-lineas .pm__linea")].map((l) => {
     const id = l.querySelector("[data-pm-pres]").value;
-    const pres = catalogoManual.flatMap((p) => p.presentaciones || []).find((x) => x.id === id);
+    const prod = catalogoManual.find((p) => (p.presentaciones || []).some((x) => x.id === id));
+    const pres = prod && prod.presentaciones.find((x) => x.id === id);
     const qty = enteroEscrito(l.querySelector("[data-pm-qty]").value) || 0;
     const unidadesStock = pres ? pres.unidades_stock : 1;
     return {
@@ -1184,6 +1185,7 @@ function lineasManual() {
       precioUnitario: precioEscrito(l.querySelector("[data-pm-precio]").value) || 0,
       unidades: unidadesStock * qty,
       esPack: unidadesStock > 1,
+      esDrip: Boolean(prod && prod.tipo !== "simple" && unidadesStock === 1),
     };
   });
 }
@@ -2617,8 +2619,20 @@ async function guardarConfigGlobal(input, fila) {
 
 // ===== Cupones =====
 function valorCupon(c) {
+  if (c.tipo === "2x1_drip") {
+    const n = Math.max(1, Number(c.valor) || 1);
+    return n === 1 ? "2×1 en drip bag" : `2×1 en drip bags (hasta ${n} gratis)`;
+  }
   return c.tipo === "porcentaje" ? `${c.valor}% OFF` : `${formato.format(c.valor)} OFF`;
 }
+
+function actualizarCampoValorCupon() {
+  const es2x1 = $("#cupon-tipo").value === "2x1_drip";
+  const campo = $("#cupon-valor");
+  campo.placeholder = es2x1 ? "Máx. drip bags gratis (1 = una sola)" : "Valor";
+  if (es2x1 && !campo.value) campo.value = "1";
+}
+$("#cupon-tipo").addEventListener("change", actualizarCampoValorCupon);
 
 function renderCupones(cupones) {
   const contenedor = $("#cupones");
@@ -2661,6 +2675,7 @@ $("#cupon-form").addEventListener("submit", async (e) => {
     const r = await api("/api/admin-cupones", { method: "POST", body: JSON.stringify(cupon) });
     mensaje("#cupon-message", `✅ Cupón ${r.cupon.codigo} guardado`, true);
     $("#cupon-form").reset();
+    actualizarCampoValorCupon();
     cargarCupones();
   } catch (err) {
     mensaje("#cupon-message", `⚠️ ${err.message}`);

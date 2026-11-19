@@ -200,7 +200,11 @@ function mailCarritoAbandonado(pedido, cuponRegalo = null) {
   const regalo = cuponRegalo
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0 0;background:#f6f0e2;border-radius:12px;">
         <tr><td style="padding:14px 16px;color:${GRIS};line-height:1.5;">🎁 Para que lo termines, te dejamos <strong style="color:${VERDE};">${
-          cuponRegalo.tipo === "porcentaje" ? `${Number(cuponRegalo.valor)}% OFF` : `${pesos(cuponRegalo.valor)} OFF`
+          cuponRegalo.tipo === "porcentaje"
+            ? `${Number(cuponRegalo.valor)}% OFF`
+            : cuponRegalo.tipo === "2x1_drip"
+              ? "2×1 en drip bag"
+              : `${pesos(cuponRegalo.valor)} OFF`
         }</strong>. Se aplica solo al entrar desde el botón (cupón ${escapar(cuponRegalo.codigo)}).</td></tr>
       </table>`
     : "";
