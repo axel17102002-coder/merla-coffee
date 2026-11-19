@@ -173,8 +173,9 @@
   }
 
   // Grano de la foto. La cámara mete grano de luz (igual en los tres canales) y
-  // apenas de color; el grano de luz no es de un píxel, así que se suaviza un
-  // poco. Devuelve { luz, color }: luz (w×h) y color (w×h×3), con el desvío
+  // apenas de color; el grano de luz no es de un píxel, así que se suaviza dos
+  // veces (granos de 2-3 px, que sobreviven a la reducción a 1200 y al JPG).
+  // Devuelve { luz, color }: luz (w×h) y color (w×h×3), con el desvío
   // estándar pedido (grano.luz y grano.color de la calibración).
   function campoDeGrano(w, h, grano) {
     const luz = new Float32Array(w * h);
@@ -182,7 +183,7 @@
       // suma de tres: más parecido a una campana que el azar plano
       luz[y * w + x] = azar(x, y, 0) + azar(x, y, 7) + azar(x, y, 13);
     }
-    const suave = desenfocarUno(luz, w, h);
+    const suave = desenfocarUno(desenfocarUno(luz, w, h), w, h);
     let suma = 0;
     for (let i = 0; i < suave.length; i++) suma += suave[i] * suave[i];
     const escala = (grano.luz || 0) / Math.sqrt(suma / suave.length || 1);
@@ -221,7 +222,7 @@
     const salida = new ImageData(new Uint8ClampedArray(limpia.data), W, H);
     const out = salida.data, base = limpia.data;
     const etq = suavizarCamara(etiqueta, EW, EH);
-    const grano = campoDeGrano(EW, EH, cal.grano || { luz: 4.5, color: 1 });
+    const grano = campoDeGrano(EW, EH, cal.grano || { luz: 6.5, color: 1.4 });
 
     const ganancia = (x, y) => {
       const fx = x / PASO, fy = y / PASO;
