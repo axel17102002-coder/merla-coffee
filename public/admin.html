@@ -179,6 +179,7 @@
           <button id="tab-mercadopago">💳 Mercado Pago</button>
           <button id="tab-cupones">Cupones</button>
           <button id="tab-resenas">Reseñas</button>
+          <button id="tab-avisos">🔔 Avisos</button>
         </div>
 
         <!-- VISTA UNIFICADA: Productos y Stock -->
@@ -526,6 +527,32 @@
                 </div>
                 <div id="cfg-comision-metodos"></div>
               </div>
+            </section>
+          </div>
+
+          <!-- VISTA: Avisos al celular (Telegram) -->
+          <div id="vista-avisos" hidden>
+            <section class="px-seccion">
+              <header class="px-cabecera">
+                <div>
+                  <h3 class="px-titulo">📲 Avisos por Telegram</h3>
+                  <p class="px-desc">Un bot tuyo te manda un mensaje al celular con cada venta cobrada, cada pedido de WhatsApp, los pagos para revisar y las reseñas nuevas. El mail de aviso sigue llegando igual.</p>
+                </div>
+              </header>
+              <p class="tg-estado" id="tg-estado">Cargando…</p>
+              <ol class="tg-pasos" id="tg-pasos" hidden>
+                <li id="tg-paso-bot">En Telegram, buscá <strong>@BotFather</strong>, mandale <code>/newbot</code> y seguí los pasos (por ejemplo, nombre «Merla Ventas»). Al final te da un <strong>token</strong>: una línea larga con números y letras.</li>
+                <li id="tg-paso-token">En Cloudflare: <strong>Workers &amp; Pages → merla-coffee → Settings → Variables and Secrets → + Add</strong>. Tipo <strong>Secret</strong>, nombre <code>TELEGRAM_BOT_TOKEN</code> y de valor el token. Guardá con <strong>Deploy</strong>.</li>
+                <li>Abrí tu bot en Telegram (el link <code>t.me/…</code> que te dio BotFather), tocá <strong>Iniciar</strong> y mandale «hola».</li>
+                <li>Volvé acá y tocá <strong>Conectar</strong>: te llega un mensaje de prueba.</li>
+              </ol>
+              <p class="px-desc tg-grupo">¿Querés que les llegue a dos personas? Creá un grupo de Telegram con las dos y el bot, escribí algo en el grupo y tocá <strong>Conectar</strong>.</p>
+              <div class="tg-botones">
+                <button type="button" class="px-btn" id="tg-conectar">Conectar</button>
+                <button type="button" class="px-btn-sec" id="tg-probar" hidden>Mandar prueba</button>
+                <button type="button" class="px-btn-sec" id="tg-desconectar" hidden>Desconectar</button>
+              </div>
+              <p class="mensaje" id="tg-mensaje"></p>
             </section>
           </div>
 

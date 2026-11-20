@@ -5,6 +5,7 @@
 const { sb, obtenerPuntos } = require("./supabase.js");
 const { enviarMail, config } = require("./brevo.js");
 const { mailAvisoAdmin, mailConfirmacionCliente, mailDespachoCliente, mailPagoRaro } = require("./mails.js");
+const { enviarTelegram, textoPedido, textoPagoRaro } = require("./telegram.js");
 
 // Confirmación con el saldo de puntos al momento de enviarla (por eso va después
 // de aprobar el pedido). Si no se puede leer el saldo, el mail sale igual sin él.
@@ -46,8 +47,12 @@ async function avisar(filtro, { confirmarCliente = false } = {}) {
     const pedido = filas && filas[0];
     if (!pedido) return false;
 
+    // Mail y Telegram a la vez (Telegram nunca lanza; sin bot, no hace nada)
     const admin = mailAvisoAdmin(pedido);
-    await enviarMail({ para: config().admin, asunto: admin.asunto, html: admin.html });
+    await Promise.all([
+      enviarMail({ para: config().admin, asunto: admin.asunto, html: admin.html }),
+      enviarTelegram(textoPedido(pedido)),
+    ]);
 
     if (confirmarCliente && pedido.cliente_email) {
       await enviarConfirmacion(pedido);
@@ -80,12 +85,15 @@ async function avisarPagoRaro(motivo, pago, pedido) {
   if (pagosAvisados.size > 500) pagosAvisados.clear();
   pagosAvisados.add(clave);
   console.error(`avisos: pago ${motivo}`, pago && pago.id, pago && pago.external_reference);
+  const telegram = enviarTelegram(textoPagoRaro(motivo, pago, pedido)); // no lanza; corre junto con el mail
   try {
     const mail = mailPagoRaro(motivo, pago, pedido);
     return await enviarMail({ para: config().admin, asunto: mail.asunto, html: mail.html });
   } catch (err) {
     console.error("avisos (pago raro):", err.message);
     return false;
+  } finally {
+    await telegram; // que el Worker no corte el envío al responder
   }
 }
 

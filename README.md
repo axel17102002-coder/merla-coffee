@@ -116,6 +116,17 @@ Configuración (una sola vez):
 
 Sin `BREVO_API_KEY` no se rompe nada: los mails simplemente no se envían y queda el aviso en los logs.
 
+## Avisos al celular (Telegram)
+
+Cada venta cobrada, cada pedido nuevo de WhatsApp, los pagos raros y las reseñas para aprobar llegan también como mensaje de un bot de Telegram (además del mail a `MAIL_ADMIN`). Se configura una vez:
+
+1. En Telegram, **@BotFather** → `/newbot` → copiar el token.
+2. Cloudflare → Workers & Pages → merla-coffee → Settings → Variables and Secrets → **Secret** `TELEGRAM_BOT_TOKEN`.
+3. Escribirle «hola» al bot (o sumarlo a un grupo y escribir ahí, para que les llegue a varios).
+4. `/admin` → Gestión → **🔔 Avisos** → **Conectar**: toma el último chat que le escribió al bot, lo guarda en `configuracion` (`telegram_chat_id`) y manda un mensaje de prueba.
+
+`TELEGRAM_CHAT_ID`, si existe, manda sobre el chat guardado. Sin token o sin chat no se envía nada y el resto sigue igual (`backend/lib/telegram.js`).
+
 ## Catálogo en Google y Meta
 
 Lo que la web ya trae para vincularla con **Google Merchant Center** y **Meta (Facebook/Instagram) Commerce**:

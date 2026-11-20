@@ -3221,6 +3221,59 @@ $("#producto-form").addEventListener("submit", async (e) => {
   }
 });
 
+// ===== Avisos por Telegram =====
+// El token del bot es un Secret de Cloudflare (no pasa por el panel); el chat
+// que recibe los avisos se descubre con "Conectar" (el último que le escribió).
+function renderAvisos({ token, chat }) {
+  const estado = $("#tg-estado");
+  estado.textContent = chat && token
+    ? "✅ Conectado: las ventas te llegan al Telegram."
+    : token ? "Falta un paso: escribile al bot y tocá Conectar." : "Todavía no está configurado.";
+  estado.classList.toggle("tg-estado--falta", !(chat && token));
+  $("#tg-pasos").hidden = Boolean(chat && token);
+  $("#tg-paso-bot").classList.toggle("tg-hecho", Boolean(token));
+  $("#tg-paso-token").classList.toggle("tg-hecho", Boolean(token));
+  $("#tg-conectar").textContent = chat && token ? "Volver a conectar" : "Conectar";
+  $("#tg-conectar").className = chat && token ? "px-btn-sec" : "px-btn";
+  $("#tg-probar").hidden = !(chat && token);
+  $("#tg-desconectar").hidden = !chat;
+}
+
+async function cargarAvisos() {
+  try {
+    renderAvisos(await api("/api/admin-telegram"));
+  } catch (err) {
+    $("#tg-estado").textContent = `⚠️ ${err.message}`;
+  }
+}
+
+async function accionTelegram(accion, boton) {
+  boton.disabled = true;
+  mensaje("#tg-mensaje", accion === "conectar" ? "Buscando tu chat…" : "Enviando…", true);
+  try {
+    const r = await api("/api/admin-telegram", { method: "POST", body: JSON.stringify({ accion }) });
+    if (accion === "conectar") {
+      const donde = r.nombre ? `${r.grupo ? "el grupo" : ""} «${r.nombre}»`.trim() : "tu chat";
+      mensaje("#tg-mensaje", r.enviado ? `Listo: conectado con ${donde}. Fijate que te llegó el mensaje de prueba.` : `Conectado con ${donde}, pero no salió el mensaje de prueba.`, r.enviado);
+    } else if (accion === "probar") {
+      mensaje("#tg-mensaje", "Mensaje de prueba enviado.", true);
+    } else {
+      mensaje("#tg-mensaje", "Desconectado: ya no llegan avisos por Telegram.", true);
+    }
+    await cargarAvisos();
+  } catch (err) {
+    mensaje("#tg-mensaje", `⚠️ ${err.message}`);
+  } finally {
+    boton.disabled = false;
+  }
+}
+
+$("#tg-conectar").addEventListener("click", (e) => accionTelegram("conectar", e.currentTarget));
+$("#tg-probar").addEventListener("click", (e) => accionTelegram("probar", e.currentTarget));
+$("#tg-desconectar").addEventListener("click", (e) => {
+  if (confirm("¿Dejar de recibir los avisos por Telegram?")) accionTelegram("desconectar", e.currentTarget);
+});
+
 // ===== Tabs de gestión =====
 // Precios, Envío y Mercado Pago se alimentan de los mismos dos endpoints
 // (admin-precios + admin-config), así que comparten `cargarPrecios`, que llena
@@ -3233,6 +3286,7 @@ const TABS = {
   "tab-mercadopago": { vista: "vista-mercadopago", cargar: cargarPrecios, grupo: "config", cargado: false },
   "tab-cupones": { vista: "vista-cupones", cargar: cargarCupones, cargado: false },
   "tab-resenas": { vista: "vista-resenas", cargar: cargarResenas, cargado: false },
+  "tab-avisos": { vista: "vista-avisos", cargar: cargarAvisos, cargado: false },
 };
 
 // Marca (o desmarca) todas las pestañas de un grupo de una vez

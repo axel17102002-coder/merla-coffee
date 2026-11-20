@@ -178,5 +178,10 @@ una regla de precio/punto, va acá y aplica en ambos lados a la vez.
   por una API apagada. Es distinto del interruptor de **transportistas** (qué
   correo se muestra, tabla `transportistas`): uno elige a quién le preguntamos
   la tarifa, el otro cuál de las tarifas se ofrece.
+- **Avisos por Telegram** (`backend/lib/telegram.js`): salen junto al mail al
+  admin desde `avisos.js` (venta cobrada, pedido de WhatsApp, pago raro) y
+  `resena.js`. El token es el Secret `TELEGRAM_BOT_TOKEN`; el chat se guarda en
+  `configuracion.telegram_chat_id` con "Conectar" en `/admin → 🔔 Avisos`
+  (`getUpdates`: no le pongas webhook al bot o deja de funcionar). Nunca lanza.
 - **Sin credenciales de un servicio no se rompe nada**: mails (Brevo) y envío a
   domicilio (Zipnova) se degradan con aviso; el resto sigue funcionando.

@@ -9,6 +9,7 @@ const { sb } = require("../lib/supabase.js");
 const { pedidoDelToken, productosDelPedido } = require("../lib/resenas.js");
 const { enviarMail, config } = require("../lib/brevo.js");
 const { mailResenaNueva } = require("../lib/mails.js");
+const { enviarTelegram, textoResena } = require("../lib/telegram.js");
 const { permitir, claveDe } = require("../lib/limite.js");
 
 const LINK_INVALIDO = "Este link para opinar no es válido o ya venció. Escribinos por WhatsApp y te mandamos uno nuevo.";
@@ -87,12 +88,14 @@ exports.handler = async (event) => {
       }
 
       // Aviso al admin para que la revise (si falla, la reseña igual quedó guardada)
+      const avisoTelegram = enviarTelegram(textoResena(resena)); // no lanza
       try {
         const mail = mailResenaNueva(resena);
         await enviarMail({ para: config().admin, asunto: mail.asunto, html: mail.html });
       } catch (err) {
         console.warn("resena: no pude avisar al admin:", err.message);
       }
+      await avisoTelegram;
       return responder(201, { ok: true });
     }
 
