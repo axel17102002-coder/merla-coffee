@@ -1807,8 +1807,16 @@ section[id], footer[id] { scroll-margin-top: 90px; }
   .card__stock { bottom: 8px; right: 6px; left: 6px; text-align: center; font-size: 0.62rem; padding: 3px 6px; }
   .card__body { padding: 12px 12px 12px 14px; gap: 7px; min-width: 0; }
   .card__body h3 { font-size: 1.08rem; line-height: 1.2; }
-  .card__notes { gap: 4px; }
-  .chip { font-size: 0.66rem; padding: 2px 7px; }
+  /* Las notas van en UN renglón (se deslizan de costado): si se apilaban en
+     dos o tres, la tarjeta quedaba más alta y la foto, que llena el alto, se
+     recortaba distinto en cada café (la bolsa se veía más grande o más chica). */
+  .card__notes {
+    gap: 4px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(90deg, #000 80%, transparent);
+    mask-image: linear-gradient(90deg, #000 80%, transparent);
+  }
+  .card__notes::-webkit-scrollbar { display: none; }
+  .chip { font-size: 0.66rem; padding: 2px 7px; flex: none; white-space: nowrap; }
   .card__more { font-size: 0.76rem; }
   .pres { gap: 5px; }
   .pres__btn { padding: 6px 4px; font-size: 0.74rem; }
