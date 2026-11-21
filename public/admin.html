@@ -349,7 +349,7 @@
               <header class="px-cabecera">
                 <div>
                   <h3 class="px-titulo">🚚 Envío</h3>
-                  <p class="px-desc">El envío se cotiza en vivo con las APIs conectadas y prendidas (Zipnova, Andreani y Paqar), según el peso estimado del pedido. Los pesos se guardan solos al cambiarlos.</p>
+                  <p class="px-desc">El envío se cotiza con los proveedores prendidos: las APIs conectadas (Zipnova, Andreani, Paqar) en vivo, o la tarifa propia de Andreani para despachar a mano. Todo según el peso estimado del pedido. Se guarda solo al cambiarlo.</p>
                 </div>
               </header>
               <p class="mensaje" id="zipnova-estado"></p>
@@ -363,6 +363,20 @@
                   </div>
                 </div>
                 <div id="proveedores-envio"></div>
+              </div>
+
+              <!-- Tarifa propia de Andreani (proveedor "tabla"): se despacha a mano -->
+              <div class="px-config">
+                <div class="px-config__fila px-config__fila--nota">
+                  <div class="px-config__info">
+                    <strong>Tarifa de Andreani (despacho a mano)</strong>
+                    <span>Lo que paga el cliente cuando está prendido «Andreani (tarifa propia)». Andreani cobra por zona según la provincia y por tamaño de caja (la caja la elige la web según el peso del pedido). Valores de andreani.com con IVA, desde La Plata: actualizalos cuando aumente. Se guarda solo al cambiarlos.</span>
+                  </div>
+                </div>
+                <div class="px-config__fila tarifa-fila">
+                  <div class="tarifa-tabla" id="tarifa-andreani"></div>
+                  <span class="px-estado" data-estado></span>
+                </div>
               </div>
 
               <!-- Reglas locales y comerciales de envío -->

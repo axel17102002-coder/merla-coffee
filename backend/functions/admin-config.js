@@ -15,6 +15,7 @@ const { precioPack, precioUnidadDesdeCosto } = require("../../public/motor.js");
 const zipnova = require("../lib/zipnova.js");
 const andreani = require("../lib/andreani.js");
 const paqar = require("../lib/paqar.js");
+const { CLAVES_TARIFA } = require("../lib/envio-tabla.js");
 
 const CLAVES_VALIDAS = [
   "margen_unidad", "gramos_por_bag", "pack_unidades", "pack_descuento", "redondeo_transferencia",
@@ -23,7 +24,8 @@ const CLAVES_VALIDAS = [
   "comision_mercadopago",
   "comision_mp_dinero", "comision_mp_debito", "comision_mp_credito",
   "comision_mp_prepaga", "comision_mp_cuotas_sin_tarjeta",
-  ...Object.keys(CLAVES_PROVEEDOR_ENVIO), // envio_local, envio_zipnova, envio_andreani, envio_paqar (1/0)
+  ...Object.keys(CLAVES_PROVEEDOR_ENVIO), // envio_local, envio_zipnova, envio_andreani, envio_paqar, envio_tabla (1/0)
+  ...CLAVES_TARIFA, // tarifa propia de Andreani: tarifa_<zona>_<caja>_<tipo>
 ];
 
 // Reaplica el margen objetivo a todos los cafés que tengan costo cargado.
@@ -74,7 +76,9 @@ exports.handler = async (event) => {
             zipnova: { conectado: zipnova.disponible(), activo: cfg.proveedoresEnvio.zipnova },
             andreani: { conectado: andreani.disponible(), activo: cfg.proveedoresEnvio.andreani },
             paqar: { conectado: paqar.disponible(), activo: cfg.proveedoresEnvio.paqar },
+            tabla: { conectado: true, activo: cfg.proveedoresEnvio.tabla },
           },
+          tarifasAndreani: cfg.tarifasAndreani,
         }),
       };
     }

@@ -156,6 +156,10 @@ Si están los dos configurados, se cotizan **en paralelo** y las opciones se mez
 - **Retiro** no cotiza nada: el envío solo entra en juego cuando el cliente elige "Envío a domicilio" y carga su código postal.
 - **Sin credenciales** no se rompe nada: el envío a domicilio queda deshabilitado con un aviso claro (retiro y WhatsApp sin envío siguen funcionando).
 
+### Andreani con tarifa propia (despacho a mano)
+
+Sin contrato con Andreani: el cliente paga según una tabla y el paquete se despacha a mano en Andreani. Se prende en `/admin → Gestión → Envío → Andreani (tarifa propia)` y los precios se editan ahí mismo: 4 zonas (CABA y GBA / Centro / Cuyo-NOA-NEA-norte patagónico / Salta, Jujuy y sur patagónico) × caja chica, mediana y grande × sucursal o domicilio. Los valores iniciales salen del cotizador de andreani.com desde La Plata (noviembre 2026); actualizarlos cuando Andreani aumente. A sucursal, el cliente escribe en cuál lo retira. Después se carga el código de seguimiento en el pedido y al cliente le llega el mail con el link de Andreani.
+
 ### Configurar Zipnova
 
 1. Creá una cuenta en [Zipnova](https://www.zipnova.com/ar/productos/envios) y pedí tus credenciales de integración por **API con autenticación Basic** (token + secret de una cuenta propia; no hace falta el flujo OAuth, que es para apps multi-cuenta).

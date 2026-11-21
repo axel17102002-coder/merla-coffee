@@ -362,6 +362,8 @@ button:disabled { opacity: .55; cursor: wait; }
 .transportista--activo { border-color: var(--verde); background: #eef3ec; }
 .transportista input { accent-color: var(--verde); flex-shrink: 0; }
 .transportista__nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* los nombres de proveedores son más largos ("Andreani (tarifa propia)") */
+#proveedores-envio { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
 .transportista--activo .transportista__nombre { font-weight: 700; }
 .transportista__visto { color: var(--gris); font-size: .72rem; white-space: nowrap; }
 .px-config__vacio { grid-column: 1 / -1; color: var(--gris); font-size: .8rem; margin: 2px 0 0; }
@@ -621,3 +623,13 @@ button:disabled { opacity: .55; cursor: wait; }
 .tg-pasos code, .tg-grupo code { background: #f4efe2; border-radius: 5px; padding: 1px 5px; font-size: .85em; }
 .tg-grupo { margin: 0 0 14px; }
 .tg-botones { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ===== Tarifa propia de Andreani (Envío) ===== */
+.tarifa-fila { flex-direction: column; align-items: stretch; }
+.tarifa-tabla { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tarifa { border-collapse: collapse; width: 100%; min-width: 640px; font-size: .84rem; }
+.tarifa th, .tarifa td { padding: 6px; border-bottom: 1px solid #f1ecdf; text-align: center; vertical-align: middle; }
+.tarifa thead th { color: var(--verde); font-weight: 700; }
+.tarifa th small { display: block; color: var(--gris); font-weight: 400; font-size: .74rem; }
+.tarifa tbody th { text-align: left; color: var(--verde); min-width: 150px; }
+.tarifa input { width: 86px; padding: 6px 7px; border: 1px solid #e3dcc9; border-radius: 8px; text-align: right; }

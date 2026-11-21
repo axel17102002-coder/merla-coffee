@@ -11,6 +11,7 @@ const envioLocal = require("./envio-local.js");
 const zipnova = require("./zipnova.js");
 const andreani = require("./andreani.js");
 const paqar = require("./paqar.js");
+const envioTabla = require("./envio-tabla.js");
 const { obtenerCostos } = require("./costos.js");
 const { calcularPaquete, pesoProductosGramos } = require("./empaque.js");
 const { firmarOpcion, verificarOpcion } = require("./cotizacion-firma.js");
@@ -24,16 +25,19 @@ const PROVEEDORES = {
   zipnova,
   andreani,
   paqar,
+  tabla: envioTabla, // Andreani con tarifa propia (despacho a mano)
 };
 
 // Prioridad al deduplicar el mismo transportista y modalidad entre proveedores:
-// lo propio > API directa del correo > agregador.
+// lo propio > API directa del correo > tarifa propia > agregador.
 const PRIORIDAD_PROVEEDOR = {
   local: 0,
   paqar: 1,
   andreani: 1,
-  zipnova: 2,
+  tabla: 2,
+  zipnova: 3,
 };
+const PRIORIDAD_DESCONOCIDA = 3;
 
 // Zipnova es el proveedor histórico y sus grupos no llevan prefijo: un carrito
 // abierto antes de este cambio manda un grupo viejo, y tiene que seguir
@@ -45,9 +49,15 @@ function proveedorDe(grupo) {
 
 // Un proveedor cotiza solo si tiene credenciales (o es local) Y está prendido
 // en /admin → Gestión → Envío (`configuracion.envio_<proveedor>`).
+// Sin valor guardado, los que tienen credenciales se asumen prendidos (así no
+// cambió nada al agregar el interruptor). La tarifa propia, en cambio, siempre
+// cotiza: arranca apagada hasta que se la prende a mano.
+const APAGADO_POR_DEFECTO = new Set(["tabla"]);
 function proveedorActivo(id, cfg) {
   const mod = PROVEEDORES[id];
-  return !!mod && mod.disponible() && ((cfg && cfg.proveedoresEnvio) || {})[id] !== false;
+  const valor = ((cfg && cfg.proveedoresEnvio) || {})[id];
+  const prendido = valor === undefined ? !APAGADO_POR_DEFECTO.has(id) : valor !== false;
+  return !!mod && mod.disponible() && prendido;
 }
 
 function proveedoresActivos(cfg) {
@@ -73,14 +83,14 @@ function deduplicarOpciones(opciones) {
   const mejorPrioridad = new Map();
   for (const o of opciones || []) {
     const clave = `${claveTransportista(o.transportista)}|${o.tipo}`;
-    const prio = PRIORIDAD_PROVEEDOR[o.proveedor] ?? 2;
+    const prio = PRIORIDAD_PROVEEDOR[o.proveedor] ?? PRIORIDAD_DESCONOCIDA;
     if (!mejorPrioridad.has(clave) || prio < mejorPrioridad.get(clave)) {
       mejorPrioridad.set(clave, prio);
     }
   }
   return (opciones || []).filter((o) => {
     const clave = `${claveTransportista(o.transportista)}|${o.tipo}`;
-    const prio = PRIORIDAD_PROVEEDOR[o.proveedor] ?? 2;
+    const prio = PRIORIDAD_PROVEEDOR[o.proveedor] ?? PRIORIDAD_DESCONOCIDA;
     return prio === mejorPrioridad.get(clave);
   });
 }

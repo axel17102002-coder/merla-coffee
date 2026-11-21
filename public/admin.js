@@ -2458,6 +2458,7 @@ async function cargarPrecios() {
     if ($("#cfg-envio-gratis")) $("#cfg-envio-gratis").value = cfgPrecios.envioGratisDesde != null ? cfgPrecios.envioGratisDesde : 0;
     proveedoresEnvioCache = dataConfig.proveedoresEnvio || {};
     renderProveedoresEnvio();
+    renderTarifaAndreani(dataConfig.tarifasAndreani);
     mensaje("#precio-message", dataConfig.desdeLaBase ? "" : "⚠️ Falta correr supabase/migracion-insumos.sql: mientras tanto se usan los valores anteriores y los insumos no se pueden editar.");
     cargarTransportistas(); // no frena la carga de Precios si falla
   } catch (err) {
@@ -2474,7 +2475,40 @@ const PROVEEDORES_ENVIO = {
   zipnova: { nombre: "Zipnova", clave: "envio_zipnova", falta: "ZIPNOVA_TOKEN, ZIPNOVA_SECRET y ZIPNOVA_ACCOUNT_ID" },
   andreani: { nombre: "Andreani", clave: "envio_andreani", falta: "ANDREANI_USUARIO, ANDREANI_PASSWORD, ANDREANI_CLIENTE, ANDREANI_SUCURSAL_ORIGEN y algún ANDREANI_CONTRATO_*" },
   paqar: { nombre: "Paqar", clave: "envio_paqar", falta: "PAQAR_USER_TOKEN, PAQAR_PASSWORD_TOKEN, PAQAR_CUSTOMER_ID y PAQAR_CP_ORIGEN" },
+  tabla: { nombre: "Andreani (tarifa propia)", clave: "envio_tabla", falta: "" },
 };
+
+// Tarifa propia de Andreani: 4 zonas × 3 cajas × sucursal/domicilio. Cada celda
+// es una clave de `configuracion` (tarifa_<zona>_<caja>_<tipo>) y se guarda sola
+// con el autoguardado de `.px-config input[data-clave]`.
+const ZONAS_ANDREANI = [
+  ["z1", "Zona 1 · AMBA", "CABA y Gran Buenos Aires (CP 1000 a 1999)"],
+  ["z2", "Zona 2 · Centro", "Resto de Buenos Aires, Córdoba, Santa Fe, Entre Ríos, La Pampa"],
+  ["z3", "Zona 3", "Cuyo, Neuquén, Río Negro, NOA (menos Salta y Jujuy) y NEA"],
+  ["z4", "Zona 4 · Lejana", "Salta, Jujuy, Chubut, Santa Cruz, Tierra del Fuego"],
+];
+const CAJAS_ANDREANI = [
+  ["chica", "Caja chica", "hasta 600 g (unas 26 drip bags)"],
+  ["mediana", "Caja mediana", "hasta 1,8 kg"],
+  ["grande", "Caja grande", "más de 1,8 kg"],
+];
+
+function renderTarifaAndreani(tarifas) {
+  const t = tarifas || {};
+  const cab = CAJAS_ANDREANI.map(([, nombre, nota]) => `<th colspan="2">${nombre}<small>${nota}</small></th>`).join("");
+  const sub = CAJAS_ANDREANI.map(() => "<th>Sucursal</th><th>Domicilio</th>").join("");
+  const filas = ZONAS_ANDREANI.map(([zona, nombre, nota]) => {
+    const celdas = CAJAS_ANDREANI.map(([caja]) => ["sucursal", "domicilio"].map((tipo) => {
+      const v = ((t[zona] || {})[caja] || {})[tipo];
+      return `<td><input data-clave="tarifa_${zona}_${caja}_${tipo}" type="number" min="0" step="10" inputmode="numeric" value="${v != null ? escapar(v) : ""}" aria-label="${escapar(`${nombre}, ${caja}, a ${tipo}`)}"></td>`;
+    }).join("")).join("");
+    return `<tr><th scope="row">${nombre}<small>${nota}</small></th>${celdas}</tr>`;
+  }).join("");
+  $("#tarifa-andreani").innerHTML = `<table class="tarifa">
+      <thead><tr><th rowspan="2">Zona</th>${cab}</tr><tr>${sub}</tr></thead>
+      <tbody>${filas}</tbody>
+    </table>`;
+}
 
 let proveedoresEnvioCache = {};
 

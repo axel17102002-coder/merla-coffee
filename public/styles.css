@@ -1617,6 +1617,9 @@ section[id], footer[id] { scroll-margin-top: 90px; }
 .sucursales { display: grid; gap: 6px; margin: 6px 0 2px 14px; }
 .sucursales__titulo { font-size: 0.8rem; font-weight: 700; color: var(--verde); margin: 2px 0; }
 .sucursales__titulo--falta { color: var(--caramelo); }
+/* Sucursal escrita a mano (Andreani con tarifa propia, sin lista oficial) */
+.sucursal-libre__ayuda { font-size: 0.76rem; color: var(--verde); text-decoration: underline; justify-self: start; }
+.cart .sucursal-libre__ayuda { color: var(--panel-texto); }
 .sucursal {
   display: flex; align-items: flex-start; gap: 10px;
   border: 1.5px solid var(--crema-borde); border-radius: 12px; padding: 9px 12px;

@@ -9,6 +9,7 @@
 
 const { sb } = require("./supabase.js");
 const { costoUnidad, costoPack } = require("../../public/motor.js");
+const { TARIFAS_RESPALDO, ZONAS, CAJAS, TIPOS, claveTarifa } = require("./envio-tabla.js");
 
 // Valores de respaldo por si la migración todavía no se corrió. Son los que
 // tenía el código antes, así los precios no cambian mientras tanto.
@@ -42,7 +43,10 @@ const RESPALDO = {
   },
   // Qué proveedores de envío se consultan, se prenden desde /admin → Envío.
   // Prendidos por defecto: sin la migración corrida manda solo si hay credenciales.
-  proveedoresEnvio: { local: true, zipnova: true, andreani: true, paqar: true },
+  // La tarifa propia de Andreani (envio-tabla.js) arranca apagada: se prende a mano.
+  proveedoresEnvio: { local: true, zipnova: true, andreani: true, paqar: true, tabla: false },
+  // Tarifa propia de Andreani por zona × caja × modalidad (ver envio-tabla.js)
+  tarifasAndreani: TARIFAS_RESPALDO,
 };
 
 const CLAVES = {
@@ -77,7 +81,15 @@ const CLAVES_PROVEEDOR_ENVIO = {
   envio_zipnova: "zipnova",
   envio_andreani: "andreani",
   envio_paqar: "paqar",
+  envio_tabla: "tabla",
 };
+
+// Cada celda de la tarifa propia de Andreani: tarifa_<zona>_<caja>_<tipo>
+const CLAVES_TARIFA_ANDREANI = {};
+for (const zona of ZONAS) for (const caja of CAJAS) for (const tipo of TIPOS) {
+  CLAVES_TARIFA_ANDREANI[claveTarifa(zona, caja, tipo)] = { zona, caja, tipo };
+}
+const copiarTarifas = (t) => JSON.parse(JSON.stringify(t));
 
 // Trae los insumos tolerando el esquema viejo (columna `aplica` en vez de
 // cantidades), para que el panel siga andando hasta re-correr la migración.
@@ -113,6 +125,7 @@ async function obtenerCostos() {
       ...RESPALDO,
       comisionMpMetodos: { ...RESPALDO.comisionMpMetodos },
       proveedoresEnvio: { ...RESPALDO.proveedoresEnvio },
+      tarifasAndreani: copiarTarifas(RESPALDO.tarifasAndreani),
       fijoUnidad: suma("cant_unidad"),
       fijoPack: suma("cant_pack"),
     };
@@ -123,6 +136,8 @@ async function obtenerCostos() {
       if (metodo) cfg.comisionMpMetodos[metodo] = Number(fila.valor);
       const proveedor = CLAVES_PROVEEDOR_ENVIO[fila.clave];
       if (proveedor) cfg.proveedoresEnvio[proveedor] = Number(fila.valor) !== 0;
+      const celda = CLAVES_TARIFA_ANDREANI[fila.clave];
+      if (celda && Number(fila.valor) >= 0) cfg.tarifasAndreani[celda.zona][celda.caja][celda.tipo] = Number(fila.valor);
     }
     return { cfg, insumos, desdeLaBase: true };
   } catch (err) {
@@ -132,6 +147,7 @@ async function obtenerCostos() {
         ...RESPALDO,
         comisionMpMetodos: { ...RESPALDO.comisionMpMetodos },
         proveedoresEnvio: { ...RESPALDO.proveedoresEnvio },
+        tarifasAndreani: copiarTarifas(RESPALDO.tarifasAndreani),
       },
       insumos: [],
       desdeLaBase: false,

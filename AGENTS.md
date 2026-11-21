@@ -178,6 +178,12 @@ una regla de precio/punto, va acá y aplica en ambos lados a la vez.
   por una API apagada. Es distinto del interruptor de **transportistas** (qué
   correo se muestra, tabla `transportistas`): uno elige a quién le preguntamos
   la tarifa, el otro cuál de las tarifas se ofrece.
+- **Andreani con tarifa propia** (`backend/lib/envio-tabla.js`, proveedor
+  `tabla`, interruptor `envio_tabla`): para despachar a mano sin API. Cobra de
+  una tabla 4 zonas (por provincia; en Buenos Aires, CP 1000-1999 = AMBA) × 3
+  cajas (las de `empaque.js`) × sucursal/domicilio, editable en `/admin → Envío`
+  (claves `tarifa_<zona>_<caja>_<tipo>`). Arranca apagada. A sucursal no hay
+  lista: el cliente la escribe (`sucursalLibre` → `sucursal.id = "a-eleccion"`).
 - **Avisos por Telegram** (`backend/lib/telegram.js`): salen junto al mail al
   admin desde `avisos.js` (venta cobrada, pedido de WhatsApp, pago raro) y
   `resena.js`. El token es el Secret `TELEGRAM_BOT_TOKEN`; el chat se guarda en

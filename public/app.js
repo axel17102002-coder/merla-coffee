@@ -75,6 +75,10 @@ let saldoPuntos = null; // saldo conocido del email actual (null = sin consultar
 let envioQuote = { clave: "", firma: "", opciones: [], cargando: false, error: null };
 let envioOpcionElegida = null; // clave de la opción elegida (carrier+servicio)
 let envioSucursalElegida = null; // id de la sucursal, solo si la opción es tipo 'sucursal'
+// Sucursal escrita por el cliente, para las opciones sin lista oficial
+// (Andreani con tarifa propia: `sucursalLibre`). Se guarda aparte para que un
+// re-render del carrito no borre lo que escribió.
+let envioSucursalTexto = "";
 let envioAbort = null; // cancela cotizaciones viejas si el cliente cambia destino o carrito
 let envioSeq = 0; // descarta respuestas que lleguen fuera de orden
 // A domicilio o a sucursal: se elige ANTES de ver transportistas, para no
@@ -1424,7 +1428,10 @@ function datosEntrega() {
   if (metodoEntrega() === "retiro") return { metodo: "retiro", nombre: $("#envio-nombre").value.trim() };
   const op = opcionElegida();
   const esSucursal = op && op.tipo === "sucursal";
-  const sucursal = esSucursal ? (op.sucursales || []).find((s) => s.id === envioSucursalElegida) : null;
+  const textoLibre = envioSucursalTexto.trim().slice(0, 200);
+  const sucursal = !esSucursal ? null
+    : op.sucursalLibre ? (textoLibre ? { id: "a-eleccion", descripcion: textoLibre, direccion: "" } : null)
+    : (op.sucursales || []).find((s) => s.id === envioSucursalElegida);
   return {
     metodo: "envio",
     nombre: $("#envio-nombre").value.trim(),
@@ -1454,7 +1461,12 @@ function validarEntrega() {
   if (!envioModalidad) return "Elegí si el envío es a domicilio o a sucursal";
   if (!e.opcionGrupo) return "Elegí una opción de envío";
   if (e.opcionTipo === "domicilio" && !e.direccion) return "Ingresá la dirección de envío";
-  if (e.opcionTipo === "sucursal" && !e.sucursal) return "Elegí la sucursal donde retirar el pedido";
+  if (e.opcionTipo === "sucursal" && !e.sucursal) {
+    const op = opcionElegida();
+    return op && op.sucursalLibre
+      ? "Escribí en qué sucursal de Andreani lo querés retirar"
+      : "Elegí la sucursal donde retirar el pedido";
+  }
   return null;
 }
 
@@ -1644,9 +1656,25 @@ function actualizarEnvioCostoEstado(items) {
     : "Notas (piso, depto, referencia)";
 
   const caja = $("#envio-sucursales");
+  const libre = op && op.tipo === "sucursal" && op.sucursalLibre;
   const conSucursales = op && op.tipo === "sucursal" && op.sucursales && op.sucursales.length;
-  caja.hidden = !conSucursales;
-  caja.innerHTML = conSucursales ? listaSucursales(op.sucursales) : "";
+  caja.hidden = !(conSucursales || libre);
+  if (libre) {
+    // No se re-dibuja si ya está: perdería el foco mientras el cliente escribe
+    if (!caja.querySelector("#envio-sucursal-libre")) caja.innerHTML = campoSucursalLibre();
+  } else {
+    caja.innerHTML = conSucursales ? listaSucursales(op.sucursales) : "";
+  }
+}
+
+// Sin lista oficial de sucursales: el cliente escribe dónde lo retira
+function campoSucursalLibre() {
+  return `<div class="sucursales">
+      <label class="sucursales__titulo" for="envio-sucursal-libre">${icono("pin")} ¿En qué sucursal de Andreani lo retirás?</label>
+      <input id="envio-sucursal-libre" class="sucursal-libre" maxlength="200" autocomplete="off"
+        placeholder="Ej.: Andreani Rosario Centro, Córdoba 1234" value="${escaparAttr(envioSucursalTexto)}">
+      <a class="sucursal-libre__ayuda" href="https://www.andreani.com/buscar-sucursal" target="_blank" rel="noopener">Buscá la más cercana en andreani.com ↗</a>
+    </div>`;
 }
 
 // Las dos tarjetas del paso 1, con el precio más barato de cada modalidad para
@@ -1725,6 +1753,10 @@ $("#envio-opciones").addEventListener("change", (e) => {
   // A propósito no se preelige sucursal: que la elija el cliente
   envioSucursalElegida = null;
   renderCarrito();
+});
+
+$("#envio-sucursales").addEventListener("input", (e) => {
+  if (e.target.id === "envio-sucursal-libre") envioSucursalTexto = e.target.value;
 });
 
 $("#envio-sucursales").addEventListener("change", (e) => {

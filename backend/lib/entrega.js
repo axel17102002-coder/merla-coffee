@@ -58,7 +58,7 @@ function validarEnvio(envio) {
   if (!envio.telefono) return "Ingresá un teléfono de contacto";
   if (!envio.opcionGrupo) return "Elegí una opción de envío";
   if (envio.opcionTipo === "sucursal") {
-    if (!envio.sucursal || !envio.sucursal.id) {
+    if (!envio.sucursal || !envio.sucursal.id || !(envio.sucursal.descripcion || envio.sucursal.direccion)) {
       return "Elegí la sucursal donde retirar el pedido";
     }
   } else if (!envio.direccion) {
