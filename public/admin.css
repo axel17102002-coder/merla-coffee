@@ -551,7 +551,7 @@ button:disabled { opacity: .55; cursor: wait; }
 .despacho-chip--despachado, .despacho-chip--listo_retiro { background: #e3eef7; color: #1d5780; }
 .despacho-chip--entregado { background: #e1f0e5; color: #1f5c31; }
 
-/* Simulador de cotización en /admin → Envío */
+/* Simulador de cotización en /admin → Ajustes → Envío */
 .sim-form {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
@@ -633,3 +633,117 @@ button:disabled { opacity: .55; cursor: wait; }
 .tarifa th small { display: block; color: var(--gris); font-weight: 400; font-size: .74rem; }
 .tarifa tbody th { text-align: left; color: var(--verde); min-width: 150px; }
 .tarifa input { width: 86px; padding: 6px 7px; border: 1px solid #e3dcc9; border-radius: 8px; text-align: right; }
+
+/* =====================================================================
+   Estructura del panel: barra lateral (compu) / barra de abajo (celular)
+   ===================================================================== */
+[hidden] { display: none !important; }
+
+.admin--dentro { width: 100%; padding: 0; }
+.admin--dentro .admin__head { display: none; }
+#panel { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 100vh; }
+#panel .panel__layout { padding: 30px 36px 80px; display: block; }
+
+.nav {
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 22px 14px; background: var(--verde); color: #fff;
+}
+.nav__marca { display: flex; align-items: center; gap: 10px; padding: 0 8px 20px; font-family: "Baloo 2", sans-serif; font-size: 1.15rem; color: #f2ead8; }
+.nav__marca img { border-radius: 9px; }
+.nav__marca b { font-weight: 800; color: #fff; }
+.nav__item {
+  display: flex; align-items: center; gap: 11px; width: 100%;
+  border: 0; border-radius: 10px; padding: 10px 12px;
+  background: transparent; color: #ffffffb8; font-weight: 600; font-size: .95rem; text-align: left;
+}
+.nav__item svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.nav__item:hover { background: #ffffff14; color: #fff; }
+.nav__item--activo { background: #ffffff1f; color: #fff; font-weight: 700; }
+.nav__item--activo svg { stroke-width: 2.2; }
+.nav__badge { margin-left: auto; min-width: 20px; padding: 1px 6px; border-radius: 999px; background: #d99a5b; color: #2b1d10; font-size: .72rem; font-weight: 800; text-align: center; }
+.nav__item--mas { display: none; }
+.nav__secundarios { display: contents; }
+.nav__secundarios .nav__item:first-child { margin-top: 14px; }
+.nav__salir { margin-top: auto !important; color: #ffffff8c; }
+.nav__salir:hover { color: #fff; }
+
+#panel .col__head { margin-bottom: 18px; }
+#panel .admin__subtitulo { font-size: 1.6rem; }
+.ico { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -3px; }
+.btn-sec { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Ajustes: sub-pestañas como control segmentado */
+#ajustes-tabs { display: inline-flex; flex-wrap: wrap; }
+#ajustes-tabs button { flex: none; padding: 9px 18px; }
+
+/* ===== Inicio ===== */
+.inicio__fecha { margin: 0 0 2px; color: var(--gris); font-size: .9rem; }
+.inicio__kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 18px; }
+.kpi-mini { background: var(--papel); border: 1px solid var(--borde); border-radius: 16px; padding: 16px 18px; display: grid; gap: 4px; box-shadow: 0 5px 18px #22301f0d; }
+.kpi-mini__label { color: var(--gris); font-size: .85rem; font-weight: 600; }
+.kpi-mini__valor { font-family: "Baloo 2", sans-serif; font-size: 1.7rem; line-height: 1.1; color: var(--verde); }
+.kpi-mini__nota { color: var(--gris); font-size: .8rem; }
+.kpi-mini__delta { font-weight: 800; white-space: nowrap; }
+.kpi-mini__delta--sube { color: #2f6931; }
+.kpi-mini__delta--baja { color: var(--rojo); }
+.inicio__grilla { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+.inicio__caja { background: var(--papel); border: 1px solid var(--borde); border-radius: 16px; padding: 18px; box-shadow: 0 5px 18px #22301f0d; }
+.inicio__titulo { margin: 0 0 12px; font-family: "Baloo 2", sans-serif; color: var(--verde); font-size: 1.15rem; }
+.inicio__titulo-fila { display: flex; justify-content: space-between; align-items: baseline; }
+.inicio__link { border: 0; background: none; color: var(--verde); font-weight: 700; font-size: .85rem; display: inline-flex; align-items: center; gap: 2px; }
+.inicio__vacio { margin: 4px 0; color: var(--gris); }
+.tareas { display: grid; gap: 8px; }
+.tarea { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: 1px solid #ece5d4; border-radius: 12px; padding: 12px; background: #fff; color: var(--texto); }
+.tarea:hover { border-color: var(--verde); }
+.tarea__ico { width: 38px; height: 38px; border-radius: 10px; background: #eef3ec; color: var(--verde); display: grid; place-items: center; flex: none; }
+.tarea__ico svg, .tarea__flecha { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.tarea__texto { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.tarea__texto small { color: var(--gris); font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tarea__flecha { color: var(--gris); flex: none; }
+.ultimos { display: grid; }
+.ultimo { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: 0; border-top: 1px solid #f1ecdf; padding: 10px 2px; background: none; color: var(--texto); }
+.ultimo:first-child { border-top: 0; }
+.ultimo:hover { background: #fbf8f0; }
+.ultimo__num { font-family: "Baloo 2", sans-serif; font-weight: 800; color: var(--verde); flex: none; width: 52px; }
+.ultimo__quien { display: grid; min-width: 0; flex: 1; }
+.ultimo__quien strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .92rem; }
+.ultimo__quien small { color: var(--gris); font-size: .78rem; }
+.ultimo__der { display: grid; justify-items: end; gap: 3px; flex: none; font-size: .9rem; }
+.estado--aprobado { background: #d9ead4; color: #2f6931; }
+.estado--rechazado, .estado--cancelado { background: #f3d8d3; color: #8d3328; }
+
+@media (max-width: 1100px) {
+  .inicio__grilla { grid-template-columns: 1fr; }
+}
+
+/* ===== Celular: barra de navegación abajo ===== */
+@media (max-width: 860px) {
+  #panel { display: block; padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+  #panel .panel__layout { padding: 18px 16px 24px; }
+  .nav {
+    position: fixed; inset: auto 0 0 0; height: auto; overflow: visible; z-index: 60;
+    flex-direction: row; gap: 0; padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    border-radius: 18px 18px 0 0; box-shadow: 0 -6px 24px #22301f2b;
+  }
+  .nav__marca { display: none; }
+  .nav > .nav__item { flex: 1; flex-direction: column; gap: 3px; padding: 7px 2px; font-size: .7rem; position: relative; text-align: center; justify-content: center; }
+  .nav > .nav__item svg { width: 22px; height: 22px; }
+  .nav > .nav__item .nav__badge { position: absolute; top: 2px; left: calc(50% + 6px); margin: 0; min-width: 18px; font-size: .64rem; padding: 0 5px; }
+  .nav__badge--punto { min-width: 9px !important; height: 9px; padding: 0 !important; }
+  .nav__item--mas { display: flex; }
+  .nav__secundarios {
+    display: none; position: fixed; right: 10px; bottom: calc(76px + env(safe-area-inset-bottom));
+    flex-direction: column; gap: 2px; min-width: 210px; padding: 8px;
+    background: var(--verde); border-radius: 16px; box-shadow: 0 10px 30px #22301f40;
+  }
+  .nav--abierta .nav__secundarios { display: flex; }
+  .nav__secundarios .nav__item:first-child { margin-top: 0; }
+  .nav__salir { margin-top: 6px !important; border-top: 1px solid #ffffff1f; border-radius: 0 0 10px 10px; }
+  #panel .admin__subtitulo { font-size: 1.35rem; }
+  .inicio__kpis { grid-template-columns: 1fr; gap: 10px; }
+  .kpi-mini { grid-template-columns: 1fr auto; align-items: baseline; padding: 14px 16px; }
+  .kpi-mini__label { grid-column: 1 / -1; }
+  .kpi-mini__valor { font-size: 1.45rem; }
+  .kpi-mini__nota { text-align: right; }
+}

@@ -6,7 +6,7 @@
 //   2. Cloudflare → Worker → Settings → Variables and Secrets → Secret
 //      TELEGRAM_BOT_TOKEN = ese token.
 //   3. Escribirle cualquier cosa al bot (o sumarlo a un grupo y escribir ahí).
-//   4. Panel → 🔔 Avisos → "Conectar": busca ese chat y lo guarda en
+//   4. Panel → Ajustes → Avisos → "Conectar": busca ese chat y lo guarda en
 //      `configuracion` (clave telegram_chat_id). TELEGRAM_CHAT_ID, si está,
 //      manda sobre lo guardado.
 //

@@ -279,6 +279,7 @@ async function cargarPedidos() {
     pedidosCache = pedidos;
     renderPedidos();
     renderInsights();
+    renderInicio();
     mensaje("#panel-message", "");
     if (busqueda) await buscarPedidos(); // una acción no tiene que borrar la búsqueda
   } catch (err) {
@@ -1526,17 +1527,184 @@ $("#pedido-manual").addEventListener("submit", async (e) => {
   }
 });
 
-// Secciones Pedidos / Gestión
-$("#secciones").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-seccion]");
-  if (!b) return;
-  $("#secciones").querySelectorAll("button").forEach((x) => x.classList.toggle("seccion-activa", x === b));
-  $("#seccion-pedidos").hidden = b.dataset.seccion !== "pedidos";
-  $("#seccion-insights").hidden = b.dataset.seccion !== "insights";
-  $("#seccion-gestion").hidden = b.dataset.seccion !== "gestion";
-  // Insights trabaja con más pedidos que la lista: se traen al abrir la pestaña
-  if (b.dataset.seccion === "insights") cargarPedidosInsights();
+// ===== Navegación =====
+// Un solo menú (barra lateral / barra de abajo) con destinos planos. Por
+// dentro, Productos, Cupones, Reseñas y Ajustes siguen siendo pestañas de la
+// sección Gestión (TABS); Ajustes es la única que muestra sus sub-pestañas.
+// El destino va en el hash (#pedidos) para que recargar o "atrás" funcionen.
+const DESTINOS = {
+  inicio: { seccion: "inicio" },
+  pedidos: { seccion: "pedidos" },
+  insights: { seccion: "insights" },
+  productos: { seccion: "gestion", tab: "tab-productos", titulo: "Productos y stock" },
+  cupones: { seccion: "gestion", tab: "tab-cupones", titulo: "Cupones" },
+  resenas: { seccion: "gestion", tab: "tab-resenas", titulo: "Reseñas" },
+  ajustes: { seccion: "gestion", titulo: "Ajustes", ajustes: true },
+};
+const TABS_AJUSTES = ["tab-precios", "tab-envio", "tab-mercadopago", "tab-avisos"];
+let tabAjustes = "tab-precios";
+let destinoActual = null;
+
+function irA(destino, { historial = true } = {}) {
+  const d = DESTINOS[destino] || DESTINOS.inicio;
+  destino = DESTINOS[destino] ? destino : "inicio";
+  destinoActual = destino;
+  for (const sec of ["inicio", "pedidos", "insights", "gestion"]) $(`#seccion-${sec}`).hidden = d.seccion !== sec;
+  document.querySelectorAll("#nav [data-ir]").forEach((b) => {
+    b.classList.toggle("nav__item--activo", b.dataset.ir === destino);
+    if (b.dataset.ir === destino) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+  });
+  $("#nav-mas").classList.toggle("nav__item--activo", ["cupones", "resenas", "ajustes"].includes(destino));
+  cerrarMenuMas();
+  if (d.seccion === "gestion") {
+    $("#gestion-titulo").textContent = d.titulo;
+    $("#ajustes-tabs").hidden = !d.ajustes;
+    activarTab(d.ajustes ? tabAjustes : d.tab);
+  }
+  // Insights trabaja con más pedidos que la lista: se traen al abrir la sección
+  if (d.seccion === "insights") cargarPedidosInsights();
+  if (d.seccion === "inicio") renderInicio();
+  // Cada cambio de sección queda en el historial: "atrás" vuelve a la anterior
+  if (location.hash.slice(1) !== destino) history[historial ? "pushState" : "replaceState"](null, "", `#${destino}`);
+  window.scrollTo(0, 0);
+}
+
+function cerrarMenuMas() {
+  $("#nav").classList.remove("nav--abierta");
+  $("#nav-mas").setAttribute("aria-expanded", "false");
+}
+
+$("#nav").addEventListener("click", (e) => {
+  if (e.target.closest("#nav-mas")) {
+    const abierta = $("#nav").classList.toggle("nav--abierta");
+    $("#nav-mas").setAttribute("aria-expanded", String(abierta));
+    return;
+  }
+  if (e.target.closest("#nav-salir")) return cerrarSesion();
+  const b = e.target.closest("[data-ir]");
+  if (b) irA(b.dataset.ir);
 });
+// Tocar afuera cierra el menú "Más" del celular
+document.addEventListener("click", (e) => {
+  if ($("#nav").classList.contains("nav--abierta") && !e.target.closest("#nav")) cerrarMenuMas();
+});
+function seguirHash() {
+  if (!$("#panel").hidden && location.hash.slice(1) !== destinoActual) irA(location.hash.slice(1), { historial: false });
+}
+window.addEventListener("popstate", seguirHash);
+window.addEventListener("hashchange", seguirHash);
+
+// Atajos y links internos (Inicio → Pedidos filtrados, etc.)
+$("#seccion-inicio").addEventListener("click", (e) => {
+  const tarea = e.target.closest("[data-tarea]");
+  const link = e.target.closest("[data-ir]");
+  const atajo = e.target.closest("[data-atajo]");
+  if (tarea) {
+    const { ir, filtro } = tarea.dataset;
+    irA(ir);
+    if (filtro) {
+      const b = document.querySelector(`#filtros [data-filtro="${filtro}"]`);
+      if (b) b.click();
+    }
+  } else if (link) {
+    irA(link.dataset.ir);
+  } else if (atajo && atajo.dataset.atajo === "nuevo-pedido") {
+    irA("pedidos");
+    if ($("#pedido-manual").hidden) $("#nuevo-pedido").click();
+  }
+});
+
+// ===== Inicio =====
+// Lo que hay que hacer ahora (con link a donde se hace) y cómo vienen las
+// ventas. Sale de lo que el panel ya trae: los últimos pedidos, las reseñas y
+// el stock de los productos.
+let productosInicio = null; // [{ nombre, stock, activo, tipo, descontinuado }]
+const STOCK_BAJO = 5;
+
+function cargarStockInicio() {
+  api("/api/admin-productos")
+    .then((d) => { productosInicio = Array.isArray(d.productos) ? d.productos : []; renderInicio(); })
+    .catch(() => {});
+}
+
+function ventasEntre(desde, hasta) {
+  const lista = pedidosCache.filter((p) => p.estado === "aprobado" && new Date(p.creado) >= desde && new Date(p.creado) < hasta);
+  return { total: lista.reduce((t, p) => t + Number(p.total || 0), 0), cantidad: lista.length };
+}
+
+function kpiInicio(etiqueta, actual, previo, nota) {
+  let delta = "";
+  if (previo && previo.total > 0) {
+    const pct = Math.round(((actual.total - previo.total) / previo.total) * 100);
+    delta = `<span class="kpi-mini__delta ${pct >= 0 ? "kpi-mini__delta--sube" : "kpi-mini__delta--baja"}">${pct >= 0 ? "▲" : "▼"} ${Math.abs(pct)}%</span>`;
+  }
+  return `<div class="kpi-mini">
+      <span class="kpi-mini__label">${etiqueta}</span>
+      <strong class="kpi-mini__valor">${formato.format(actual.total)}</strong>
+      <span class="kpi-mini__nota">${actual.cantidad} venta${actual.cantidad === 1 ? "" : "s"}${nota ? ` · ${nota}` : ""} ${delta}</span>
+    </div>`;
+}
+
+function tareasPendientes() {
+  const despachar = pedidosCache.filter((p) => p.estado === "aprobado" && p.estado_entrega !== "entregado");
+  const aprobar = pedidosCache.filter((p) => p.estado === "pendiente" && p.origen === "whatsapp");
+  const resenas = (resenasCache || []).filter((r) => r.pendiente);
+  const bajos = (productosInicio || []).filter((p) => p.activo && !p.descontinuado && Number(p.stock) <= STOCK_BAJO);
+  const tareas = [];
+  if (despachar.length) tareas.push({ icono: "a-camion", ir: "pedidos", filtro: "por_despachar", texto: `${despachar.length} pedido${despachar.length === 1 ? "" : "s"} por despachar`, nota: "Cobrados y todavía sin entregar" });
+  if (aprobar.length) tareas.push({ icono: "a-chat", ir: "pedidos", filtro: "whatsapp", texto: `${aprobar.length} pedido${aprobar.length === 1 ? "" : "s"} de WhatsApp sin aprobar`, nota: "Aprobalos cuando cobres: ahí se descuenta el stock" });
+  if (resenas.length) tareas.push({ icono: "a-resenas", ir: "resenas", texto: `${resenas.length} reseña${resenas.length === 1 ? "" : "s"} para aprobar`, nota: "No se publican hasta que las apruebes" });
+  if (bajos.length) tareas.push({ icono: "a-alerta", ir: "productos", texto: `Stock bajo en ${bajos.length} producto${bajos.length === 1 ? "" : "s"}`, nota: bajos.map((p) => `${p.nombre} (${p.stock})`).join(", ") });
+  return { tareas, despachar: despachar.length, resenas: resenas.length, bajos: bajos.length };
+}
+
+function actualizarBadges({ despachar, resenas, bajos }) {
+  const poner = (id, n) => { const b = $(id); b.hidden = !n; b.textContent = n || ""; };
+  poner("#badge-pedidos", despachar);
+  poner("#badge-productos", bajos);
+  poner("#badge-resenas", resenas);
+  $("#badge-mas").hidden = !resenas;
+}
+
+function renderInicio() {
+  const pend = tareasPendientes();
+  actualizarBadges(pend);
+  if ($("#seccion-inicio").hidden) return;
+
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const dia = 24 * 3600 * 1000;
+  const manana = new Date(hoy.getTime() + dia);
+  const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const inicioMesPrevio = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+  const mismoDiaMesPrevio = new Date(inicioMesPrevio.getTime() + (manana - inicioMes));
+  const fecha = new Date().toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+  $("#inicio-fecha").textContent = fecha.charAt(0).toUpperCase() + fecha.slice(1);
+  $("#inicio-kpis").innerHTML =
+    kpiInicio("Hoy", ventasEntre(hoy, manana), ventasEntre(new Date(hoy.getTime() - 7 * dia), new Date(manana.getTime() - 7 * dia)), "vs. el mismo día la semana pasada") +
+    kpiInicio("Últimos 7 días", ventasEntre(new Date(manana.getTime() - 7 * dia), manana), ventasEntre(new Date(manana.getTime() - 14 * dia), new Date(manana.getTime() - 7 * dia))) +
+    kpiInicio("Este mes", ventasEntre(inicioMes, manana), ventasEntre(inicioMesPrevio, mismoDiaMesPrevio), "vs. el mes pasado a esta altura");
+
+  $("#inicio-tareas").innerHTML = pend.tareas.length
+    ? pend.tareas.map((t) => `<button class="tarea" data-tarea data-ir="${t.ir}"${t.filtro ? ` data-filtro="${t.filtro}"` : ""}>
+          <span class="tarea__ico"><svg><use href="#${t.icono}"/></svg></span>
+          <span class="tarea__texto"><strong>${escapar(t.texto)}</strong><small>${escapar(t.nota)}</small></span>
+          <svg class="tarea__flecha"><use href="#a-flecha"/></svg>
+        </button>`).join("")
+    : `<p class="inicio__vacio">✨ Todo al día: no hay nada pendiente.</p>`;
+
+  const ultimos = pedidosCache.slice(0, 6);
+  $("#inicio-ultimos").innerHTML = ultimos.length
+    ? ultimos.map((p) => {
+        const nombre = (p.envio && p.envio.nombre) || p.cliente_email || "Sin datos";
+        const cuando = new Date(p.creado).toLocaleString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+        return `<button class="ultimo" data-ir="pedidos">
+            <span class="ultimo__num">${escapar(numeroDe(p))}</span>
+            <span class="ultimo__quien"><strong>${escapar(nombre)}</strong><small>${escapar(CANALES[p.origen] || p.origen || "")} · ${escapar(cuando)}</small></span>
+            <span class="ultimo__der"><strong>${formato.format(p.total || 0)}</strong><span class="estado estado--${escapar(p.estado)}">${escapar(p.estado)}</span></span>
+          </button>`;
+      }).join("")
+    : `<p class="inicio__vacio">Todavía no hay pedidos.</p>`;
+}
 // ===== Productos y stock (unificados) =====
 // Una sola lista: cada producto muestra su estado y su stock, con la carga
 // por gramos y el publicar/ocultar en la misma fila.
@@ -2610,7 +2778,7 @@ $("#transportistas").addEventListener("change", async (e) => {
   }
 });
 
-// ===== Simulador de cotización en vivo (/admin → Envío) =====
+// ===== Simulador de cotización en vivo (/admin → Ajustes → Envío) =====
 if ($("#simulador-envio")) {
   $("#simulador-envio").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -3000,6 +3168,7 @@ function marcarResenasNuevas() {
   const nuevas = resenasCache.filter((r) => r.pendiente).length;
   $("#tab-resenas").textContent = nuevas ? `Reseñas (${nuevas})` : "Reseñas";
   $("#tab-resenas").classList.toggle("tab-aviso", nuevas > 0);
+  renderInicio();
 }
 
 async function cargarResenas() {
@@ -3334,6 +3503,7 @@ function invalidarPrecios() {
 }
 
 function activarTab(tabId) {
+  if (TABS_AJUSTES.includes(tabId)) tabAjustes = tabId;
   for (const [id, t] of Object.entries(TABS)) {
     const activa = id === tabId;
     $("#" + id).classList.toggle("tab-activo", activa);
@@ -3352,15 +3522,16 @@ Object.keys(TABS).forEach((id) => $("#" + id).addEventListener("click", () => ac
 function abrirPanel() {
   $("#login").hidden = true;
   $("#panel").hidden = false;
-  $("#logout").hidden = false;
+  document.querySelector(".admin").classList.add("admin--dentro");
   cargarPedidos();
+  cargarStockInicio();
   // Cuántas reseñas nuevas hay, para mostrarlo en la pestaña sin abrirla
   api("/api/admin-resenas")
     .then((d) => { resenasCache = Array.isArray(d.resenas) ? d.resenas : []; marcarResenasNuevas(); })
     .catch(() => {});
-  // reiniciar el estado "cargado" de las tabs y abrir Productos
+  // reiniciar el estado "cargado" de las tabs y abrir donde se estaba (o Inicio)
   Object.values(TABS).forEach((t) => (t.cargado = false));
-  activarTab("tab-productos");
+  irA(location.hash.slice(1) || "inicio", { historial: false });
 }
 
 function cerrarSesion() {
@@ -3368,6 +3539,7 @@ function cerrarSesion() {
   $("#login").hidden = false;
   $("#panel").hidden = true;
   $("#logout").hidden = true;
+  document.querySelector(".admin").classList.remove("admin--dentro");
   $("#token").value = "";
 }
 

@@ -1,4 +1,4 @@
-// Qué transportistas ve el cliente, se prendan desde /admin → Precios → Envío
+// Qué transportistas ve el cliente, se prendan desde /admin → Ajustes → Envío
 // (tabla `transportistas`). Vive aparte de cada proveedor porque el interruptor
 // es uno solo: da igual si la tarifa la trae Zipnova o si la pedimos directo a
 // la API de Andreani, si el transportista está apagado no se muestra.

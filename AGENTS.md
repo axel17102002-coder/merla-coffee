@@ -104,6 +104,14 @@ una regla de precio/punto, va acá y aplica en ambos lados a la vez.
 
 ## Trampas conocidas
 
+- **Navegación del panel** (`admin.js` → `DESTINOS`, `irA`): un menú plano
+  (barra lateral en compu, barra de abajo + "Más" en celular) con el destino en
+  el hash (`#pedidos`). Por dentro, Productos, Cupones, Reseñas y Ajustes siguen
+  siendo pestañas de `#seccion-gestion` (`TABS`/`activarTab`); solo Ajustes
+  muestra sus sub-pestañas (Precios, Envío, Mercado Pago, Avisos). Una vista
+  nueva: agregala a `TABS` y a `DESTINOS` (o a `TABS_AJUSTES`). **Inicio**
+  (`renderInicio`) arma "Para hacer" y los badges del menú con lo que ya trae
+  el panel (pedidos, reseñas, stock).
 - **Insights** (`admin.js`) calcula todo sobre los **últimos 200 pedidos** que
   trae `admin-pedidos`. Un rango de fechas más viejo que esa ventana queda
   incompleto. Si el volumen crece, mover el cálculo a una vista/endpoint de Supabase.
@@ -171,7 +179,7 @@ una regla de precio/punto, va acá y aplica en ambos lados a la vez.
   se usan con `icono("nombre")` en `app.js`. Para uno nuevo, sumá el `<symbol>`.
 - **Pasarelas de pago**: se prenden/apagan en `motor.js` → `CONFIG.pagos`. Hoy
   Mercado Pago activo, MODO implementado pero apagado.
-- **APIs de envío**: se prenden/apagan desde `/admin → Precios → Envío` (claves
+- **APIs de envío**: se prenden/apagan desde `/admin → Ajustes → Envío` (claves
   `envio_zipnova` / `envio_andreani` / `envio_paqar` en `configuracion`, 1/0).
   Cotizan solo si tienen credenciales **y** están prendidas; el filtro se aplica
   en `envio-costo.js`, también al recobrar, así un carrito viejo no puede pagar
@@ -181,13 +189,13 @@ una regla de precio/punto, va acá y aplica en ambos lados a la vez.
 - **Andreani con tarifa propia** (`backend/lib/envio-tabla.js`, proveedor
   `tabla`, interruptor `envio_tabla`): para despachar a mano sin API. Cobra de
   una tabla 4 zonas (por provincia; en Buenos Aires, CP 1000-1999 = AMBA) × 3
-  cajas (las de `empaque.js`) × sucursal/domicilio, editable en `/admin → Envío`
+  cajas (las de `empaque.js`) × sucursal/domicilio, editable en `/admin → Ajustes → Envío`
   (claves `tarifa_<zona>_<caja>_<tipo>`). Arranca apagada. A sucursal no hay
   lista: el cliente la escribe (`sucursalLibre` → `sucursal.id = "a-eleccion"`).
 - **Avisos por Telegram** (`backend/lib/telegram.js`): salen junto al mail al
   admin desde `avisos.js` (venta cobrada, pedido de WhatsApp, pago raro) y
   `resena.js`. El token es el Secret `TELEGRAM_BOT_TOKEN`; el chat se guarda en
-  `configuracion.telegram_chat_id` con "Conectar" en `/admin → 🔔 Avisos`
+  `configuracion.telegram_chat_id` con "Conectar" en `/admin → Ajustes → Avisos`
   (`getUpdates`: no le pongas webhook al bot o deja de funcionar). Nunca lanza.
 - **Sin credenciales de un servicio no se rompe nada**: mails (Brevo) y envío a
   domicilio (Zipnova) se degradan con aviso; el resto sigue funcionando.

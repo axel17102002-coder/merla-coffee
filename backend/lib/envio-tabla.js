@@ -1,6 +1,6 @@
 // Andreani con tarifa propia: el envío se despacha a mano en Andreani (sin API
 // ni contrato) y se le cobra al cliente según una tabla que se edita en
-// /admin → Gestión → Envío.
+// /admin → Ajustes → Envío.
 //
 // Andreani cobra por zonas fijas según la provincia de destino y por tamaño de
 // caja (hasta 600 g da lo mismo el peso: manda el volumen). La tabla replica
@@ -78,7 +78,7 @@ function tarifas(cfg) {
 }
 
 // Siempre disponible (no depende de secretos); se prende o apaga desde
-// /admin → Gestión → Envío (`configuracion.envio_tabla`).
+// /admin → Ajustes → Envío (`configuracion.envio_tabla`).
 function disponible() {
   return true;
 }

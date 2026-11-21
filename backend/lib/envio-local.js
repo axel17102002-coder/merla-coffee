@@ -29,7 +29,7 @@ function cubreDestino({ cp, provincia }) {
 }
 
 // Siempre disponible (no depende de secretos externos); se prende o apaga desde
-// /admin → Gestión → Envío (`configuracion.envio_local`).
+// /admin → Ajustes → Envío (`configuracion.envio_local`).
 function disponible() {
   return true;
 }

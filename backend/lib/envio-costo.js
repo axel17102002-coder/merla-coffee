@@ -48,7 +48,7 @@ function proveedorDe(grupo) {
 }
 
 // Un proveedor cotiza solo si tiene credenciales (o es local) Y está prendido
-// en /admin → Gestión → Envío (`configuracion.envio_<proveedor>`).
+// en /admin → Ajustes → Envío (`configuracion.envio_<proveedor>`).
 // Sin valor guardado, los que tienen credenciales se asumen prendidos (así no
 // cambió nada al agregar el interruptor). La tarifa propia, en cambio, siempre
 // cotiza: arranca apagada hasta que se la prende a mano.

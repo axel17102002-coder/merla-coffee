@@ -1,4 +1,4 @@
-// Simulador protegido de cotizaciones de envío para /admin → Gestión → Envío.
+// Simulador protegido de cotizaciones de envío para /admin → Ajustes → Envío.
 //
 //   POST { cp, ciudad, provincia, pesoGramos?, valorDeclarado? }
 //

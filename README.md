@@ -123,7 +123,7 @@ Cada venta cobrada, cada pedido nuevo de WhatsApp, los pagos raros y las reseña
 1. En Telegram, **@BotFather** → `/newbot` → copiar el token.
 2. Cloudflare → Workers & Pages → merla-coffee → Settings → Variables and Secrets → **Secret** `TELEGRAM_BOT_TOKEN`.
 3. Escribirle «hola» al bot (o sumarlo a un grupo y escribir ahí, para que les llegue a varios).
-4. `/admin` → Gestión → **🔔 Avisos** → **Conectar**: toma el último chat que le escribió al bot, lo guarda en `configuracion` (`telegram_chat_id`) y manda un mensaje de prueba.
+4. `/admin` → Ajustes → **Avisos** → **Conectar**: toma el último chat que le escribió al bot, lo guarda en `configuracion` (`telegram_chat_id`) y manda un mensaje de prueba.
 
 `TELEGRAM_CHAT_ID`, si existe, manda sobre el chat guardado. Sin token o sin chat no se envía nada y el resto sigue igual (`backend/lib/telegram.js`).
 
@@ -149,16 +149,16 @@ Hay **tres proveedores de tarifas** y se pueden usar juntos:
 | **Andreani** | Directo al transportista, sin el margen del agregador | Las da su equipo comercial con el contrato |
 | **paq.ar** (MiCorreo) | Correo Argentino directo. En la prueba que hicimos salió **la mitad** que la opción más barata del agregador | Se piden por el formulario de contacto de Correo Argentino |
 
-Si están los dos configurados, se cotizan **en paralelo** y las opciones se mezclan en una sola lista ordenada por precio — al cliente le da igual de dónde sale la tarifa. Si uno falla o está caído, el otro igual responde. Qué transportistas se muestran se elige en `/admin` → Precios → Envío, y ese interruptor aplica a los dos proveedores por igual.
+Si están los dos configurados, se cotizan **en paralelo** y las opciones se mezclan en una sola lista ordenada por precio — al cliente le da igual de dónde sale la tarifa. Si uno falla o está caído, el otro igual responde. Qué transportistas se muestran se elige en `/admin` → Ajustes → Envío, y ese interruptor aplica a los dos proveedores por igual.
 
-- **Prender y apagar cada API**: en `/admin` → Precios → Envío hay un interruptor por proveedor. Apagar uno **no borra sus credenciales**: simplemente se le deja de pedir tarifas, y las opciones que ya había dado dejan de poder cobrarse. Sirve para probar un proveedor nuevo, o para sacar uno que está caro o caído sin tocar código ni desplegar. Con todos apagados queda solo el retiro. Requiere correr `supabase/migracion-proveedores-envio.sql`; sin eso los tres se asumen prendidos, como venía funcionando.
-- **Peso estimado**: cada tipo de producto (drip bag, café en bolsa de 1/4, tazas/otros) tiene un peso configurable en `/admin` → Precios → Envío. Se usa `peso × unidades del carrito` para cotizar.
+- **Prender y apagar cada API**: en `/admin` → Ajustes → Envío hay un interruptor por proveedor. Apagar uno **no borra sus credenciales**: simplemente se le deja de pedir tarifas, y las opciones que ya había dado dejan de poder cobrarse. Sirve para probar un proveedor nuevo, o para sacar uno que está caro o caído sin tocar código ni desplegar. Con todos apagados queda solo el retiro. Requiere correr `supabase/migracion-proveedores-envio.sql`; sin eso los tres se asumen prendidos, como venía funcionando.
+- **Peso estimado**: cada tipo de producto (drip bag, café en bolsa de 1/4, tazas/otros) tiene un peso configurable en `/admin` → Ajustes → Envío. Se usa `peso × unidades del carrito` para cotizar.
 - **Retiro** no cotiza nada: el envío solo entra en juego cuando el cliente elige "Envío a domicilio" y carga su código postal.
 - **Sin credenciales** no se rompe nada: el envío a domicilio queda deshabilitado con un aviso claro (retiro y WhatsApp sin envío siguen funcionando).
 
 ### Andreani con tarifa propia (despacho a mano)
 
-Sin contrato con Andreani: el cliente paga según una tabla y el paquete se despacha a mano en Andreani. Se prende en `/admin → Gestión → Envío → Andreani (tarifa propia)` y los precios se editan ahí mismo: 4 zonas (CABA y GBA / Centro / Cuyo-NOA-NEA-norte patagónico / Salta, Jujuy y sur patagónico) × caja chica, mediana y grande × sucursal o domicilio. Los valores iniciales salen del cotizador de andreani.com desde La Plata (noviembre 2026); actualizarlos cuando Andreani aumente. A sucursal, el cliente escribe en cuál lo retira. Después se carga el código de seguimiento en el pedido y al cliente le llega el mail con el link de Andreani.
+Sin contrato con Andreani: el cliente paga según una tabla y el paquete se despacha a mano en Andreani. Se prende en `/admin → Ajustes → Envío → Andreani (tarifa propia)` y los precios se editan ahí mismo: 4 zonas (CABA y GBA / Centro / Cuyo-NOA-NEA-norte patagónico / Salta, Jujuy y sur patagónico) × caja chica, mediana y grande × sucursal o domicilio. Los valores iniciales salen del cotizador de andreani.com desde La Plata (noviembre 2026); actualizarlos cuando Andreani aumente. A sucursal, el cliente escribe en cuál lo retira. Después se carga el código de seguimiento en el pedido y al cliente le llega el mail con el link de Andreani.
 
 ### Configurar Zipnova
 
@@ -192,7 +192,7 @@ Endpoints que usa la integración (`backend/lib/paqar.js`): `POST /token` (Basic
 
 Las tarifas de paq.ar vienen por servicio (Clásico, Expreso, Hoy), así que el carrito muestra el nombre del servicio y el plazo debajo del transportista: si no, serían dos filas iguales de "Correo Argentino" con distinto precio.
 
-En `/admin` → Precios → Envío el aviso de arriba dice con qué proveedores está cotizando y cuáles quedan sin conectar.
+En `/admin` → Ajustes → Envío el aviso de arriba dice con qué proveedores está cotizando y cuáles quedan sin conectar.
 
 ## Notas
 

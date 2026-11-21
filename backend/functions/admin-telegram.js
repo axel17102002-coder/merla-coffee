@@ -1,4 +1,4 @@
-// Avisos por Telegram desde el panel (🔔 Avisos). Solo admin.
+// Avisos por Telegram desde el panel (Ajustes → Avisos). Solo admin.
 //
 //   GET                            → { token, chat }  (¿está el secreto? ¿hay chat guardado?)
 //   POST { accion: "conectar" }    → busca el último chat que le escribió al bot,

@@ -41,7 +41,7 @@ const RESPALDO = {
     prepaga: 0,
     cuotas_sin_tarjeta: 0,
   },
-  // Qué proveedores de envío se consultan, se prenden desde /admin → Envío.
+  // Qué proveedores de envío se consultan, se prenden desde /admin → Ajustes → Envío.
   // Prendidos por defecto: sin la migración corrida manda solo si hay credenciales.
   // La tarifa propia de Andreani (envio-tabla.js) arranca apagada: se prende a mano.
   proveedoresEnvio: { local: true, zipnova: true, andreani: true, paqar: true, tabla: false },
