@@ -538,6 +538,8 @@ button:disabled { opacity: .55; cursor: wait; }
 .pedido__despacho-btn:hover { background: #eef3ec; }
 .pedido__despacho-btn--primario { background: var(--verde); border-color: var(--verde); color: #fff; }
 .pedido__despacho-btn--primario:hover { opacity: .92; background: var(--verde); }
+.pedido__despacho-btn--entregado { border-color: #2f6931; color: #2f6931; font-weight: 800; }
+.pedido__despacho-btn--entregado:hover { background: #d9ead4; }
 .pedido__tracking-link { font-size: .8rem; font-weight: 700; color: var(--verde); }
 .despacho-chip {
   display: inline-block;

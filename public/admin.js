@@ -147,6 +147,9 @@ function panelDespacho(p) {
         <span class="pedido__metodo-estado" data-despacho-estado></span>` : ""}
         ${esEnvio ? `<button type="button" class="pedido__despacho-btn" data-action="copiar-envio" data-id="${escapar(p.id)}">📋 Copiar envío</button>` : ""}
         ${p.cliente_email ? `<button type="button" class="pedido__despacho-btn pedido__despacho-btn--primario" data-action="avisar-despacho" data-id="${escapar(p.id)}">${textoAviso}</button>` : ""}
+        ${tieneMigracion && estadoActual !== "entregado"
+          ? `<button type="button" class="pedido__despacho-btn pedido__despacho-btn--entregado" data-action="marcar-entregado" data-id="${escapar(p.id)}">✓ Marcar como entregado</button>`
+          : ""}
       </div>
       ${tieneMigracion && esEnvio && !esLocal ? `<div class="pedido__despacho-fila">
         <div class="pedido__tracking">
@@ -1109,6 +1112,21 @@ $("#pedidos").addEventListener("click", async (e) => {
   if (!boton) return;
   const { action, id } = boton.dataset;
 
+  // Un toque: el pedido queda entregado (sale de "Por despachar")
+  if (action === "marcar-entregado") {
+    boton.disabled = true;
+    boton.textContent = "Guardando…";
+    try {
+      await cambiarEstadoEntrega(id, "entregado");
+      toast("✅ Pedido marcado como entregado");
+    } catch (err) {
+      boton.disabled = false;
+      boton.textContent = "✓ Marcar como entregado";
+      toast(`⚠️ ${err.message}`);
+    }
+    return;
+  }
+
   // Cancelar un pedido cobrado: el botón abre la confirmación dentro de la
   // tarjeta, y recién "Sí, cancelar" lo ejecuta.
   const tarjeta = boton.closest(".pedido");
@@ -1225,32 +1243,41 @@ $("#pedidos").addEventListener("click", async (e) => {
   }
 });
 
+// Guarda el estado de entrega de un pedido y lo refleja en todas las copias
+// (lista, búsqueda, Insights) y en Inicio. Lo usan el selector y el botón
+// "Marcar como entregado". Devuelve el estado anterior para poder deshacer.
+async function cambiarEstadoEntrega(id, estado) {
+  const copias = [pedidosCache, pedidosInsights, pedidosBusqueda]
+    .filter(Boolean)
+    .map((lista) => lista.find((p) => p.id === id))
+    .filter(Boolean);
+  const r = await api("/api/admin-pedidos", {
+    method: "PATCH",
+    body: JSON.stringify({ id, estado_entrega: estado }),
+  });
+  for (const copia of copias) {
+    copia.estado_entrega = r.estado_entrega;
+    copia.despachado_en = r.despachado_en;
+  }
+  renderPedidos();
+  renderInicio();
+  return r;
+}
+
 // Corregir el método de pago de MP o actualizar el estado de entrega de un pedido
 $("#pedidos").addEventListener("change", async (e) => {
   const selectEntrega = e.target.closest("[data-estado-entrega]");
   if (selectEntrega) {
     const id = selectEntrega.dataset.id;
     const estadoEl = selectEntrega.parentElement.querySelector("[data-despacho-estado]");
-    const copias = [pedidosCache, pedidosInsights, pedidosBusqueda]
-      .filter(Boolean)
-      .map((lista) => lista.find((p) => p.id === id))
-      .filter(Boolean);
-    const anterior = copias[0] ? copias[0].estado_entrega : "pendiente";
+    const anterior = (pedidosCache.find((p) => p.id === id) || {}).estado_entrega || "pendiente";
     selectEntrega.disabled = true;
     if (estadoEl) estadoEl.textContent = "Guardando…";
     try {
-      const r = await api("/api/admin-pedidos", {
-        method: "PATCH",
-        body: JSON.stringify({ id, estado_entrega: selectEntrega.value }),
-      });
-      for (const copia of copias) {
-        copia.estado_entrega = r.estado_entrega;
-        copia.despachado_en = r.despachado_en;
-      }
-      renderPedidos();
+      await cambiarEstadoEntrega(id, selectEntrega.value);
       toast(`✅ Entrega actualizada`);
     } catch (err) {
-      selectEntrega.value = anterior || "pendiente";
+      selectEntrega.value = anterior;
       if (estadoEl) estadoEl.textContent = `⚠️ ${err.message}`;
       selectEntrega.disabled = false;
     }
