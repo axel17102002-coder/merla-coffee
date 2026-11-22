@@ -112,6 +112,14 @@ una regla de precio/punto, va acá y aplica en ambos lados a la vez.
   nueva: agregala a `TABS` y a `DESTINOS` (o a `TABS_AJUSTES`). **Inicio**
   (`renderInicio`) arma "Para hacer" y los badges del menú con lo que ya trae
   el panel (pedidos, reseñas, stock).
+- **Pedidos por etapa** (`etapaDe` en `admin.js`): Por cobrar (WhatsApp y
+  manuales pendientes) → Por preparar (cobrados, `estado_entrega` pendiente o
+  preparando) → En camino (despachado / listo_retiro) → Entregados. Los
+  pendientes de Mercado Pago son carritos: solo aparecen en "Todos". Cada
+  pedido es un renglón con su próximo paso; el detalle (`tarjetaPedido`) se abre
+  en un panel y comparte los handlers (`manejarAccionPedido`). "Marcar enviado"
+  (`abrirDespacho`) guarda código + estado en un solo PATCH y después manda el
+  mail de despacho.
 - **Insights** (`admin.js`) calcula todo sobre los **últimos 200 pedidos** que
   trae `admin-pedidos`. Un rango de fechas más viejo que esa ventana queda
   incompleto. Si el volumen crece, mover el cálculo a una vista/endpoint de Supabase.

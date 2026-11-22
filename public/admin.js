@@ -192,28 +192,116 @@ let filtroCanal = "todos";
 let busqueda = "";
 let pedidosBusqueda = null; // null = sin búsqueda activa
 
+// ===== Pedidos por etapa =====
+// La lista se ordena por lo que hay que hacer con cada pedido (cobrar →
+// preparar → en camino → entregado), no por canal. Cada pedido es un renglón
+// con su próximo paso; al tocarlo se abre el detalle completo (tarjetaPedido).
+// Los carritos de Mercado Pago sin pagar no son trabajo: solo están en "Todos".
+const ETAPAS = {
+  por_cobrar: { nombre: "Por cobrar", vacio: "No hay pedidos esperando el pago.", ayuda: "Pedidos de WhatsApp o cargados a mano que todavía no pagaron. Al marcarlos cobrados se descuenta el stock y se suman los puntos." },
+  por_preparar: { nombre: "Por preparar", vacio: "Nada por preparar 🎉", ayuda: "Cobrados y todavía sin salir, del más viejo al más nuevo. Tocá «Marcar enviado» cuando lo despaches (ahí tenés los datos para cargar en Andreani)." },
+  en_camino: { nombre: "En camino", vacio: "No hay pedidos en camino.", ayuda: "Despachados o listos para retirar. Marcalos entregados cuando lleguen." },
+  entregados: { nombre: "Entregados", vacio: "Todavía no hay pedidos entregados.", ayuda: "" },
+  todos: { nombre: "Todos", vacio: "No hay pedidos todavía.", ayuda: "Todo, incluidos los carritos de Mercado Pago sin pagar y los cancelados." },
+};
+let etapaPedidos = "por_preparar";
+let pedidoAbierto = null; // id del pedido con el detalle abierto
+
+function etapaDe(p) {
+  if (p.estado === "pendiente") return ORIGENES_MANUALES.includes(p.origen) || p.origen === "whatsapp" ? "por_cobrar" : "carrito";
+  if (p.estado !== "aprobado") return "cerrado"; // cancelado o rechazado
+  const e = p.estado_entrega || "pendiente";
+  if (e === "entregado") return "entregados";
+  if (e === "despachado" || e === "listo_retiro") return "en_camino";
+  return "por_preparar";
+}
+
+const esRetiro = (p) => !p.envio || p.envio.metodo !== "envio";
+const esEnvioLocal = (p) => !esRetiro(p) && (p.envio.proveedor === "local" || String(p.envio.opcionGrupo || "").startsWith("local:"));
+
+function resumenEntrega(p) {
+  const e = p.envio || {};
+  if (esRetiro(p)) return "🏪 Retiro";
+  if (esEnvioLocal(p)) return "🛵 La Plata";
+  const modo = e.opcionTipo === "sucursal" ? "sucursal" : "domicilio";
+  return `📦 ${e.transportista || "Envío"} · ${modo}`;
+}
+
+function hace(fecha) {
+  const min = Math.max(0, Math.round((Date.now() - new Date(fecha)) / 60000));
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `hace ${h} h`;
+  return `hace ${Math.round(h / 24)} d`;
+}
+
+function accionPrincipal(p, etapa) {
+  const id = escapar(p.id);
+  if (etapa === "por_cobrar") return `<button class="fp__btn" data-action="aprobar" data-id="${id}">Marcar cobrado</button>`;
+  if (etapa === "por_preparar") return `<button class="fp__btn fp__btn--primario" data-action="despachar" data-id="${id}">${esRetiro(p) ? "Listo para retirar" : "Marcar enviado"}</button>`;
+  if (etapa === "en_camino") return `<button class="fp__btn" data-action="marcar-entregado" data-id="${id}">✓ Entregado</button>`;
+  const etiqueta = { entregados: "Entregado", carrito: "Sin pagar", cerrado: p.estado }[etapa] || p.estado;
+  return `<span class="fp__estado fp__estado--${escapar(etapa)}">${escapar(etiqueta)}</span>`;
+}
+
+function filaPedido(p) {
+  const etapa = etapaDe(p);
+  const items = p.items || [];
+  const resumen = items.length ? `${items[0].qty}× ${items[0].nombre}${items.length > 1 ? ` +${items.length - 1} más` : ""}` : "";
+  const nombre = (p.envio && p.envio.nombre) || p.cliente_email || "Sin datos";
+  const demorado = etapa === "por_preparar" && Date.now() - new Date(p.creado) > 48 * 3600 * 1000;
+  return `<article class="fp fp--${escapar(etapa)}${demorado ? " fp--demorado" : ""}${p.id === pedidoAbierto ? " fp--abierto" : ""}" data-abrir="${escapar(p.id)}" tabindex="0">
+      <span class="fp__num">${escapar(numeroDe(p))}</span>
+      <span class="fp__quien"><strong>${escapar(nombre)}</strong><small>${escapar(resumen)}</small></span>
+      <span class="fp__meta">
+        <span class="canal canal--${escapar(p.origen)}">${escapar(CANALES[p.origen] || p.origen || "—")}</span>
+        <span class="fp__entrega">${escapar(resumenEntrega(p))}</span>
+        <span class="fp__edad"${demorado ? ' title="Hace más de 48 h que está cobrado"' : ""}>${demorado ? "⚠️ " : ""}${escapar(hace(p.creado))}</span>
+      </span>
+      <strong class="fp__total">${formato.format(p.total || 0)}</strong>
+      <span class="fp__accion">${accionPrincipal(p, etapa)}</span>
+    </article>`;
+}
+
 function renderPedidos() {
   const contenedor = $("#pedidos");
   const base = pedidosBusqueda || pedidosCache;
 
-  // Contador de pedidos cobrados que todavía faltan preparar/despachar/entregar
-  const porDespachar = pedidosCache.filter((p) => p.estado === "aprobado" && p.estado_entrega !== "entregado").length;
-  const btnDespacho = $("#filtro-despacho");
-  if (btnDespacho) btnDespacho.textContent = porDespachar ? `📦 Por despachar (${porDespachar})` : "📦 Por despachar";
+  // Cuántos hay en cada etapa (sobre todos los pedidos, no sobre la búsqueda)
+  const cuentas = {};
+  for (const p of pedidosCache) cuentas[etapaDe(p)] = (cuentas[etapaDe(p)] || 0) + 1;
+  document.querySelectorAll("#etapas [data-etapa]").forEach((b) => {
+    b.classList.toggle("etapa-activa", b.dataset.etapa === etapaPedidos && !pedidosBusqueda);
+    const n = b.querySelector("[data-cuenta]");
+    if (n) { const c = cuentas[b.dataset.etapa] || 0; n.textContent = c || ""; n.hidden = !c; }
+  });
+  const carritos = cuentas.carrito || 0;
+  const ayuda = pedidosBusqueda ? `Resultados de “${busqueda}” en todas las etapas.` : ETAPAS[etapaPedidos].ayuda +
+    (etapaPedidos === "por_cobrar" && carritos ? ` Los ${carritos} carrito${carritos === 1 ? "" : "s"} de Mercado Pago sin pagar están en «Todos».` : "");
+  $("#etapa-ayuda").textContent = ayuda;
+  $("#etapa-ayuda").hidden = !ayuda;
 
-  const lista = filtroCanal === "todos"
-    ? base
-    : filtroCanal === "por_despachar"
-      ? base.filter((p) => p.estado === "aprobado" && p.estado_entrega !== "entregado")
-      : base.filter((p) => p.origen === filtroCanal);
-  if (!lista.length) {
-    const nombreFiltro = filtroCanal === "por_despachar" ? "por despachar" : (CANALES[filtroCanal] || filtroCanal);
-    contenedor.innerHTML = pedidosBusqueda
-      ? `<div class="vacio">Ningún pedido coincide con “${escapar(busqueda)}”${filtroCanal === "todos" ? "" : ` en ${nombreFiltro}`}.</div>`
-      : `<div class="vacio">No hay pedidos${filtroCanal === "todos" ? " todavía" : filtroCanal === "por_despachar" ? " pendientes de despacho 🎉" : ` de ${nombreFiltro}`}.</div>`;
-    return;
+  // Con búsqueda activa se ven todas las etapas
+  let lista = pedidosBusqueda || etapaPedidos === "todos" ? base : base.filter((p) => etapaDe(p) === etapaPedidos);
+  if (filtroCanal !== "todos") lista = lista.filter((p) => p.origen === filtroCanal);
+  // La cola de trabajo va del más viejo al más nuevo; el resto, al revés
+  if (!pedidosBusqueda && ["por_preparar", "en_camino"].includes(etapaPedidos)) {
+    lista = [...lista].sort((a, b) => new Date(a.creado) - new Date(b.creado));
   }
-  contenedor.innerHTML = lista.map((p) => {
+
+  if (!lista.length) {
+    const canal = filtroCanal !== "todos" ? ` de ${CANALES[filtroCanal] || filtroCanal}` : "";
+    contenedor.innerHTML = pedidosBusqueda
+      ? `<div class="vacio">Ningún pedido${canal} coincide con “${escapar(busqueda)}”.</div>`
+      : `<div class="vacio">${canal ? `No hay pedidos${canal} en «${ETAPAS[etapaPedidos].nombre}».` : escapar(ETAPAS[etapaPedidos].vacio)}</div>`;
+  } else {
+    contenedor.innerHTML = lista.map(filaPedido).join("");
+  }
+  renderDetalle();
+}
+
+// Detalle completo de un pedido (todo lo que antes era la tarjeta)
+function tarjetaPedido(p) {
     const lineas = (p.items || []).map((i) => `<li><span>${escapar(i.qty)}× ${escapar(i.nombre)}</span> <span>${formato.format(i.precio_unitario * i.qty)}</span></li>`).join("");
     const fecha = new Date(p.creado).toLocaleString("es-AR", { dateStyle: "medium", timeStyle: "short" });
     const canal = CANALES[p.origen] || p.origen || "—";
@@ -270,7 +358,35 @@ function renderPedidos() {
       </div>
       ${cancelable ? panelCancelar(p) : ""}
     </article>`;
-  }).join("");
+}
+
+function buscarPedido(id) {
+  return (pedidosBusqueda || []).find((p) => p.id === id) || pedidosCache.find((p) => p.id === id);
+}
+
+function abrirDetalle(id) {
+  pedidoAbierto = id;
+  renderDetalle();
+  document.body.classList.add("sin-scroll");
+  document.querySelectorAll("#pedidos .fp").forEach((f) => f.classList.toggle("fp--abierto", f.dataset.abrir === id));
+  const cerrar = $("#pedido-detalle .detalle__cerrar");
+  if (cerrar) cerrar.focus();
+}
+
+function cerrarDetalle() {
+  pedidoAbierto = null;
+  $("#pedido-detalle").hidden = true;
+  document.body.classList.remove("sin-scroll");
+  document.querySelectorAll("#pedidos .fp--abierto").forEach((f) => f.classList.remove("fp--abierto"));
+}
+
+function renderDetalle() {
+  if (!pedidoAbierto) return;
+  const p = buscarPedido(pedidoAbierto);
+  if (!p) return cerrarDetalle(); // lo eliminaron
+  // El próximo paso arriba de todo, grande; abajo, el pedido completo
+  $("#pedido-detalle-cuerpo").innerHTML = `<div class="detalle__accion">${accionPrincipal(p, etapaDe(p))}</div>${tarjetaPedido(p)}`;
+  $("#pedido-detalle").hidden = false;
 }
 
 async function cargarPedidos() {
@@ -1099,18 +1215,41 @@ $("#tendencia").addEventListener("click", (e) => {
   renderTendencia(calcularInsights(pedidosEnRango()).aprobados);
 });
 
-$("#filtros").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-filtro]");
+$("#etapas").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-etapa]");
   if (!b) return;
-  filtroCanal = b.dataset.filtro;
-  $("#filtros").querySelectorAll("button").forEach((x) => x.classList.toggle("filtro-activo", x === b));
+  etapaPedidos = b.dataset.etapa;
+  if (busqueda) { busqueda = ""; $("#buscar-pedido").value = ""; buscarPedidos(); return; }
   renderPedidos();
 });
 
-$("#pedidos").addEventListener("click", async (e) => {
+$("#filtro-canal").addEventListener("change", (e) => {
+  filtroCanal = e.target.value;
+  renderPedidos();
+});
+
+// Tocar un renglón abre el detalle (salvo que se toque su botón)
+$("#pedidos").addEventListener("click", (e) => {
+  const fila = e.target.closest("[data-abrir]");
+  if (fila && !e.target.closest("button, a, select, input")) abrirDetalle(fila.dataset.abrir);
+});
+$("#pedidos").addEventListener("keydown", (e) => {
+  const fila = e.target.closest("[data-abrir]");
+  if (fila && e.key === "Enter" && e.target === fila) abrirDetalle(fila.dataset.abrir);
+});
+$("#pedido-detalle").addEventListener("click", (e) => {
+  if (e.target.closest("[data-cerrar-detalle]")) cerrarDetalle();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && pedidoAbierto && !$("#despacho-dialogo").open) cerrarDetalle();
+});
+
+async function manejarAccionPedido(e) {
   const boton = e.target.closest("[data-action]");
   if (!boton) return;
   const { action, id } = boton.dataset;
+
+  if (action === "despachar") return abrirDespacho(id);
 
   // Un toque: el pedido queda entregado (sale de "Por despachar")
   if (action === "marcar-entregado") {
@@ -1241,7 +1380,9 @@ $("#pedidos").addEventListener("click", async (e) => {
     mensaje("#panel-message", `⚠️ ${err.message}`);
     boton.disabled = false;
   }
-});
+}
+$("#pedidos").addEventListener("click", manejarAccionPedido);
+$("#pedido-detalle").addEventListener("click", manejarAccionPedido);
 
 // Guarda el estado de entrega de un pedido y lo refleja en todas las copias
 // (lista, búsqueda, Insights) y en Inicio. Lo usan el selector y el botón
@@ -1265,7 +1406,7 @@ async function cambiarEstadoEntrega(id, estado) {
 }
 
 // Corregir el método de pago de MP o actualizar el estado de entrega de un pedido
-$("#pedidos").addEventListener("change", async (e) => {
+async function manejarCambioPedido(e) {
   const selectEntrega = e.target.closest("[data-estado-entrega]");
   if (selectEntrega) {
     const id = selectEntrega.dataset.id;
@@ -1319,9 +1460,128 @@ $("#pedidos").addEventListener("change", async (e) => {
   } finally {
     select.disabled = false;
   }
-});
+}
+$("#pedidos").addEventListener("change", manejarCambioPedido);
+$("#pedido-detalle").addEventListener("change", manejarCambioPedido);
 
 $("#reload").addEventListener("click", cargarPedidos);
+
+// ===== Despachar en un paso =====
+// Una sola ventana: datos para pegar en el correo, código de seguimiento y el
+// aviso al cliente. Al confirmar: guarda el código, pasa el pedido a "En
+// camino" (o "Listo para retirar") y, si se pidió, le manda el mail.
+let despachoId = null;
+
+// Los datos de entrega campo por campo, en el orden del formulario de
+// Andreani, para copiarlos de a uno
+function camposEnvio(p) {
+  const e = p.envio || {};
+  const campos = [["Nombre y apellido", e.nombre], ["Teléfono", e.telefono], ["Email", p.cliente_email]];
+  if (e.opcionTipo === "sucursal") {
+    campos.push(["Sucursal", [e.sucursal && e.sucursal.descripcion, e.sucursal && e.sucursal.direccion].filter(Boolean).join(" — ")]);
+  } else {
+    campos.push(["Calle y número", e.direccion]);
+  }
+  campos.push(["Código postal", e.cp], ["Localidad", e.ciudad], ["Provincia", e.provincia], ["Notas", e.notas]);
+  if (e.servicio || e.transportista) campos.push(["Servicio", [e.transportista, e.servicio].filter(Boolean).join(" · ")]);
+  return campos.filter(([, v]) => v && String(v).trim());
+}
+
+async function copiarConAviso(boton, texto, etiqueta) {
+  try {
+    await navigator.clipboard.writeText(texto);
+    boton.textContent = "✓ Copiado";
+    boton.classList.add("dlg__copiar--ok");
+    setTimeout(() => { boton.textContent = etiqueta; boton.classList.remove("dlg__copiar--ok"); }, 1400);
+  } catch {
+    prompt("Copiá el dato:", texto);
+  }
+}
+
+function abrirDespacho(id) {
+  const p = buscarPedido(id);
+  if (!p) return;
+  despachoId = id;
+  const retiro = esRetiro(p);
+  const conCodigo = !retiro && !esEnvioLocal(p);
+  const email = p.cliente_email;
+  $("#despacho-titulo").textContent = `${retiro ? "Listo para retirar" : "Marcar como enviado"} ${numeroDe(p)}`;
+  $("#despacho-cuerpo").innerHTML = `
+    ${retiro ? `<p class="dlg__texto">${escapar((p.envio && p.envio.nombre) || "El cliente")} lo retira en La Plata.</p>` : `
+      <div class="dlg__datos">
+        <div class="dlg__datos-cabeza">
+          <strong>${conCodigo ? `Datos para cargar en ${escapar((p.envio && p.envio.transportista) || "el correo")}` : "Datos de entrega"}</strong>
+          <button type="button" class="dlg__copiar-todo" data-copiar-despacho>📋 Copiar todo</button>
+        </div>
+        <dl class="dlg__campos">${camposEnvio(p).map(([etiqueta, valor]) => `
+          <div class="dlg__fila"><dt>${escapar(etiqueta)}</dt><dd><span>${escapar(valor)}</span>
+            <button type="button" class="dlg__copiar" data-copiar-valor="${escapar(valor)}" aria-label="Copiar ${escapar(etiqueta)}">Copiar</button></dd></div>`).join("")}
+        </dl>
+      </div>`}
+    ${conCodigo ? `<label class="dlg__campo">Código de seguimiento
+        <input id="despacho-codigo" type="text" autocomplete="off" placeholder="Ej.: 360000123456789" value="${escapar(p.tracking_codigo || "")}">
+      </label>` : ""}
+    <label class="dlg__check">
+      <input type="checkbox" id="despacho-avisar" ${email ? "checked" : "disabled"}>
+      ${email
+        ? `Avisarle por mail a ${escapar(email)}${conCodigo ? " (con el link de seguimiento)" : ""}`
+        : "El pedido no tiene email: no se puede avisar por mail"}
+    </label>`;
+  $("#despacho-ok").textContent = retiro ? "Marcar listo para retirar" : "Marcar como enviado";
+  $("#despacho-ok").disabled = false;
+  mensaje("#despacho-mensaje", "");
+  $("#despacho-dialogo").showModal();
+  const codigo = $("#despacho-codigo");
+  if (codigo && !codigo.value) codigo.focus();
+}
+
+$("#despacho-dialogo").addEventListener("click", async (e) => {
+  if (e.target.closest("[data-cerrar-despacho]") || e.target === $("#despacho-dialogo")) return $("#despacho-dialogo").close();
+  const valor = e.target.closest("[data-copiar-valor]");
+  if (valor) return copiarConAviso(valor, valor.dataset.copiarValor, "Copiar");
+  const todo = e.target.closest("[data-copiar-despacho]");
+  if (todo) return copiarConAviso(todo, textoCopiarEnvio(buscarPedido(despachoId)), "📋 Copiar todo");
+});
+
+$("#despacho-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const p = buscarPedido(despachoId);
+  if (!p) return $("#despacho-dialogo").close();
+  const boton = $("#despacho-ok");
+  const body = { id: p.id, estado_entrega: esRetiro(p) ? "listo_retiro" : "despachado" };
+  const codigo = $("#despacho-codigo");
+  if (codigo && codigo.value.trim()) body.tracking_codigo = codigo.value.trim();
+  const avisar = $("#despacho-avisar").checked && !$("#despacho-avisar").disabled;
+  boton.disabled = true;
+  mensaje("#despacho-mensaje", "Guardando…", true);
+  try {
+    const r = await api("/api/admin-pedidos", { method: "PATCH", body: JSON.stringify(body) });
+    for (const lista of [pedidosCache, pedidosInsights, pedidosBusqueda].filter(Boolean)) {
+      const copia = lista.find((x) => x.id === p.id);
+      if (!copia) continue;
+      for (const campo of ["estado_entrega", "despachado_en", "tracking_codigo", "tracking_url"]) {
+        if (r[campo] !== undefined) copia[campo] = r[campo];
+      }
+    }
+    let aviso = "";
+    if (avisar) {
+      mensaje("#despacho-mensaje", "Avisando al cliente…", true);
+      try {
+        const m = await api("/api/admin-mail", { method: "POST", body: JSON.stringify({ pedido_id: p.id, tipo: "despacho" }) });
+        aviso = ` · aviso enviado a ${m.para}`;
+      } catch (err) {
+        aviso = ` · ⚠️ el mail no salió (${err.message})`;
+      }
+    }
+    $("#despacho-dialogo").close();
+    renderPedidos();
+    renderInicio();
+    toast(`✅ ${numeroDe(p)} ${esRetiro(p) ? "listo para retirar" : "marcado como enviado"}${aviso}`);
+  } catch (err) {
+    mensaje("#despacho-mensaje", `⚠️ ${err.message}`);
+    boton.disabled = false;
+  }
+});
 
 // ===== Pedido manual (mayorista o venta directa) =====
 // Para ventas que se cierran por fuera de la web: el precio lo fija el admin.
@@ -1623,16 +1883,16 @@ window.addEventListener("hashchange", seguirHash);
 
 // Atajos y links internos (Inicio → Pedidos filtrados, etc.)
 $("#seccion-inicio").addEventListener("click", (e) => {
+  const ultimo = e.target.closest("[data-pedido]");
+  if (ultimo) { irA("pedidos"); abrirDetalle(ultimo.dataset.pedido); return; }
   const tarea = e.target.closest("[data-tarea]");
   const link = e.target.closest("[data-ir]");
   const atajo = e.target.closest("[data-atajo]");
   if (tarea) {
-    const { ir, filtro } = tarea.dataset;
+    const { ir, etapa } = tarea.dataset;
+    if (etapa) { etapaPedidos = etapa; filtroCanal = "todos"; $("#filtro-canal").value = "todos"; }
     irA(ir);
-    if (filtro) {
-      const b = document.querySelector(`#filtros [data-filtro="${filtro}"]`);
-      if (b) b.click();
-    }
+    if (etapa) renderPedidos();
   } else if (link) {
     irA(link.dataset.ir);
   } else if (atajo && atajo.dataset.atajo === "nuevo-pedido") {
@@ -1673,16 +1933,18 @@ function kpiInicio(etiqueta, actual, previo, nota) {
 }
 
 function tareasPendientes() {
-  const despachar = pedidosCache.filter((p) => p.estado === "aprobado" && p.estado_entrega !== "entregado");
-  const aprobar = pedidosCache.filter((p) => p.estado === "pendiente" && p.origen === "whatsapp");
+  const en = (etapa) => pedidosCache.filter((p) => etapaDe(p) === etapa).length;
+  const cobrar = en("por_cobrar"), preparar = en("por_preparar"), camino = en("en_camino");
   const resenas = (resenasCache || []).filter((r) => r.pendiente);
   const bajos = (productosInicio || []).filter((p) => p.activo && !p.descontinuado && Number(p.stock) <= STOCK_BAJO);
+  const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
   const tareas = [];
-  if (despachar.length) tareas.push({ icono: "a-camion", ir: "pedidos", filtro: "por_despachar", texto: `${despachar.length} pedido${despachar.length === 1 ? "" : "s"} por despachar`, nota: "Cobrados y todavía sin entregar" });
-  if (aprobar.length) tareas.push({ icono: "a-chat", ir: "pedidos", filtro: "whatsapp", texto: `${aprobar.length} pedido${aprobar.length === 1 ? "" : "s"} de WhatsApp sin aprobar`, nota: "Aprobalos cuando cobres: ahí se descuenta el stock" });
-  if (resenas.length) tareas.push({ icono: "a-resenas", ir: "resenas", texto: `${resenas.length} reseña${resenas.length === 1 ? "" : "s"} para aprobar`, nota: "No se publican hasta que las apruebes" });
-  if (bajos.length) tareas.push({ icono: "a-alerta", ir: "productos", texto: `Stock bajo en ${bajos.length} producto${bajos.length === 1 ? "" : "s"}`, nota: bajos.map((p) => `${p.nombre} (${p.stock})`).join(", ") });
-  return { tareas, despachar: despachar.length, resenas: resenas.length, bajos: bajos.length };
+  if (preparar) tareas.push({ icono: "a-camion", ir: "pedidos", etapa: "por_preparar", texto: `${plural(preparar, "pedido", "pedidos")} por preparar`, nota: "Cobrados y todavía sin despachar" });
+  if (cobrar) tareas.push({ icono: "a-chat", ir: "pedidos", etapa: "por_cobrar", texto: `${plural(cobrar, "pedido", "pedidos")} sin cobrar`, nota: "De WhatsApp o cargados a mano: marcalos cobrados cuando paguen" });
+  if (resenas.length) tareas.push({ icono: "a-resenas", ir: "resenas", texto: `${plural(resenas.length, "reseña", "reseñas")} para aprobar`, nota: "No se publican hasta que las apruebes" });
+  if (bajos.length) tareas.push({ icono: "a-alerta", ir: "productos", texto: `Stock bajo en ${plural(bajos.length, "producto", "productos")}`, nota: bajos.map((p) => `${p.nombre} (${p.stock})`).join(", ") });
+  if (camino) tareas.push({ icono: "a-pedidos", ir: "pedidos", etapa: "en_camino", texto: `${plural(camino, "pedido", "pedidos")} en camino`, nota: "Marcalos entregados cuando lleguen" });
+  return { tareas, despachar: cobrar + preparar, resenas: resenas.length, bajos: bajos.length };
 }
 
 function actualizarBadges({ despachar, resenas, bajos }) {
@@ -1712,7 +1974,7 @@ function renderInicio() {
     kpiInicio("Este mes", ventasEntre(inicioMes, manana), ventasEntre(inicioMesPrevio, mismoDiaMesPrevio), "vs. el mes pasado a esta altura");
 
   $("#inicio-tareas").innerHTML = pend.tareas.length
-    ? pend.tareas.map((t) => `<button class="tarea" data-tarea data-ir="${t.ir}"${t.filtro ? ` data-filtro="${t.filtro}"` : ""}>
+    ? pend.tareas.map((t) => `<button class="tarea" data-tarea data-ir="${t.ir}"${t.etapa ? ` data-etapa="${t.etapa}"` : ""}>
           <span class="tarea__ico"><svg><use href="#${t.icono}"/></svg></span>
           <span class="tarea__texto"><strong>${escapar(t.texto)}</strong><small>${escapar(t.nota)}</small></span>
           <svg class="tarea__flecha"><use href="#a-flecha"/></svg>
@@ -1724,7 +1986,7 @@ function renderInicio() {
     ? ultimos.map((p) => {
         const nombre = (p.envio && p.envio.nombre) || p.cliente_email || "Sin datos";
         const cuando = new Date(p.creado).toLocaleString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-        return `<button class="ultimo" data-ir="pedidos">
+        return `<button class="ultimo" data-pedido="${escapar(p.id)}">
             <span class="ultimo__num">${escapar(numeroDe(p))}</span>
             <span class="ultimo__quien"><strong>${escapar(nombre)}</strong><small>${escapar(CANALES[p.origen] || p.origen || "")} · ${escapar(cuando)}</small></span>
             <span class="ultimo__der"><strong>${formato.format(p.total || 0)}</strong><span class="estado estado--${escapar(p.estado)}">${escapar(p.estado)}</span></span>

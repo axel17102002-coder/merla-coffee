@@ -165,24 +165,55 @@
               <button type="submit" id="pm-guardar">Cargar pedido</button>
             </div>
           </form>
-          <div class="filtros" id="filtros">
-            <button data-filtro="todos" class="filtro-activo">Todos</button>
-            <button data-filtro="por_despachar" id="filtro-despacho">📦 Por despachar</button>
-            <button data-filtro="mercadopago">Mercado Pago</button>
-            <button data-filtro="whatsapp">WhatsApp</button>
-            <button data-filtro="mayorista">Mayorista</button>
-            <button data-filtro="directa">Venta directa</button>
+          <!-- Pedidos por etapa: lo que hay que hacer con cada uno -->
+          <div class="etapas" id="etapas" role="tablist" aria-label="Etapa de los pedidos">
+            <button data-etapa="por_cobrar" role="tab">Por cobrar <b data-cuenta hidden></b></button>
+            <button data-etapa="por_preparar" role="tab" class="etapa-activa">Por preparar <b data-cuenta hidden></b></button>
+            <button data-etapa="en_camino" role="tab">En camino <b data-cuenta hidden></b></button>
+            <button data-etapa="entregados" role="tab">Entregados</button>
+            <button data-etapa="todos" role="tab">Todos</button>
           </div>
           <!-- Busca contra la base, no entre los 200 que trae el panel: el que
                se busca suele ser justamente un pedido viejo. -->
-          <div class="buscador">
-            <input id="buscar-pedido" type="search" inputmode="search" autocomplete="off"
-                   placeholder="Buscar por email o N° de pedido (#0012)" aria-label="Buscar pedidos">
-            <button id="buscar-limpiar" class="buscador__limpiar" hidden aria-label="Limpiar búsqueda">✕</button>
+          <div class="pedidos-filtros">
+            <div class="buscador">
+              <input id="buscar-pedido" type="search" inputmode="search" autocomplete="off"
+                     placeholder="Buscar email o N° (#0012)" aria-label="Buscar pedidos">
+              <button id="buscar-limpiar" class="buscador__limpiar" hidden aria-label="Limpiar búsqueda">✕</button>
+            </div>
+            <select id="filtro-canal" aria-label="Canal">
+              <option value="todos">Canal: todos</option>
+              <option value="mercadopago">Mercado Pago</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="mayorista">Mayorista</option>
+              <option value="directa">Venta directa</option>
+            </select>
           </div>
-          <p class="panel__hint">Los de WhatsApp se crean pendientes: al aprobar se descuenta el stock y se suman los puntos. Los de Mercado Pago se aprueban solos al cobrar.</p>
+          <p class="panel__hint" id="etapa-ayuda"></p>
           <p class="mensaje" id="panel-message"></p>
-          <div class="pedidos" id="pedidos"></div>
+          <div class="pedidos-lista" id="pedidos"></div>
+
+          <!-- Detalle de un pedido: panel al costado (compu) o pantalla completa (celular) -->
+          <div class="detalle" id="pedido-detalle" hidden>
+            <div class="detalle__fondo" data-cerrar-detalle></div>
+            <aside class="detalle__panel" role="dialog" aria-modal="true" aria-label="Detalle del pedido">
+              <div class="detalle__barra"><button type="button" class="detalle__cerrar" data-cerrar-detalle aria-label="Cerrar">✕</button></div>
+              <div id="pedido-detalle-cuerpo"></div>
+            </aside>
+          </div>
+
+          <!-- Despachar en un paso -->
+          <dialog class="dlg" id="despacho-dialogo">
+            <form id="despacho-form" class="dlg__form">
+              <h3 class="dlg__titulo" id="despacho-titulo">Marcar como enviado</h3>
+              <div id="despacho-cuerpo"></div>
+              <p class="mensaje" id="despacho-mensaje"></p>
+              <div class="dlg__botones">
+                <button type="button" class="btn-sec" data-cerrar-despacho>Cancelar</button>
+                <button type="submit" class="px-btn" id="despacho-ok">Marcar como enviado</button>
+              </div>
+            </form>
+          </dialog>
         </div>
 
         <!-- SECCIÓN: Insights -->
