@@ -1656,8 +1656,10 @@ function lineasManual() {
 }
 
 function totalManual() {
+  // El 10% OFF siempre está a la vista: tildarlo elige "Transferencia" como
+  // método de pago, y elegir otro método lo destilda (el servidor solo lo
+  // aplica con transferencia).
   const esTransferencia = $("#pm-pago").value === "transferencia";
-  $("#pm-off-transferencia-fila").hidden = !esTransferencia;
   const calc = calcularDescuentosManual(lineasManual(), {
     cupon: cuponManual,
     aplicarCantidad: $("#pm-off-cantidad").checked,
@@ -1710,7 +1712,15 @@ $("#pm-cupon-quitar").addEventListener("click", () => {
   $("#pm-cupon").value = "";
   mostrarCuponManual();
 });
-["#pm-pago", "#pm-off-cantidad", "#pm-off-transferencia"].forEach((s) => $(s).addEventListener("change", totalManual));
+$("#pm-off-transferencia").addEventListener("change", () => {
+  if ($("#pm-off-transferencia").checked) $("#pm-pago").value = "transferencia";
+  totalManual();
+});
+$("#pm-pago").addEventListener("change", () => {
+  if ($("#pm-pago").value !== "transferencia") $("#pm-off-transferencia").checked = false;
+  totalManual();
+});
+$("#pm-off-cantidad").addEventListener("change", totalManual);
 
 function cerrarPedidoManual() {
   $("#pedido-manual").hidden = true;
