@@ -6,6 +6,7 @@ const { sb, obtenerPuntos } = require("./supabase.js");
 const { enviarMail, config } = require("./brevo.js");
 const { mailAvisoAdmin, mailConfirmacionCliente, mailDespachoCliente, mailPagoRaro } = require("./mails.js");
 const { enviarTelegram, textoPedido, textoPagoRaro } = require("./telegram.js");
+const { enviarPush, avisoPedido } = require("./push.js");
 
 // Confirmación con el saldo de puntos al momento de enviarla (por eso va después
 // de aprobar el pedido). Si no se puede leer el saldo, el mail sale igual sin él.
@@ -52,6 +53,7 @@ async function avisar(filtro, { confirmarCliente = false } = {}) {
     await Promise.all([
       enviarMail({ para: config().admin, asunto: admin.asunto, html: admin.html }),
       enviarTelegram(textoPedido(pedido)),
+      enviarPush(avisoPedido(pedido)),
     ]);
 
     if (confirmarCliente && pedido.cliente_email) {
@@ -85,7 +87,10 @@ async function avisarPagoRaro(motivo, pago, pedido) {
   if (pagosAvisados.size > 500) pagosAvisados.clear();
   pagosAvisados.add(clave);
   console.error(`avisos: pago ${motivo}`, pago && pago.id, pago && pago.external_reference);
-  const telegram = enviarTelegram(textoPagoRaro(motivo, pago, pedido)); // no lanza; corre junto con el mail
+  const telegram = Promise.all([ // no lanzan; corren junto con el mail
+    enviarTelegram(textoPagoRaro(motivo, pago, pedido)),
+    enviarPush({ titulo: `⚠️ Pago para revisar · $ ${Number((pago && pago.transaction_amount) || 0).toLocaleString("es-AR")}`, cuerpo: motivo === "duplicado" ? "Pagaron dos veces el mismo pedido. Revisá el mail." : "Entró un pago sin pedido. Revisá el mail.", url: "/admin#pedidos", etiqueta: `pago-${pago && pago.id}` }),
+  ]);
   try {
     const mail = mailPagoRaro(motivo, pago, pedido);
     return await enviarMail({ para: config().admin, asunto: mail.asunto, html: mail.html });

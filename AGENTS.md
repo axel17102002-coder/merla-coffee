@@ -205,5 +205,18 @@ una regla de precio/punto, va acá y aplica en ambos lados a la vez.
   `resena.js`. El token es el Secret `TELEGRAM_BOT_TOKEN`; el chat se guarda en
   `configuracion.telegram_chat_id` con "Conectar" en `/admin → Ajustes → Avisos`
   (`getUpdates`: no le pongas webhook al bot o deja de funcionar). Nunca lanza.
+- **Notificaciones del panel (Web Push)** (`backend/lib/push.js`, `public/sw-admin.js`,
+  `public/admin.webmanifest`): cada dispositivo se suscribe en `/admin → Ajustes →
+  Avisos` (tabla `push_suscripciones`); las claves VAPID se generan solas en
+  `push_claves`. `enviarPush` cifra (RFC 8291, probado contra el vector del RFC)
+  y firma (RFC 8292) con WebCrypto; salen junto al mail desde `avisos.js`,
+  `resena.js` y `presupuesto.js`. En iPhone solo con el panel agregado a inicio.
+- **Presupuestos** (`backend/lib/presupuestos.js`, `/admin → Presupuestos`): el
+  cliente los ve en `/presupuesto/<token>` (lo arma el Worker, no es un archivo de
+  `public/`) y puede aceptarlos (`/api/presupuesto`, avisa por push y Telegram).
+  Los totales se recalculan en el servidor. Las líneas con `presentacion` se
+  pueden cargar como pedido manual; las libres (el armado con café del cliente,
+  de la calculadora) no, porque no tienen stock. Migración:
+  `migracion-push-presupuestos.sql`.
 - **Sin credenciales de un servicio no se rompe nada**: mails (Brevo) y envío a
   domicilio (Zipnova) se degradan con aviso; el resto sigue funcionando.

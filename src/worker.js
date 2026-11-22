@@ -5,7 +5,7 @@
 import { adaptar } from "./adaptador.js";
 import { urlCanonica } from "../backend/lib/dominio.js";
 import { etiquetasVerificacion, fichaProducto, etiquetasProducto, reemplazosProducto } from "../backend/lib/pagina.js";
-import { obtenerCatalogo } from "../backend/lib/supabase.js";
+import { obtenerCatalogo, sb } from "../backend/lib/supabase.js";
 import { conciliarPagosMp, limpiarPedidosPendientes, pedirResenas, recordarCarritosAbandonados } from "../backend/lib/mantenimiento.js";
 
 import { handler as tienda } from "../backend/functions/tienda.js";
@@ -26,6 +26,10 @@ import { handler as resena } from "../backend/functions/resena.js";
 import { handler as visita } from "../backend/functions/visita.js";
 import { handler as adminMetricas } from "../backend/functions/admin-metricas.js";
 import { handler as adminTelegram } from "../backend/functions/admin-telegram.js";
+import { handler as adminPush } from "../backend/functions/admin-push.js";
+import { handler as adminPresupuestos } from "../backend/functions/admin-presupuestos.js";
+import { handler as presupuesto } from "../backend/functions/presupuesto.js";
+import { paginaPresupuesto } from "../backend/lib/presupuestos.js";
 import { handler as adminMail } from "../backend/functions/admin-mail.js";
 import { handler as adminProductos } from "../backend/functions/admin-productos.js";
 import { handler as adminImagen } from "../backend/functions/admin-imagen.js";
@@ -58,6 +62,9 @@ const rutas = {
   "visita": adaptar(visita),
   "admin-metricas": adaptar(adminMetricas),
   "admin-telegram": adaptar(adminTelegram),
+  "admin-push": adaptar(adminPush),
+  "admin-presupuestos": adaptar(adminPresupuestos),
+  "presupuesto": adaptar(presupuesto),
   "admin-mail": adaptar(adminMail),
   "admin-productos": adaptar(adminProductos),
   "admin-imagen": adaptar(adminImagen),
@@ -151,6 +158,20 @@ export default {
     const match = url.pathname.match(/^\/api\/([a-z0-9-]+)\/?$/);
     if (match && rutas[match[1]]) {
       return rutas[match[1]]({ request, env });
+    }
+    // Presupuesto para un cliente: /presupuesto/<token> (ver backend/lib/presupuestos.js)
+    const presu = url.pathname.match(/^\/presupuesto\/([A-Za-z0-9_-]{16,64})\/?$/);
+    if (presu && request.method === "GET") {
+      cargarEnv(env);
+      const html = (cuerpo, status = 200) => new Response(cuerpo, { status, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
+      try {
+        const [p] = await sb(`presupuestos?token=eq.${encodeURIComponent(presu[1])}&select=*&limit=1`);
+        if (p) return html(paginaPresupuesto(p));
+        return html('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Presupuesto · Merla Coffee</title><p style="font-family:sans-serif;padding:24px">Este presupuesto no existe o fue eliminado. Escribinos por WhatsApp al +54 9 221 680-3376.</p>', 404);
+      } catch (err) {
+        console.error("presupuesto (página):", err);
+        return html('<!doctype html><meta charset="utf-8"><p style="font-family:sans-serif;padding:24px">No pudimos mostrar el presupuesto. Probá de nuevo en un rato.</p>', 500);
+      }
     }
     if (request.method === "GET" && url.pathname === "/") {
       // Si algo falla acá, la tienda se sirve igual, sin los agregados

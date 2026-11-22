@@ -127,6 +127,20 @@ Cada venta cobrada, cada pedido nuevo de WhatsApp, los pagos raros y las reseña
 
 `TELEGRAM_CHAT_ID`, si existe, manda sobre el chat guardado. Sin token o sin chat no se envía nada y el resto sigue igual (`backend/lib/telegram.js`).
 
+## Notificaciones del panel en el celular
+
+Además del mail y de Telegram, el panel instalado manda notificaciones como una app (ventas, pedidos de WhatsApp, pagos raros, reseñas y presupuestos aceptados), sin servicios de terceros:
+
+1. Correr `supabase/migracion-push-presupuestos.sql` en el SQL Editor.
+2. En el celular, abrir `merlacoffee.com.ar/admin` y agregarlo a la pantalla de inicio (en iPhone, desde Safari: Compartir → Agregar a inicio; si ya estaba, borrarlo y volver a agregarlo).
+3. Abrir el panel desde ese ícono → Ajustes → Avisos → **Activar en este dispositivo**.
+
+Las claves VAPID se generan solas y quedan en `push_claves`; no hay secretos que cargar.
+
+## Presupuestos
+
+`/admin → Presupuestos`: líneas de productos de la tienda o libres, descuento, validez y notas. **Calcular armado** arma el precio del armado de drip bags con el café del cliente (insumos tildados + merma + mano de obra + indirectos, y el margen). El cliente recibe un link `/presupuesto/<token>` (por WhatsApp o copiado), lo guarda en PDF desde el navegador y lo puede aceptar; un aceptado con productos de la tienda se carga como pedido con un toque.
+
 ## Catálogo en Google y Meta
 
 Lo que la web ya trae para vincularla con **Google Merchant Center** y **Meta (Facebook/Instagram) Commerce**:

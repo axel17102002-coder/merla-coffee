@@ -1748,8 +1748,8 @@ function cerrarPedidoManual() {
   mensaje("#pm-mensaje");
 }
 
-$("#nuevo-pedido").addEventListener("click", async () => {
-  if (!$("#pedido-manual").hidden) { cerrarPedidoManual(); return; }
+// `datos` (opcional): { nombre, email, lineas: [{ presentacion, qty, precio }] }
+async function abrirPedidoManual(datos = null) {
   mensaje("#panel-message", "Cargando productos…");
   try {
     const { productos } = await api("/api/tienda");
@@ -1757,11 +1757,32 @@ $("#nuevo-pedido").addEventListener("click", async () => {
     mensaje("#panel-message");
     if (!catalogoManual.length) { mensaje("#panel-message", "⚠️ No hay productos publicados para vender."); return; }
     $("#pedido-manual").hidden = false;
-    agregarLineaManual();
+    $("#pm-lineas").innerHTML = "";
+    const lineas = (datos && datos.lineas) || [];
+    for (const l of lineas) {
+      agregarLineaManual();
+      const fila = $("#pm-lineas").lastElementChild;
+      const select = fila.querySelector("[data-pm-pres]");
+      if (![...select.options].some((o) => o.value === l.presentacion)) { fila.remove(); continue; }
+      select.value = l.presentacion;
+      fila.querySelector("[data-pm-qty]").value = String(l.qty);
+      fila.querySelector("[data-pm-precio]").value = String(l.precio).replace(".", ",");
+    }
+    if (!$("#pm-lineas").children.length) agregarLineaManual();
+    if (datos) {
+      $("#pm-nombre").value = datos.nombre || "";
+      $("#pm-email").value = datos.email || "";
+    }
+    totalManual();
     $("#pm-nombre").focus();
   } catch (err) {
     mensaje("#panel-message", `⚠️ ${err.message}`);
   }
+}
+
+$("#nuevo-pedido").addEventListener("click", () => {
+  if (!$("#pedido-manual").hidden) { cerrarPedidoManual(); return; }
+  abrirPedidoManual();
 });
 
 $("#pm-agregar").addEventListener("click", agregarLineaManual);
@@ -1853,6 +1874,7 @@ const DESTINOS = {
   productos: { seccion: "gestion", tab: "tab-productos", titulo: "Productos y stock" },
   cupones: { seccion: "gestion", tab: "tab-cupones", titulo: "Cupones" },
   resenas: { seccion: "gestion", tab: "tab-resenas", titulo: "Reseñas" },
+  presupuestos: { seccion: "gestion", tab: "tab-presupuestos", titulo: "Presupuestos" },
   ajustes: { seccion: "gestion", titulo: "Ajustes", ajustes: true },
 };
 const TABS_AJUSTES = ["tab-precios", "tab-envio", "tab-mercadopago", "tab-avisos"];
@@ -1868,7 +1890,7 @@ function irA(destino, { historial = true } = {}) {
     b.classList.toggle("nav__item--activo", b.dataset.ir === destino);
     if (b.dataset.ir === destino) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
   });
-  $("#nav-mas").classList.toggle("nav__item--activo", ["cupones", "resenas", "ajustes"].includes(destino));
+  $("#nav-mas").classList.toggle("nav__item--activo", ["cupones", "resenas", "presupuestos", "ajustes"].includes(destino));
   cerrarMenuMas();
   if (d.seccion === "gestion") {
     $("#gestion-titulo").textContent = d.titulo;
@@ -1916,8 +1938,9 @@ $("#seccion-inicio").addEventListener("click", (e) => {
   const link = e.target.closest("[data-ir]");
   const atajo = e.target.closest("[data-atajo]");
   if (tarea) {
-    const { ir, etapa } = tarea.dataset;
+    const { ir, etapa, ajustes } = tarea.dataset;
     if (etapa) { etapaPedidos = etapa; filtroCanal = "todos"; $("#filtro-canal").value = "todos"; }
+    if (ajustes) tabAjustes = ajustes;
     irA(ir);
     if (etapa) renderPedidos();
   } else if (link) {
@@ -1970,6 +1993,7 @@ function tareasPendientes() {
   if (cobrar) tareas.push({ icono: "a-chat", ir: "pedidos", etapa: "por_cobrar", texto: `${plural(cobrar, "pedido", "pedidos")} sin cobrar`, nota: "De WhatsApp o cargados a mano: marcalos cobrados cuando paguen" });
   if (resenas.length) tareas.push({ icono: "a-resenas", ir: "resenas", texto: `${plural(resenas.length, "reseña", "reseñas")} para aprobar`, nota: "No se publican hasta que las apruebes" });
   if (bajos.length) tareas.push({ icono: "a-alerta", ir: "productos", texto: `Stock bajo en ${plural(bajos.length, "producto", "productos")}`, nota: bajos.map((p) => `${p.nombre} (${p.stock})`).join(", ") });
+  if (pushPendiente) tareas.push({ icono: "a-alerta", ir: "ajustes", ajustes: "tab-avisos", texto: "Activá las notificaciones en este dispositivo", nota: "Te avisa cada venta aunque el panel esté cerrado" });
   if (camino) tareas.push({ icono: "a-pedidos", ir: "pedidos", etapa: "en_camino", texto: `${plural(camino, "pedido", "pedidos")} en camino`, nota: "Marcalos entregados cuando lleguen" });
   return { tareas, despachar: cobrar + preparar, resenas: resenas.length, bajos: bajos.length };
 }
@@ -2001,7 +2025,7 @@ function renderInicio() {
     kpiInicio("Este mes", ventasEntre(inicioMes, manana), ventasEntre(inicioMesPrevio, mismoDiaMesPrevio), "vs. el mes pasado a esta altura");
 
   $("#inicio-tareas").innerHTML = pend.tareas.length
-    ? pend.tareas.map((t) => `<button class="tarea" data-tarea data-ir="${t.ir}"${t.etapa ? ` data-etapa="${t.etapa}"` : ""}>
+    ? pend.tareas.map((t) => `<button class="tarea" data-tarea data-ir="${t.ir}"${t.etapa ? ` data-etapa="${t.etapa}"` : ""}${t.ajustes ? ` data-ajustes="${t.ajustes}"` : ""}>
           <span class="tarea__ico"><svg><use href="#${t.icono}"/></svg></span>
           <span class="tarea__texto"><strong>${escapar(t.texto)}</strong><small>${escapar(t.nota)}</small></span>
           <svg class="tarea__flecha"><use href="#a-flecha"/></svg>
@@ -3758,7 +3782,125 @@ function renderAvisos({ token, chat }) {
   $("#tg-desconectar").hidden = !chat;
 }
 
+// ===== Notificaciones en este dispositivo (Web Push) =====
+// El panel instalado (pantalla de inicio) se suscribe con el service worker
+// /sw-admin.js; el servidor guarda la suscripción y le manda los avisos.
+// En iPhone solo funciona con el panel agregado a inicio y abierto desde ahí.
+const pushSoportado = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+const esIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+const panelInstalado = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+let pushPendiente = false; // para la tarea de Inicio
+
+function registrarSW() {
+  return navigator.serviceWorker.register("/sw-admin.js", { scope: "/admin" });
+}
+
+function bytesDeBase64Url(t) {
+  const b64 = t.replace(/-/g, "+").replace(/_/g, "/");
+  const s = atob(b64 + "===".slice((b64.length + 3) % 4));
+  return Uint8Array.from(s, (c) => c.charCodeAt(0));
+}
+
+function nombreDispositivo() {
+  const ua = navigator.userAgent;
+  if (/iPhone/.test(ua)) return "iPhone";
+  if (/iPad/.test(ua)) return "iPad";
+  if (/Android/.test(ua)) return "Android";
+  if (/Mac/.test(ua)) return "Mac";
+  if (/Windows/.test(ua)) return "Windows";
+  return "Otro";
+}
+
+async function estadoPush() {
+  if (esIOS && !panelInstalado()) return { estado: "instalar" };
+  if (!pushSoportado()) return { estado: "no-soportado" };
+  if (Notification.permission === "denied") return { estado: "bloqueado" };
+  const reg = await registrarSW();
+  const sus = await reg.pushManager.getSubscription();
+  return { estado: sus ? "activo" : "inactivo", sus, reg };
+}
+
+async function renderPush() {
+  let e;
+  try { e = await estadoPush(); } catch (err) { e = { estado: "error", error: err.message }; }
+  const textos = {
+    activo: "✅ Activadas en este dispositivo.",
+    inactivo: "Todavía no están activadas en este dispositivo.",
+    instalar: "Para recibirlas en el iPhone, primero agregá el panel a la pantalla de inicio:",
+    bloqueado: "⚠️ Las notificaciones están bloqueadas para el panel. Habilitalas en la configuración del celular (Notificaciones → Merla Admin) o del navegador, y volvé a esta pantalla.",
+    "no-soportado": "Este navegador no puede recibir notificaciones. Probá con Chrome, Safari o el panel instalado en el celular.",
+    error: `⚠️ ${e.error || "No pude revisar el estado."}`,
+  };
+  $("#push-estado").textContent = textos[e.estado] || "";
+  $("#push-estado").classList.toggle("tg-estado--falta", e.estado !== "activo");
+  $("#push-instalar").hidden = e.estado !== "instalar";
+  $("#push-activar").hidden = e.estado !== "inactivo";
+  $("#push-probar").hidden = e.estado !== "activo";
+  $("#push-desactivar").hidden = e.estado !== "activo";
+  pushPendiente = e.estado === "inactivo" || e.estado === "instalar";
+  return e;
+}
+
+$("#push-activar").addEventListener("click", async (ev) => {
+  const boton = ev.currentTarget;
+  // El permiso hay que pedirlo apenas se toca (si no, el iPhone lo ignora)
+  const permiso = await Notification.requestPermission();
+  if (permiso !== "granted") {
+    mensaje("#push-mensaje", "⚠️ Sin permiso no se pueden mandar notificaciones. Tocá Activar de nuevo y elegí Permitir.");
+    return renderPush();
+  }
+  cargando(boton, true);
+  try {
+    const { publica } = await api("/api/admin-push");
+    const reg = await registrarSW();
+    await navigator.serviceWorker.ready;
+    const sus = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytesDeBase64Url(publica) });
+    await api("/api/admin-push", { method: "POST", body: JSON.stringify({ accion: "suscribir", suscripcion: sus.toJSON(), dispositivo: nombreDispositivo() }) });
+    const r = await api("/api/admin-push", { method: "POST", body: JSON.stringify({ accion: "probar" }) });
+    mensaje("#push-mensaje", r.recibidos ? "Listo: te mandé una notificación de prueba." : "Activadas, pero la prueba no llegó. Tocá «Mandar prueba» en un rato.", Boolean(r.recibidos));
+  } catch (err) {
+    mensaje("#push-mensaje", `⚠️ ${err.message}`);
+  } finally {
+    cargando(boton, false);
+    await renderPush();
+    renderInicio();
+  }
+});
+
+$("#push-probar").addEventListener("click", async (ev) => {
+  const boton = ev.currentTarget;
+  cargando(boton, true);
+  try {
+    const r = await api("/api/admin-push", { method: "POST", body: JSON.stringify({ accion: "probar" }) });
+    mensaje("#push-mensaje", r.recibidos ? `Prueba enviada a ${r.recibidos} dispositivo${r.recibidos === 1 ? "" : "s"}.` : "⚠️ No llegó a ningún dispositivo. Desactivá y volvé a activar.", Boolean(r.recibidos));
+  } catch (err) {
+    mensaje("#push-mensaje", `⚠️ ${err.message}`);
+  } finally {
+    cargando(boton, false);
+  }
+});
+
+$("#push-desactivar").addEventListener("click", async (ev) => {
+  const boton = ev.currentTarget;
+  cargando(boton, true);
+  try {
+    const { sus } = await estadoPush();
+    if (sus) {
+      await api("/api/admin-push", { method: "POST", body: JSON.stringify({ accion: "desuscribir", endpoint: sus.endpoint }) });
+      await sus.unsubscribe();
+    }
+    mensaje("#push-mensaje", "Desactivadas en este dispositivo.", true);
+  } catch (err) {
+    mensaje("#push-mensaje", `⚠️ ${err.message}`);
+  } finally {
+    cargando(boton, false);
+    await renderPush();
+    renderInicio();
+  }
+});
+
 async function cargarAvisos() {
+  renderPush();
   try {
     renderAvisos(await api("/api/admin-telegram"));
   } catch (err) {
@@ -3793,6 +3935,349 @@ $("#tg-desconectar").addEventListener("click", (e) => {
   if (confirm("¿Dejar de recibir los avisos por Telegram?")) accionTelegram("desconectar", e.currentTarget);
 });
 
+// ===== Presupuestos =====
+// Se arman acá y el cliente los ve en /presupuesto/<token>, donde los puede
+// guardar en PDF y aceptar (llega el aviso). Las cuentas se rehacen en el
+// servidor; acá solo se muestran mientras se edita.
+let presupuestosCache = [];
+let catalogoPresu = [];
+let insumosPresu = null;
+let presuEditando = null; // id del presupuesto que se está editando
+const ESTADOS_PRESU = { borrador: "Borrador", enviado: "Enviado", aceptado: "Aceptado", rechazado: "Rechazado" };
+const numeroPresu = (n) => `#${String(n || 0).padStart(4, "0")}`;
+const linkPresu = (p) => `${location.origin}/presupuesto/${p.token}`;
+const venceElPresu = (p) => new Date(new Date(p.creado).getTime() + (Number(p.validez_dias) || 15) * 86400000);
+
+function waPresu(p) {
+  let tel = String(p.cliente_telefono || "").replace(/\D/g, "");
+  if (tel && !tel.startsWith("54")) {
+    tel = tel.replace(/^0/, "");
+    if (tel.length > 10) tel = tel.replace(/^(\d{2,4})15/, "$1"); // "221 15 555-1234" → sin el 15
+    tel = "549" + tel;
+  }
+  const texto = `¡Hola ${p.cliente_nombre}! Te paso el presupuesto ${numeroPresu(p.numero)} de Merla Coffee: ${linkPresu(p)}`;
+  return `https://wa.me/${tel}?text=${encodeURIComponent(texto)}`;
+}
+
+async function cargarPresupuestos() {
+  mensaje("#pre-mensaje", "Cargando presupuestos…", true);
+  try {
+    const d = await api("/api/admin-presupuestos");
+    presupuestosCache = Array.isArray(d.presupuestos) ? d.presupuestos : [];
+    mensaje("#pre-mensaje", "");
+    renderPresupuestos();
+  } catch (err) {
+    mensaje("#pre-mensaje", `⚠️ ${err.message}`);
+  }
+}
+
+function renderPresupuestos() {
+  const lista = $("#pre-lista");
+  if (!presupuestosCache.length) {
+    lista.innerHTML = `<div class="vacio">Todavía no armaste presupuestos. Tocá «Nuevo presupuesto».</div>`;
+    return;
+  }
+  lista.innerHTML = presupuestosCache.map((p) => {
+    const vencido = venceElPresu(p) < new Date() && !["aceptado", "rechazado"].includes(p.estado);
+    const deCatalogo = (p.items || []).some((i) => i.presentacion);
+    const resumen = (p.items || []).map((i) => `${i.qty}× ${i.descripcion}`).join(" · ");
+    return `<article class="pre-fila pre-fila--${escapar(p.estado)}" data-presu="${escapar(p.id)}">
+        <div class="pre-fila__principal">
+          <span class="fp__num">${escapar(numeroPresu(p.numero))}</span>
+          <span class="fp__quien"><strong>${escapar(p.cliente_nombre)}</strong><small>${escapar(resumen)}</small></span>
+          <strong class="fp__total">${formato.format(p.total || 0)}</strong>
+        </div>
+        <div class="pre-fila__meta">
+          <select data-presu-estado aria-label="Estado del presupuesto">${Object.entries(ESTADOS_PRESU).map(([k, v]) => `<option value="${k}"${p.estado === k ? " selected" : ""}>${v}</option>`).join("")}</select>
+          <span>${new Date(p.creado).toLocaleDateString("es-AR", { day: "numeric", month: "short" })} · ${vencido ? '<b class="pre-vencido">vencido</b>' : `vale hasta el ${venceElPresu(p).toLocaleDateString("es-AR", { day: "numeric", month: "short" })}`}</span>
+        </div>
+        <div class="pre-fila__acciones">
+          <a class="p-btn p-pri p-sm" href="${escapar(waPresu(p))}" target="_blank" rel="noopener" data-presu-enviar><svg class="ico"><use href="#a-chat"/></svg>WhatsApp</a>
+          <button type="button" class="p-btn p-sec p-sm" data-presu-accion="copiar"><svg class="ico"><use href="#a-link"/></svg><span>Copiar link</span></button>
+          <a class="p-btn p-sec p-sm" href="${escapar(linkPresu(p))}" target="_blank" rel="noopener">Ver</a>
+          <button type="button" class="p-btn p-sec p-sm" data-presu-accion="editar">Editar</button>
+          ${p.estado === "aceptado" && deCatalogo ? `<button type="button" class="p-btn p-ok p-sm" data-presu-accion="pedido"><svg class="ico"><use href="#a-check"/></svg>Cargar como pedido</button>` : ""}
+          <button type="button" class="p-btn p-texto p-sm" data-presu-accion="eliminar"><svg class="ico"><use href="#a-tacho"/></svg>Eliminar</button>
+        </div>
+      </article>`;
+  }).join("");
+}
+
+async function cambiarPresu(id, cambios) {
+  const { presupuesto } = await api("/api/admin-presupuestos", { method: "PATCH", body: JSON.stringify({ id, ...cambios }) });
+  presupuestosCache = presupuestosCache.map((p) => (p.id === id ? presupuesto : p));
+  renderPresupuestos();
+  return presupuesto;
+}
+
+// Al mandarlo (WhatsApp o link copiado), un borrador pasa a "enviado"
+function marcarEnviado(id) {
+  const p = presupuestosCache.find((x) => x.id === id);
+  if (p && p.estado === "borrador") cambiarPresu(id, { estado: "enviado" }).catch(() => {});
+}
+
+$("#pre-lista").addEventListener("click", async (e) => {
+  const fila = e.target.closest("[data-presu]");
+  if (!fila) return;
+  const id = fila.dataset.presu;
+  const p = presupuestosCache.find((x) => x.id === id);
+  if (e.target.closest("[data-presu-enviar]")) return marcarEnviado(id);
+  const boton = e.target.closest("[data-presu-accion]");
+  if (!boton || !p) return;
+  const accion = boton.dataset.presuAccion;
+  if (accion === "copiar") {
+    try {
+      await navigator.clipboard.writeText(linkPresu(p));
+      boton.querySelector("span").textContent = "Copiado";
+      setTimeout(() => { boton.querySelector("span").textContent = "Copiar link"; }, 1500);
+    } catch {
+      prompt("Copiá el link del presupuesto:", linkPresu(p));
+    }
+    marcarEnviado(id);
+  } else if (accion === "editar") {
+    abrirFormPresu(p);
+  } else if (accion === "pedido") {
+    irA("pedidos");
+    if (!$("#pedido-manual").hidden) cerrarPedidoManual();
+    await abrirPedidoManual({
+      nombre: p.cliente_nombre,
+      email: p.cliente_email,
+      lineas: (p.items || []).filter((i) => i.presentacion).map((i) => ({ presentacion: i.presentacion, qty: i.qty, precio: i.precio_unitario })),
+    });
+    toast("Revisá el pedido y tocá «Cargar pedido». Las líneas libres (como el armado) no entran: no son productos con stock.");
+  } else if (accion === "eliminar") {
+    if (!confirm(`¿Eliminar el presupuesto ${numeroPresu(p.numero)}? El link deja de funcionar.`)) return;
+    cargando(boton, true);
+    try {
+      await api(`/api/admin-presupuestos?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      presupuestosCache = presupuestosCache.filter((x) => x.id !== id);
+      renderPresupuestos();
+      toast("Presupuesto eliminado");
+    } catch (err) {
+      cargando(boton, false);
+      toast(`⚠️ ${err.message}`);
+    }
+  }
+});
+
+$("#pre-lista").addEventListener("change", async (e) => {
+  const select = e.target.closest("[data-presu-estado]");
+  if (!select) return;
+  const id = select.closest("[data-presu]").dataset.presu;
+  const anterior = (presupuestosCache.find((x) => x.id === id) || {}).estado;
+  try {
+    await cambiarPresu(id, { estado: select.value });
+    toast(`Presupuesto ${ESTADOS_PRESU[select.value].toLowerCase()}`);
+  } catch (err) {
+    select.value = anterior;
+    toast(`⚠️ ${err.message}`);
+  }
+});
+
+// ----- Formulario -----
+function opcionesPresu() {
+  return `<option value="">Elegí un producto…</option>` + catalogoPresu.map((p) => `<optgroup label="${escapar(p.nombre)}">
+      ${presentacionesDe(p).map((x) => `<option value="${escapar(x.id)}" data-precio="${x.precio}" data-nombre="${escapar(`${p.nombre} · ${x.nombre}`)}">${escapar(p.nombre)} · ${escapar(x.nombre)} (lista ${formato.format(x.precio)})</option>`).join("")}
+    </optgroup>`).join("");
+}
+
+function lineaPresu({ descripcion = "", qty = 1, precio_unitario = "", presentacion = "" } = {}, conProducto = false) {
+  const fila = document.createElement("div");
+  fila.className = "pre-linea";
+  fila.innerHTML = `<div class="pre-linea__detalle">
+      ${conProducto || presentacion ? `<select data-pre-pres aria-label="Producto">${opcionesPresu()}</select>` : ""}
+      <input data-pre-desc maxlength="160" placeholder="Ej.: Armado de drip bags con su café" aria-label="Detalle" value="${escapar(descripcion)}">
+    </div>
+    <input data-pre-qty inputmode="numeric" aria-label="Cantidad" value="${escapar(qty)}">
+    <input data-pre-precio inputmode="decimal" aria-label="Precio de cada uno" placeholder="$" value="${precio_unitario === "" ? "" : escapar(String(precio_unitario).replace(".", ","))}">
+    <span class="pre-linea__sub" data-pre-sub></span>
+    <button type="button" class="pm__quitar" data-pre-quitar aria-label="Quitar línea">✕</button>`;
+  if (presentacion) fila.querySelector("[data-pre-pres]").value = presentacion;
+  $("#pre-lineas").appendChild(fila);
+  totalesPresu();
+  return fila;
+}
+
+function leerLineasPresu() {
+  return [...document.querySelectorAll("#pre-lineas .pre-linea")].map((f) => {
+    const sel = f.querySelector("[data-pre-pres]");
+    return {
+      descripcion: f.querySelector("[data-pre-desc]").value.trim(),
+      qty: enteroEscrito(f.querySelector("[data-pre-qty]").value),
+      precio_unitario: precioEscrito(f.querySelector("[data-pre-precio]").value),
+      presentacion: sel && sel.value ? sel.value : undefined,
+    };
+  });
+}
+
+function totalesPresu() {
+  const lineas = leerLineasPresu();
+  document.querySelectorAll("#pre-lineas .pre-linea").forEach((f, i) => {
+    const l = lineas[i];
+    f.querySelector("[data-pre-sub]").textContent = l.qty > 0 && l.precio_unitario >= 0 ? formato.format(Math.round(l.qty * l.precio_unitario)) : "—";
+  });
+  const subtotal = lineas.reduce((t, l) => t + (l.qty > 0 && l.precio_unitario >= 0 ? Math.round(l.qty * l.precio_unitario) : 0), 0);
+  const pct = precioEscrito($("#pre-descuento").value) || 0;
+  const descuento = Math.round((subtotal * pct) / 100);
+  $("#pre-totales").innerHTML = `${descuento ? `<p><span>Subtotal</span><span>${formato.format(subtotal)}</span></p><p><span>Descuento ${pct}%</span><span>-${formato.format(descuento)}</span></p>` : ""}<p class="pre-totales__total"><span>Total</span><span>${formato.format(subtotal - descuento)}</span></p>`;
+}
+
+async function asegurarCatalogoPresu() {
+  if (catalogoPresu.length) return;
+  const { productos } = await api("/api/tienda");
+  catalogoPresu = productos.filter((p) => presentacionesDe(p).length);
+}
+
+async function abrirFormPresu(p = null) {
+  try { await asegurarCatalogoPresu(); } catch (err) { return mensaje("#pre-mensaje", `⚠️ ${err.message}`); }
+  presuEditando = p ? p.id : null;
+  $("#pre-titulo").textContent = p ? `Editar presupuesto ${numeroPresu(p.numero)}` : "Nuevo presupuesto";
+  $("#pre-nombre").value = p ? p.cliente_nombre : "";
+  $("#pre-telefono").value = p ? p.cliente_telefono || "" : "";
+  $("#pre-email").value = p ? p.cliente_email || "" : "";
+  $("#pre-descuento").value = p ? String(p.descuento_porcentaje).replace(".", ",") : "0";
+  $("#pre-validez").value = p ? String(p.validez_dias) : "15";
+  $("#pre-notas").value = p ? p.notas || "" : "";
+  $("#pre-lineas").innerHTML = "";
+  (p ? p.items : []).forEach((i) => lineaPresu(i));
+  if (!p) lineaPresu({}, true);
+  $("#pre-calc").hidden = true;
+  mensaje("#pre-form-mensaje", "");
+  $("#pre-form").hidden = false;
+  $("#pre-nuevo").hidden = true;
+  totalesPresu();
+  $("#pre-form").scrollIntoView({ block: "start", behavior: "smooth" });
+  $("#pre-nombre").focus({ preventScroll: true });
+}
+
+function cerrarFormPresu() {
+  $("#pre-form").hidden = true;
+  $("#pre-nuevo").hidden = false;
+  presuEditando = null;
+}
+
+$("#pre-nuevo").addEventListener("click", () => abrirFormPresu());
+$("#pre-cancelar").addEventListener("click", cerrarFormPresu);
+$("#pre-mas-producto").addEventListener("click", () => lineaPresu({}, true).querySelector("select").focus());
+$("#pre-mas-libre").addEventListener("click", () => lineaPresu({}).querySelector("[data-pre-desc]").focus());
+$("#pre-lineas").addEventListener("input", totalesPresu);
+$("#pre-descuento").addEventListener("input", totalesPresu);
+$("#pre-lineas").addEventListener("change", (e) => {
+  const sel = e.target.closest("[data-pre-pres]");
+  if (!sel) return;
+  const op = sel.options[sel.selectedIndex];
+  const fila = sel.closest(".pre-linea");
+  if (op && op.value) {
+    fila.querySelector("[data-pre-desc]").value = op.dataset.nombre;
+    fila.querySelector("[data-pre-precio]").value = op.dataset.precio;
+  }
+  totalesPresu();
+});
+$("#pre-lineas").addEventListener("click", (e) => {
+  const q = e.target.closest("[data-pre-quitar]");
+  if (!q) return;
+  q.closest(".pre-linea").remove();
+  totalesPresu();
+});
+
+$("#pre-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const boton = $("#pre-guardar");
+  const datos = {
+    cliente_nombre: $("#pre-nombre").value.trim(),
+    cliente_telefono: $("#pre-telefono").value.trim(),
+    cliente_email: $("#pre-email").value.trim(),
+    items: leerLineasPresu().filter((l) => l.descripcion || l.precio_unitario),
+    descuento_porcentaje: precioEscrito($("#pre-descuento").value) || 0,
+    validez_dias: enteroEscrito($("#pre-validez").value) || 15,
+    notas: $("#pre-notas").value.trim(),
+  };
+  if (!datos.cliente_nombre) return mensaje("#pre-form-mensaje", "⚠️ Poné el nombre del cliente");
+  if (!datos.items.length) return mensaje("#pre-form-mensaje", "⚠️ Agregá al menos una línea");
+  cargando(boton, true);
+  try {
+    const r = presuEditando
+      ? await api("/api/admin-presupuestos", { method: "PATCH", body: JSON.stringify({ id: presuEditando, ...datos }) })
+      : await api("/api/admin-presupuestos", { method: "POST", body: JSON.stringify(datos) });
+    presupuestosCache = presuEditando
+      ? presupuestosCache.map((x) => (x.id === presuEditando ? r.presupuesto : x))
+      : [r.presupuesto, ...presupuestosCache];
+    cerrarFormPresu();
+    renderPresupuestos();
+    toast(`✅ Presupuesto ${numeroPresu(r.presupuesto.numero)} guardado. Mandalo por WhatsApp o copiá el link.`);
+  } catch (err) {
+    mensaje("#pre-form-mensaje", `⚠️ ${err.message}`);
+  } finally {
+    cargando(boton, false);
+  }
+});
+
+// ----- Calculadora del armado (el cliente pone el café) -----
+const CAMPOS_CALC = ["cantidad", "merma", "por-hora", "hora", "indirectos", "margen"];
+function leerCalcGuardada() {
+  try { return JSON.parse(localStorage.getItem("merla-calc-armado") || "{}") || {}; } catch { return {}; }
+}
+function guardarCalc() {
+  const datos = { sinInsumos: [...document.querySelectorAll("#calc-insumos input:not(:checked)")].map((c) => c.value) };
+  CAMPOS_CALC.forEach((c) => { datos[c] = $(`#calc-${c}`).value; });
+  try { localStorage.setItem("merla-calc-armado", JSON.stringify(datos)); } catch {}
+}
+
+async function abrirCalc() {
+  $("#pre-calc").hidden = false;
+  const guardada = leerCalcGuardada();
+  CAMPOS_CALC.forEach((c) => { if (guardada[c] != null) $(`#calc-${c}`).value = guardada[c]; });
+  if (!insumosPresu) {
+    try {
+      const d = await api("/api/admin-config");
+      insumosPresu = (d.insumos || []).filter((i) => Number(i.cant_unidad) > 0);
+    } catch (err) {
+      $("#calc-insumos").innerHTML = `<span class="mensaje">⚠️ ${escapar(err.message)}</span>`;
+      return;
+    }
+  }
+  const fuera = new Set(guardada.sinInsumos || insumosPresu.filter((i) => /env[ií]o/i.test(i.nombre)).map((i) => i.id));
+  $("#calc-insumos").innerHTML = insumosPresu.map((i) => `<label class="pre-calc__insumo"><input type="checkbox" value="${escapar(i.id)}" data-costo="${Number(i.costo) * Number(i.cant_unidad)}"${fuera.has(i.id) ? "" : " checked"}> ${escapar(i.nombre)} <b>${formato.format(Number(i.costo) * Number(i.cant_unidad))}</b></label>`).join("") || `<span class="panel__hint">No hay insumos cargados en Ajustes → Precios.</span>`;
+  calcularArmado();
+  $("#pre-calc").scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+let precioArmado = null;
+function calcularArmado() {
+  const num = (id) => precioEscrito($(`#calc-${id}`).value) || 0;
+  const cantidad = enteroEscrito($("#calc-cantidad").value) || 0;
+  const insumos = [...document.querySelectorAll("#calc-insumos input:checked")].reduce((t, c) => t + Number(c.dataset.costo), 0);
+  const merma = (insumos * num("merma")) / 100;
+  const manoDeObra = num("por-hora") > 0 ? num("hora") / num("por-hora") : 0;
+  const base = insumos + merma + manoDeObra;
+  const indirectos = (base * num("indirectos")) / 100;
+  const costo = base + indirectos;
+  const margen = Math.min(num("margen"), 95);
+  precioArmado = Math.ceil(costo / (1 - margen / 100) / 10) * 10;
+  const fila = (t, v, fuerte = false) => `<p${fuerte ? ' class="fuerte"' : ""}><span>${t}</span><span>${v}</span></p>`;
+  $("#calc-resultado").innerHTML =
+    fila("Insumos", formato.format(insumos)) +
+    fila(`Merma (${num("merma")}%)`, formato.format(merma)) +
+    fila("Mano de obra", formato.format(manoDeObra)) +
+    fila(`Gastos indirectos (${num("indirectos")}%)`, formato.format(indirectos)) +
+    fila("Costo por drip bag", formato.format(costo), true) +
+    fila(`Precio por drip bag (margen ${margen}%)`, formato.format(precioArmado), true) +
+    (cantidad ? fila(`Total por ${cantidad} drip bags`, formato.format(precioArmado * cantidad), true) : "");
+}
+
+$("#pre-calc-abrir").addEventListener("click", abrirCalc);
+$("#pre-calc-cerrar").addEventListener("click", () => { $("#pre-calc").hidden = true; });
+$("#pre-calc").addEventListener("input", () => { calcularArmado(); guardarCalc(); });
+$("#pre-calc").addEventListener("change", () => { calcularArmado(); guardarCalc(); });
+$("#pre-calc-agregar").addEventListener("click", () => {
+  calcularArmado();
+  const cantidad = enteroEscrito($("#calc-cantidad").value) || 0;
+  if (!cantidad || !precioArmado) return toast("⚠️ Completá la cantidad y los valores");
+  lineaPresu({ descripcion: "Armado de drip bags con su café (filtro, sobre, etiquetas y armado)", qty: cantidad, precio_unitario: precioArmado });
+  $("#pre-calc").hidden = true;
+  toast(`Agregado: ${cantidad} × ${formato.format(precioArmado)}`);
+});
+
 // ===== Tabs de gestión =====
 // Precios, Envío y Mercado Pago se alimentan de los mismos dos endpoints
 // (admin-precios + admin-config), así que comparten `cargarPrecios`, que llena
@@ -3806,6 +4291,7 @@ const TABS = {
   "tab-cupones": { vista: "vista-cupones", cargar: cargarCupones, cargado: false },
   "tab-resenas": { vista: "vista-resenas", cargar: cargarResenas, cargado: false },
   "tab-avisos": { vista: "vista-avisos", cargar: cargarAvisos, cargado: false },
+  "tab-presupuestos": { vista: "vista-presupuestos", cargar: cargarPresupuestos, cargado: false },
 };
 
 // Marca (o desmarca) todas las pestañas de un grupo de una vez
@@ -3841,6 +4327,7 @@ function abrirPanel() {
   document.querySelector(".admin").classList.add("admin--dentro");
   cargarPedidos();
   cargarStockInicio();
+  if (pushSoportado() || esIOS) renderPush().then(() => renderInicio()).catch(() => {});
   // Cuántas reseñas nuevas hay, para mostrarlo en la pestaña sin abrirla
   api("/api/admin-resenas")
     .then((d) => { resenasCache = Array.isArray(d.resenas) ? d.resenas : []; marcarResenasNuevas(); })

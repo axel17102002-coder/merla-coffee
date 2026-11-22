@@ -1,0 +1,14 @@
+{
+  "name": "Merla Admin",
+  "short_name": "Merla Admin",
+  "description": "Panel de administración de Merla Coffee",
+  "start_url": "/admin#inicio",
+  "scope": "/admin",
+  "display": "standalone",
+  "background_color": "#2f4a36",
+  "theme_color": "#2f4a36",
+  "icons": [
+    { "src": "/img/icon-admin-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/img/apple-touch-icon-admin.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

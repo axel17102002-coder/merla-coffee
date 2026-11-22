@@ -9,6 +9,10 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/img/apple-touch-icon-admin.png?v=1">
   <link rel="apple-touch-icon" sizes="512x512" href="/img/icon-admin-512.png?v=1">
   <meta name="apple-mobile-web-app-title" content="Merla Admin">
+  <!-- Instalable como app (necesario para las notificaciones en iPhone) -->
+  <link rel="manifest" href="/admin.webmanifest">
+  <meta name="theme-color" content="#2f4a36">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
@@ -59,6 +63,9 @@
         <symbol id="a-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m5.7 5.7 12.6 12.6"/></symbol>
         <symbol id="a-tacho" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></symbol>
         <symbol id="a-recargar" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></symbol>
+        <symbol id="a-presupuesto" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></symbol>
+        <symbol id="a-calculadora" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 18h.01M12 18h4"/></symbol>
+        <symbol id="a-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
         <symbol id="a-tienda" viewBox="0 0 24 24"><path d="M4 9h16l-1-5H5zM4 9v11h16V9M9 20v-6h6v6"/></symbol>
       </svg>
 
@@ -75,6 +82,7 @@
         <div class="nav__secundarios" id="nav-secundarios">
           <button class="nav__item" data-ir="cupones"><svg><use href="#a-cupones"/></svg><span>Cupones</span></button>
           <button class="nav__item" data-ir="resenas"><svg><use href="#a-resenas"/></svg><span>Reseñas</span><b class="nav__badge" id="badge-resenas" hidden></b></button>
+          <button class="nav__item" data-ir="presupuestos"><svg><use href="#a-presupuesto"/></svg><span>Presupuestos</span></button>
           <button class="nav__item" data-ir="ajustes"><svg><use href="#a-ajustes"/></svg><span>Ajustes</span></button>
           <button class="nav__item nav__salir" id="nav-salir"><svg><use href="#a-salir"/></svg><span>Cerrar sesión</span></button>
         </div>
@@ -276,6 +284,7 @@
           <button id="tab-cupones" hidden>Cupones</button>
           <button id="tab-resenas" hidden>Reseñas</button>
           <button id="tab-avisos">Avisos</button>
+          <button id="tab-presupuestos" hidden>Presupuestos</button>
         </div>
 
         <!-- VISTA UNIFICADA: Productos y Stock -->
@@ -642,6 +651,28 @@
 
           <!-- VISTA: Avisos al celular (Telegram) -->
           <div id="vista-avisos" hidden>
+            <!-- Notificaciones del panel en el celular (Web Push) -->
+            <section class="px-seccion" id="push-seccion">
+              <header class="px-cabecera">
+                <div>
+                  <h3 class="px-titulo">📲 Notificaciones en este celular</h3>
+                  <p class="px-desc">El panel te avisa como una app, aunque esté cerrado: ventas cobradas, pedidos de WhatsApp, pagos para revisar y reseñas nuevas. Se activa en cada celular o compu donde lo quieras.</p>
+                </div>
+              </header>
+              <p class="tg-estado" id="push-estado">Revisando…</p>
+              <ol class="tg-pasos" id="push-instalar" hidden>
+                <li>Abrí <strong>merlacoffee.com.ar/admin</strong> en <strong>Safari</strong>.</li>
+                <li>Tocá <strong>Compartir</strong> (el cuadrado con la flecha) → <strong>Agregar a inicio</strong>. Si ya tenías el ícono del panel, borralo y agregalo de nuevo.</li>
+                <li>Abrí el panel desde ese ícono, entrá a <strong>Ajustes → Avisos</strong> y tocá <strong>Activar</strong>.</li>
+              </ol>
+              <div class="tg-botones">
+                <button type="button" class="px-btn" id="push-activar" hidden>Activar en este dispositivo</button>
+                <button type="button" class="px-btn-sec" id="push-probar" hidden>Mandar prueba</button>
+                <button type="button" class="px-btn-sec" id="push-desactivar" hidden>Desactivar acá</button>
+              </div>
+              <p class="mensaje" id="push-mensaje"></p>
+            </section>
+
             <section class="px-seccion">
               <header class="px-cabecera">
                 <div>
@@ -664,6 +695,64 @@
               </div>
               <p class="mensaje" id="tg-mensaje"></p>
             </section>
+          </div>
+
+          <!-- VISTA: Presupuestos -->
+          <div id="vista-presupuestos" hidden>
+            <div class="pre-cabeza">
+              <p class="panel__hint">Para cafeterías y mayoristas: el cliente abre el presupuesto con un link, lo guarda en PDF y lo puede aceptar ahí mismo (te llega el aviso). Si te da su café para armar drip bags, usá <strong>Calcular armado</strong>.</p>
+              <button type="button" class="p-btn p-pri" id="pre-nuevo"><svg class="ico"><use href="#a-mas-uno"/></svg>Nuevo presupuesto</button>
+            </div>
+            <form class="pre-form" id="pre-form" hidden novalidate>
+              <h3 class="pre-titulo" id="pre-titulo">Nuevo presupuesto</h3>
+              <div class="pre-cliente">
+                <label>Cliente<input id="pre-nombre" maxlength="120" placeholder="Ej.: Hostel 555" required></label>
+                <label>Teléfono (para mandarlo por WhatsApp)<input id="pre-telefono" maxlength="40" inputmode="tel" placeholder="Ej.: 221 555 1234"></label>
+                <label>Email (opcional)<input id="pre-email" maxlength="160" type="email" placeholder="cliente@mail.com"></label>
+              </div>
+              <div class="pre-lineas-cabeza"><span>Detalle</span><span>Cant.</span><span>Precio c/u</span><span>Subtotal</span><span></span></div>
+              <div class="pre-lineas" id="pre-lineas"></div>
+              <div class="pre-agregar">
+                <button type="button" class="p-btn p-sec p-sm" id="pre-mas-producto"><svg class="ico"><use href="#a-productos"/></svg>Producto de la tienda</button>
+                <button type="button" class="p-btn p-sec p-sm" id="pre-mas-libre"><svg class="ico"><use href="#a-mas-uno"/></svg>Línea libre</button>
+                <button type="button" class="p-btn p-sec p-sm" id="pre-calc-abrir"><svg class="ico"><use href="#a-calculadora"/></svg>Calcular armado (café del cliente)</button>
+              </div>
+
+              <!-- Calculadora del armado: el cliente pone el café -->
+              <div class="pre-calc" id="pre-calc" hidden>
+                <h4>Armado de drip bags con el café del cliente</h4>
+                <p class="panel__hint">Costo = insumos + merma + tu mano de obra + gastos indirectos. Precio = costo ÷ (1 − margen). Los valores quedan guardados en este navegador.</p>
+                <div class="pre-calc__grilla">
+                  <label>Cantidad de drip bags<input id="calc-cantidad" inputmode="numeric" value="100"></label>
+                  <label>Merma (%)<input id="calc-merma" inputmode="decimal" value="5"></label>
+                  <label>Drip bags por hora<input id="calc-por-hora" inputmode="numeric" value="40"></label>
+                  <label>Valor de tu hora ($)<input id="calc-hora" inputmode="numeric" value="6000"></label>
+                  <label>Gastos indirectos (%)<input id="calc-indirectos" inputmode="decimal" value="8"></label>
+                  <label>Margen de ganancia (%)<input id="calc-margen" inputmode="decimal" value="35"></label>
+                </div>
+                <p class="pre-calc__sub">Insumos que pone Merla (tildá los que van):</p>
+                <div class="pre-calc__insumos" id="calc-insumos"><span class="panel__hint">Cargando insumos…</span></div>
+                <div class="pre-calc__resultado" id="calc-resultado"></div>
+                <div class="pre-calc__botones">
+                  <button type="button" class="p-btn p-sec p-sm" id="pre-calc-cerrar">Cerrar</button>
+                  <button type="button" class="p-btn p-pri p-sm" id="pre-calc-agregar"><svg class="ico"><use href="#a-mas-uno"/></svg>Agregar al presupuesto</button>
+                </div>
+              </div>
+
+              <div class="pre-condiciones">
+                <label>Descuento (%)<input id="pre-descuento" inputmode="decimal" value="0"></label>
+                <label>Válido por (días)<input id="pre-validez" inputmode="numeric" value="15"></label>
+                <label class="pre-notas">Notas y condiciones (las ve el cliente)<textarea id="pre-notas" rows="3" maxlength="2000" placeholder="Ej.: Entrega en 7 días hábiles desde que recibimos el café. Pago 50% al confirmar."></textarea></label>
+              </div>
+              <div class="pre-totales" id="pre-totales"></div>
+              <p class="mensaje" id="pre-form-mensaje"></p>
+              <div class="pre-botones">
+                <button type="button" class="p-btn p-sec" id="pre-cancelar">Cancelar</button>
+                <button type="submit" class="p-btn p-pri" id="pre-guardar">Guardar presupuesto</button>
+              </div>
+            </form>
+            <p class="mensaje" id="pre-mensaje"></p>
+            <div class="pre-lista" id="pre-lista"></div>
           </div>
 
           <!-- VISTA: Cupones -->

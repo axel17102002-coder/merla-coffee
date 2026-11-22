@@ -10,6 +10,7 @@ const { pedidoDelToken, productosDelPedido } = require("../lib/resenas.js");
 const { enviarMail, config } = require("../lib/brevo.js");
 const { mailResenaNueva } = require("../lib/mails.js");
 const { enviarTelegram, textoResena } = require("../lib/telegram.js");
+const { enviarPush } = require("../lib/push.js");
 const { permitir, claveDe } = require("../lib/limite.js");
 
 const LINK_INVALIDO = "Este link para opinar no es válido o ya venció. Escribinos por WhatsApp y te mandamos uno nuevo.";
@@ -88,7 +89,10 @@ exports.handler = async (event) => {
       }
 
       // Aviso al admin para que la revise (si falla, la reseña igual quedó guardada)
-      const avisoTelegram = enviarTelegram(textoResena(resena)); // no lanza
+      const avisoTelegram = Promise.all([ // no lanzan
+        enviarTelegram(textoResena(resena)),
+        enviarPush({ titulo: `⭐ Reseña nueva de ${resena.nombre} (${resena.estrellas}/5)`, cuerpo: String(resena.texto || "").slice(0, 120), url: "/admin#resenas", etiqueta: `resena-${resena.pedido_id}` }),
+      ]);
       try {
         const mail = mailResenaNueva(resena);
         await enviarMail({ para: config().admin, asunto: mail.asunto, html: mail.html });
