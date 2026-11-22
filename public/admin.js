@@ -138,23 +138,23 @@ function panelDespacho(p) {
     .join("");
 
   const linkTracking = p.tracking_url || urlTracking(envio.transportista, p.tracking_codigo);
-  const textoAviso = esEnvio ? (esLocal ? "🛵 Avisar en camino" : "🚚 Avisar despacho") : "🏪 Avisar listo";
+  const textoAviso = esEnvio ? (esLocal ? "Avisar en camino" : "Avisar despacho") : "Avisar listo";
 
   return `<div class="pedido__despacho" data-despacho="${escapar(p.id)}">
       <div class="pedido__despacho-fila">
         ${tieneMigracion ? `<span class="pedido__despacho-label">Entrega</span>
         <select data-estado-entrega data-id="${escapar(p.id)}" aria-label="Estado de entrega">${opcionesEstado}</select>
         <span class="pedido__metodo-estado" data-despacho-estado></span>` : ""}
-        ${esEnvio ? `<button type="button" class="pedido__despacho-btn" data-action="copiar-envio" data-id="${escapar(p.id)}">📋 Copiar envío</button>` : ""}
-        ${p.cliente_email ? `<button type="button" class="pedido__despacho-btn pedido__despacho-btn--primario" data-action="avisar-despacho" data-id="${escapar(p.id)}">${textoAviso}</button>` : ""}
+        ${esEnvio ? `<button type="button" class="p-btn p-sec p-sm" data-action="copiar-envio" data-id="${escapar(p.id)}"><svg class="ico"><use href="#a-copiar"/></svg><span>Copiar envío</span></button>` : ""}
+        ${p.cliente_email ? `<button type="button" class="p-btn p-pri p-sm" data-action="avisar-despacho" data-id="${escapar(p.id)}"><svg class="ico"><use href="#a-mail"/></svg>${textoAviso}</button>` : ""}
         ${tieneMigracion && estadoActual !== "entregado"
-          ? `<button type="button" class="pedido__despacho-btn pedido__despacho-btn--entregado" data-action="marcar-entregado" data-id="${escapar(p.id)}">✓ Marcar como entregado</button>`
+          ? `<button type="button" class="p-btn p-ok p-sm" data-action="marcar-entregado" data-id="${escapar(p.id)}"><svg class="ico"><use href="#a-check"/></svg>Marcar entregado</button>`
           : ""}
       </div>
       ${tieneMigracion && esEnvio && !esLocal ? `<div class="pedido__despacho-fila">
         <div class="pedido__tracking">
           <input type="text" data-tracking-input placeholder="Código de seguimiento (ej. 0000123456)" value="${escapar(p.tracking_codigo || "")}" aria-label="Código de seguimiento">
-          <button type="button" class="pedido__despacho-btn" data-action="guardar-tracking" data-id="${escapar(p.id)}">Guardar</button>
+          <button type="button" class="p-btn p-sec p-sm" data-action="guardar-tracking" data-id="${escapar(p.id)}">Guardar</button>
         </div>
         ${linkTracking ? `<a class="pedido__tracking-link" href="${escapar(linkTracking)}" target="_blank" rel="noopener">Seguir ↗</a>` : ""}
       </div>` : ""}
@@ -237,9 +237,9 @@ function hace(fecha) {
 
 function accionPrincipal(p, etapa) {
   const id = escapar(p.id);
-  if (etapa === "por_cobrar") return `<button class="fp__btn" data-action="aprobar" data-id="${id}">Marcar cobrado</button>`;
-  if (etapa === "por_preparar") return `<button class="fp__btn fp__btn--primario" data-action="despachar" data-id="${id}">${esRetiro(p) ? "Listo para retirar" : "Marcar enviado"}</button>`;
-  if (etapa === "en_camino") return `<button class="fp__btn" data-action="marcar-entregado" data-id="${id}">✓ Entregado</button>`;
+  if (etapa === "por_cobrar") return `<button class="p-btn p-sec fp__btn" data-action="aprobar" data-id="${id}"><svg class="ico"><use href="#a-billete"/></svg>Marcar cobrado</button>`;
+  if (etapa === "por_preparar") return `<button class="p-btn p-pri fp__btn" data-action="despachar" data-id="${id}">${esRetiro(p) ? `<svg class="ico"><use href="#a-tienda"/></svg>Listo para retirar` : `<svg class="ico"><use href="#a-camion"/></svg>Marcar enviado`}</button>`;
+  if (etapa === "en_camino") return `<button class="p-btn p-ok fp__btn" data-action="marcar-entregado" data-id="${id}"><svg class="ico"><use href="#a-check"/></svg>Entregado</button>`;
   const etiqueta = { entregados: "Entregado", carrito: "Sin pagar", cerrado: p.estado }[etapa] || p.estado;
   return `<span class="fp__estado fp__estado--${escapar(etapa)}">${escapar(etiqueta)}</span>`;
 }
@@ -350,11 +350,11 @@ function tarjetaPedido(p) {
       </div>
       ${cliente}${pago}${cupon}${puntos}${entrega}${estadoMail}${selectorMetodoMp(p)}${panelDespacho(p)}
       <div class="pedido__actions">
-        <button class="borrar" data-action="eliminar" data-id="${escapar(p.id)}" title="Eliminar pedido">🗑 Eliminar</button>
-        ${cancelable ? `<button class="rechazar" data-action="cancelar" title="Cancelar este pedido ya cobrado: revierte puntos, cupón y stock">Cancelar</button>` : ""}
-        ${p.cliente_email && p.estado !== "cancelado" ? `<button class="mail" data-action="mail" data-id="${escapar(p.id)}" title="Enviar confirmación por mail">✉️ ${p.confirmacion_enviada ? "Reenviar" : cancelable ? `Enviar<span class="pedido__largo"> confirmación</span>` : "Enviar confirmación"}</button>` : ""}
-        ${aprobable ? `<button class="rechazar" data-action="rechazar" data-id="${escapar(p.id)}">Rechazar</button>
-        <button class="aprobar" data-action="aprobar" data-id="${escapar(p.id)}">Marcar cobrado</button>` : ""}
+        <button class="p-btn p-texto" data-action="eliminar" data-id="${escapar(p.id)}" title="Eliminar pedido"><svg class="ico"><use href="#a-tacho"/></svg>Eliminar</button>
+        ${cancelable ? `<button class="p-btn p-peligro" data-action="cancelar" title="Cancelar este pedido ya cobrado: revierte puntos, cupón y stock"><svg class="ico"><use href="#a-ban"/></svg>Cancelar</button>` : ""}
+        ${p.cliente_email && p.estado !== "cancelado" ? `<button class="p-btn p-sec" data-action="mail" data-id="${escapar(p.id)}" title="Enviar confirmación por mail"><svg class="ico"><use href="#a-mail"/></svg>${p.confirmacion_enviada ? "Reenviar" : "Confirmación"}</button>` : ""}
+        ${aprobable ? `<button class="p-btn p-peligro" data-action="rechazar" data-id="${escapar(p.id)}"><svg class="ico"><use href="#a-ban"/></svg>Rechazar</button>
+        <button class="p-btn p-pri" data-action="aprobar" data-id="${escapar(p.id)}"><svg class="ico"><use href="#a-check"/></svg>Marcar cobrado</button>` : ""}
       </div>
       ${cancelable ? panelCancelar(p) : ""}
     </article>`;
@@ -1253,14 +1253,12 @@ async function manejarAccionPedido(e) {
 
   // Un toque: el pedido queda entregado (sale de "Por despachar")
   if (action === "marcar-entregado") {
-    boton.disabled = true;
-    boton.textContent = "Guardando…";
+    cargando(boton, true);
     try {
       await cambiarEstadoEntrega(id, "entregado");
       toast("✅ Pedido marcado como entregado");
     } catch (err) {
-      boton.disabled = false;
-      boton.textContent = "✓ Marcar como entregado";
+      cargando(boton, false);
       toast(`⚠️ ${err.message}`);
     }
     return;
@@ -1276,7 +1274,7 @@ async function manejarAccionPedido(e) {
   }
   if (action === "cancelar-confirmar") {
     const devolverStock = tarjeta.querySelector("[data-cancelar-stock]").checked;
-    boton.disabled = true;
+    cargando(boton, true);
     try {
       await api("/api/admin-pedidos", { method: "POST", body: JSON.stringify({ accion: "cancelar", id, devolverStock }) });
       await cargarPedidos();
@@ -1284,7 +1282,7 @@ async function manejarAccionPedido(e) {
       mensaje("#panel-message", `✅ Pedido cancelado${devolverStock ? " y stock devuelto" : ""}`, true);
     } catch (err) {
       mensaje("#panel-message", `⚠️ ${err.message}`);
-      boton.disabled = false;
+      cargando(boton, false);
     }
     return;
   }
@@ -1296,9 +1294,11 @@ async function manejarAccionPedido(e) {
     const texto = textoCopiarEnvio(pedido);
     try {
       await navigator.clipboard.writeText(texto);
-      const orig = boton.textContent;
-      boton.textContent = "✓ Copiado";
-      setTimeout(() => { boton.textContent = orig; }, 1600);
+      const rotulo = boton.querySelector("span") || boton;
+      const orig = rotulo.textContent;
+      rotulo.textContent = "Copiado";
+      boton.classList.add("hecho-suave");
+      setTimeout(() => { rotulo.textContent = orig; boton.classList.remove("hecho-suave"); }, 1600);
     } catch {
       prompt("Copiá los datos del envío:", texto);
     }
@@ -1310,7 +1310,7 @@ async function manejarAccionPedido(e) {
     const caja = boton.closest("[data-despacho]");
     const input = caja && caja.querySelector("[data-tracking-input]");
     const codigo = input ? input.value.trim() : "";
-    boton.disabled = true;
+    cargando(boton, true);
     try {
       const r = await api("/api/admin-pedidos", {
         method: "PATCH",
@@ -1327,7 +1327,7 @@ async function manejarAccionPedido(e) {
       toast(codigo ? "✅ Código de seguimiento guardado" : "Código de seguimiento borrado");
     } catch (err) {
       mensaje("#panel-message", `⚠️ ${err.message}`);
-      boton.disabled = false;
+      cargando(boton, false);
     }
     return;
   }
@@ -1340,14 +1340,14 @@ async function manejarAccionPedido(e) {
       ? "¿Enviar el mail de aviso de despacho al cliente (con el código de seguimiento si lo cargaste)?"
       : "¿Avisarle por mail al cliente que su pedido está listo para retirar?";
     if (!confirm(pregunta)) return;
-    boton.disabled = true;
+    cargando(boton, true);
     try {
       const r = await api("/api/admin-mail", { method: "POST", body: JSON.stringify({ pedido_id: id, tipo: "despacho" }) });
       toast(`✅ Aviso enviado a ${r.para}`);
+      cargando(boton, false, true);
     } catch (err) {
       mensaje("#panel-message", `⚠️ ${err.message}`);
-    } finally {
-      boton.disabled = false;
+      cargando(boton, false);
     }
     return;
   }
@@ -1363,7 +1363,7 @@ async function manejarAccionPedido(e) {
   if (action === "rechazar" && !confirm("¿Rechazar este pedido pendiente?")) return;
   if (action === "aprobar" && !confirm("¿Confirmar el cobro? Esto descuenta stock y actualiza puntos.")) return;
   if (action === "mail" && !confirm("¿Enviar el mail de confirmación al cliente?")) return;
-  boton.disabled = true;
+  cargando(boton, true);
   try {
     if (action === "eliminar") {
       await api(`/api/admin-pedidos?id=${encodeURIComponent(id)}`, { method: "DELETE" });
@@ -1378,7 +1378,7 @@ async function manejarAccionPedido(e) {
     await cargarPedidos();
   } catch (err) {
     mensaje("#panel-message", `⚠️ ${err.message}`);
-    boton.disabled = false;
+    cargando(boton, false);
   }
 }
 $("#pedidos").addEventListener("click", manejarAccionPedido);
@@ -1464,7 +1464,24 @@ async function manejarCambioPedido(e) {
 $("#pedidos").addEventListener("change", manejarCambioPedido);
 $("#pedido-detalle").addEventListener("change", manejarCambioPedido);
 
-$("#reload").addEventListener("click", cargarPedidos);
+// Botón esperando al servidor: círculo que gira y no se puede volver a tocar.
+// Con `hecho`, muestra un tilde un momento antes de volver a la normalidad.
+function cargando(boton, activo, hecho = false) {
+  if (!boton) return;
+  boton.disabled = activo;
+  boton.classList.toggle("cargando", activo);
+  if (!activo && hecho && boton.isConnected) {
+    boton.classList.add("hecho");
+    setTimeout(() => boton.classList.remove("hecho"), 900);
+  }
+}
+
+$("#reload").addEventListener("click", async () => {
+  const b = $("#reload");
+  b.classList.add("gira");
+  await cargarPedidos();
+  b.classList.remove("gira");
+});
 
 // ===== Despachar en un paso =====
 // Una sola ventana: datos para pegar en el correo, código de seguimiento y el
@@ -1528,7 +1545,7 @@ function abrirDespacho(id) {
         : "El pedido no tiene email: no se puede avisar por mail"}
     </label>`;
   $("#despacho-ok").textContent = retiro ? "Marcar listo para retirar" : "Marcar como enviado";
-  $("#despacho-ok").disabled = false;
+  cargando($("#despacho-ok"), false);
   mensaje("#despacho-mensaje", "");
   $("#despacho-dialogo").showModal();
   const codigo = $("#despacho-codigo");
@@ -1552,7 +1569,7 @@ $("#despacho-form").addEventListener("submit", async (e) => {
   const codigo = $("#despacho-codigo");
   if (codigo && codigo.value.trim()) body.tracking_codigo = codigo.value.trim();
   const avisar = $("#despacho-avisar").checked && !$("#despacho-avisar").disabled;
-  boton.disabled = true;
+  cargando(boton, true);
   mensaje("#despacho-mensaje", "Guardando…", true);
   try {
     const r = await api("/api/admin-pedidos", { method: "PATCH", body: JSON.stringify(body) });
@@ -1579,7 +1596,7 @@ $("#despacho-form").addEventListener("submit", async (e) => {
     toast(`✅ ${numeroDe(p)} ${esRetiro(p) ? "listo para retirar" : "marcado como enviado"}${aviso}`);
   } catch (err) {
     mensaje("#despacho-mensaje", `⚠️ ${err.message}`);
-    boton.disabled = false;
+    cargando(boton, false);
   }
 });
 
@@ -1794,7 +1811,7 @@ $("#pedido-manual").addEventListener("submit", async (e) => {
   if (!confirm(`¿Cargar este pedido por ${formato.format(total)}?\n\n${aviso}`)) return;
 
   const boton = $("#pm-guardar");
-  boton.disabled = true;
+  cargando(boton, true);
   try {
     const r = await api("/api/admin-pedidos", {
       method: "POST",
@@ -1820,7 +1837,7 @@ $("#pedido-manual").addEventListener("submit", async (e) => {
   } catch (err) {
     mensaje("#pm-mensaje", `⚠️ ${err.message}`);
   } finally {
-    boton.disabled = false;
+    cargando(boton, false);
   }
 });
 

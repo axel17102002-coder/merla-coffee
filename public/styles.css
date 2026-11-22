@@ -1924,3 +1924,72 @@ section[id], footer[id] { scroll-margin-top: 90px; }
   .para-vos { padding: 14px; }
   .para-vos__opcion { padding: 7px 12px; font-size: 0.8rem; }
 }
+
+/* =====================================================================
+   Botones (rediseño elegido): responden al apretar en vez de saltar al
+   pasar el mouse, y todo lo que se toca mide 40-52 px.
+   ===================================================================== */
+@keyframes salta { 40% { transform: scale(1.35); } }
+
+/* «Agregar»: con ícono y confirmación ("Agregado") un segundo */
+.card__add { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 44px; padding: 0 18px 0 14px; transition: background 0.15s, transform 0.1s; }
+.card__add:hover { background: var(--verde-oscuro); transform: none; box-shadow: none; }
+.card__add:active { transform: scale(0.97); }
+.card__add .icono { width: 18px; height: 18px; stroke-width: 2.4; }
+.card__add.agregado, .card__add.agregado:hover { background: #8a5a2b; }
+
+/* Unidad / Pack: un selector de dos opciones, no dos botones sueltos */
+.pres { gap: 0; padding: 4px; background: #e7e3da; border-radius: 999px; }
+.pres__btn { height: 36px; padding: 0 8px; border: 0; background: transparent; display: inline-flex; align-items: center; justify-content: center; gap: 6px; color: #5a6552; transition: background 0.15s, color 0.15s, box-shadow 0.15s; }
+.pres__btn em { font-size: 0.7rem; color: #8a5a2b; background: #f4e3cf; padding: 1px 6px; border-radius: 999px; }
+.pres__btn.activo { background: var(--blanco); color: var(--verde); border: 0; box-shadow: 0 1px 3px rgba(34, 48, 31, 0.16); }
+.pres__btn.activo em { color: #8a5a2b; }
+
+/* Carrito del encabezado: marrón, 44 px, el número salta al agregar */
+.cart-btn { height: 44px; padding: 0 18px; transition: background 0.15s, transform 0.1s, box-shadow 0.15s; }
+.cart-btn:hover { background: var(--cacao-claro); transform: none; }
+.cart-btn:active { transform: scale(0.97); }
+.cart-btn__badge { background: var(--caramelo-suave); color: var(--cacao); box-shadow: 0 0 0 2px var(--crema); }
+.cart-btn__badge.salta { animation: salta 0.35s ease; }
+
+/* Pago: un color para cada uno (azul Mercado Pago, verde WhatsApp), con
+   contraste de más de 5:1 y 52 px de alto */
+#pay-mp, #checkout { min-height: 52px; padding-top: 8px; padding-bottom: 8px; transition: background 0.15s, transform 0.1s; }
+#pay-mp:active, #checkout:active { transform: scale(0.98); }
+.btn--mp { background: #0072b5; color: #fff; }
+.btn--mp:hover:not(:disabled) { background: #005f99; }
+.btn--wsp { background: #1b7a43; color: #fff; border: 0; }
+.btn--wsp:hover { background: #156637; color: #fff; border: 0; transform: none; }
+.btn__textos { display: grid; text-align: left; line-height: 1.25; }
+.btn__textos small { font-weight: 500; font-size: 0.76rem; opacity: 0.9; }
+
+/* Cantidad: una sola pieza; con 1 unidad, el − es un tacho */
+.cart-item__qty { display: inline-flex; align-items: center; gap: 0; height: 40px; padding: 2px; border: 1.5px solid var(--crema-borde); border-radius: 999px; background: var(--blanco); }
+.cart-item__qty button { width: 34px; height: 34px; border: 0; border-radius: 50%; background: transparent; display: grid; place-items: center; padding: 0; }
+.cart-item__qty button .icono { width: 17px; height: 17px; stroke-width: 2.2; }
+.cart-item__qty b { min-width: 30px; font-variant-numeric: tabular-nums; }
+.cart .cart-item__qty { background: var(--panel); border-color: var(--panel-borde); }
+.cart .cart-item__qty button { background: transparent; color: var(--panel-texto); }
+.cart .cart-item__qty button:hover { background: var(--panel-borde); }
+
+/* «Ver detalle»: verde (contraste 9,6:1) con flechita */
+.card__more { color: var(--verde); font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 2px; padding: 6px 0; text-underline-offset: 3px; }
+.card__more:hover { text-decoration: underline; }
+.card__more .icono { width: 16px; height: 16px; stroke-width: 2.4; transition: transform 0.15s; }
+.card__more:hover .icono { transform: translateX(2px); }
+
+/* Cerrar: 40 px y una X dibujada, siempre centrada */
+.modal__close, .cart__close { width: 40px; height: 40px; padding: 0; display: grid; place-items: center; border-radius: 50%; transition: background 0.15s, border-color 0.15s; }
+.modal__close:hover { background: var(--crema-suave); border-color: var(--verde); }
+.modal__close .icono, .cart__close .icono { width: 18px; height: 18px; stroke-width: 2.2; }
+
+@media (max-width: 560px) {
+  .card__add { height: 40px; padding: 0 14px 0 11px; font-size: 0.8rem; }
+  .card__add .icono { width: 16px; height: 16px; }
+  .pres__btn { height: 32px; padding: 0 4px; font-size: 0.74rem; }
+  .pres__btn em { font-size: 0.64rem; padding: 0 5px; }
+  .cart-btn { height: 42px; padding: 0 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cart-btn__badge.salta { animation: none; }
+}

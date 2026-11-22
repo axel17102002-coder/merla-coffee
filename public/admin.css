@@ -860,3 +860,53 @@ body.sin-scroll { overflow: hidden; }
   .dlg__form { padding: 18px 16px; }
   .dlg__fila { grid-template-columns: 84px minmax(0, 1fr); }
 }
+
+/* =====================================================================
+   Botones del panel (rediseño elegido): una familia, esquinas de 10 px,
+   íconos de trazo, 36-40 px de alto, y "cargando" con círculo que gira
+   ===================================================================== */
+.p-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 40px; padding: 0 15px; border: 1px solid transparent; border-radius: 10px; font: inherit; font-weight: 700; font-size: .88rem; cursor: pointer; white-space: nowrap; transition: background .15s, border-color .15s, color .15s, transform .1s; }
+.p-btn:active:not(:disabled) { transform: scale(.97); }
+.p-btn .ico { width: 17px; height: 17px; }
+.p-pri { background: var(--verde); color: #fff; }
+.p-pri:hover:not(:disabled) { background: #24392a; }
+.p-sec { background: #fff; color: var(--verde); border-color: var(--borde); }
+.p-sec:hover:not(:disabled) { border-color: var(--verde); background: #f7f4ea; }
+.p-ok { background: #fff; color: #2f6931; border-color: #b9d7b0; }
+.p-ok:hover:not(:disabled) { background: #d9ead4; }
+.p-peligro { background: #fff; color: var(--rojo); border-color: #e8c4be; }
+.p-peligro:hover:not(:disabled) { background: #fbeeeb; }
+.p-texto { background: none; border: 0; color: var(--rojo); padding: 0 4px; opacity: .85; }
+.p-texto:hover:not(:disabled) { opacity: 1; text-decoration: underline; }
+.p-sm { height: 36px; padding: 0 12px; font-size: .82rem; }
+.p-btn:disabled { cursor: default; }
+/* Le gana a los estilos viejos de .pedido__actions button */
+.pedido__actions .p-btn { padding: 0 15px; border-radius: 10px; }
+.pedido__actions .p-texto { margin-right: auto; padding: 0 4px; }
+.pedido__actions { align-items: center; }
+.fp__btn.p-btn { height: 38px; padding: 0 13px; font-size: .84rem; }
+.detalle__accion .p-btn { flex: 1; height: 46px; font-size: .95rem; }
+.hecho-suave { background: #d9ead4 !important; border-color: #b9d7b0 !important; color: #2f6931 !important; }
+
+/* Ícono solo (Actualizar) */
+.icono-btn { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--borde); background: var(--papel); color: var(--verde); display: inline-grid; place-items: center; cursor: pointer; transition: background .15s, border-color .15s; }
+.icono-btn:hover { border-color: var(--verde); background: #f7f4ea; }
+.icono-btn .ico { width: 18px; height: 18px; }
+.icono-btn.gira .ico { animation: gira-btn .7s linear infinite; }
+
+/* Cargando: el contenido se oculta y gira un círculo del color del texto */
+@keyframes gira-btn { to { transform: rotate(360deg); } }
+.cargando { position: relative; pointer-events: none; }
+.cargando > * { visibility: hidden; }
+.cargando { color: transparent !important; }
+.cargando::after { content: ""; position: absolute; inset: 0; margin: auto; width: 16px; height: 16px; border-radius: 50%; border: 2.5px solid var(--spin, var(--verde)); border-right-color: transparent; animation: gira-btn .7s linear infinite; }
+.p-pri.cargando, .px-btn.cargando, #pm-guardar.cargando { --spin: #fff; }
+.p-peligro.cargando, .p-texto.cargando { --spin: var(--rojo); }
+.p-ok.cargando { --spin: #2f6931; }
+.hecho { background: #2f6931 !important; border-color: #2f6931 !important; color: #fff !important; }
+@media (prefers-reduced-motion: reduce) {
+  .cargando::after, .icono-btn.gira .ico { animation-duration: 2s; }
+}
+@media (max-width: 600px) {
+  .pedido__actions .p-btn:not(.p-texto) { flex: 1 1 auto; }
+}

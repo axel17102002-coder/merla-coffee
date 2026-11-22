@@ -377,7 +377,7 @@ function tarjetaProducto(p, i) {
         <h3>${p.nombre}</h3>
         <div class="card__notes">${p.notas.map((n) => `<span class="chip">${n}</span>`).join("")}</div>
         ${barrasPerfil(p, "perfil--tarjeta")}
-        <button class="card__more" data-modal="${p.id}">Ver detalle</button>
+        <button class="card__more" data-modal="${p.id}">Ver detalle ${icono("chevron")}</button>
         ${p.stock > 0 ? selectorPresentaciones(p) : ""}
         <div class="card__foot">
           <div class="card__precios">
@@ -388,7 +388,7 @@ function tarjetaProducto(p, i) {
             ${base ? `<span class="precio-transf"><strong data-transf-de="${p.id}">${formatear(precioTransferencia(base.precio))}</strong> con transferencia</span>` : ""}
           </div>
           <button class="card__add" data-add="${p.id}" ${p.stock === 0 || !base ? "disabled" : ""}>
-            ${p.stock === 0 ? "Sin stock" : "Agregar"}
+            ${p.stock === 0 ? "Sin stock" : `${icono("mas")}<span>Agregar</span>`}
           </button>
         </div>
       </div>
@@ -481,7 +481,7 @@ function renderParaVos() {
       ${elegido.imagen ? `<img src="${escaparAttr(elegido.imagen)}" alt="" loading="lazy">` : ""}
       <div class="para-vos__texto">
         <p>Te va a gustar el <strong>${escaparHtml(elegido.nombre)}</strong>${notas ? `: ${escaparHtml(notas)}.` : "."}</p>
-        <button type="button" class="card__more" data-modal="${escaparAttr(elegido.id)}">Ver detalle y comprar</button>
+        <button type="button" class="card__more" data-modal="${escaparAttr(elegido.id)}">Ver detalle y comprar ${icono("chevron")}</button>
       </div>
     </div>`;
 }
@@ -876,7 +876,15 @@ function renderCarrito() {
   const badge = $("#cart-count");
 
   badge.hidden = items.length === 0;
-  badge.textContent = calc ? calc.unidades : items.reduce((a, i) => a + i.qty, 0);
+  const unidades = calc ? calc.unidades : items.reduce((a, i) => a + i.qty, 0);
+  // El número salta cuando aumenta (agregaste algo)
+  if (Number(badge.textContent) < unidades && badge.dataset.listo) {
+    badge.classList.remove("salta");
+    void badge.offsetWidth;
+    badge.classList.add("salta");
+  }
+  badge.dataset.listo = "1";
+  badge.textContent = unidades;
 
   $("#email-input").value = emailCliente();
   renderPuntosWidget();
@@ -905,9 +913,9 @@ function renderCarrito() {
           <div class="cart-item__name">${producto.nombre} <span class="cart-item__pres">${pres.nombre}</span></div>
           <div class="cart-item__price">${formatear(pres.precio)} c/u</div>
           <div class="cart-item__qty">
-            <button data-menos="${presentacion}" aria-label="Restar">−</button>
+            <button data-menos="${presentacion}" aria-label="${qty === 1 ? "Sacar del carrito" : "Restar"}">${icono(qty === 1 ? "tacho" : "menos")}</button>
             <b>${qty}</b>
-            <button data-mas="${presentacion}" aria-label="Sumar">+</button>
+            <button data-mas="${presentacion}" aria-label="Sumar">${icono("mas")}</button>
           </div>
         </div>
         <div style="text-align:right">
@@ -1111,6 +1119,18 @@ function agregar(productoId, presentacionId, abrir = false) {
     });
     if (abrir) abrirCarrito();
   }
+  return ok;
+}
+
+// El botón dice "Agregado" con un tilde un segundo: confirma sin abrir el carrito
+function confirmarAgregado(boton) {
+  clearTimeout(boton._agregado);
+  boton.classList.add("agregado");
+  boton.innerHTML = `${icono("check")}<span>Agregado</span>`;
+  boton._agregado = setTimeout(() => {
+    boton.classList.remove("agregado");
+    boton.innerHTML = `${icono("mas")}<span>Agregar</span>`;
+  }, 1200);
 }
 
 function cambiar(presentacionId, delta) {
@@ -1951,7 +1971,7 @@ function mostrarConfirmacionCompra({ pedido, puntos, conEmail }) {
   $("#modal-card").classList.add("modal__card--simple");
   $("#modal-card").innerHTML = `
     <div class="modal__body form-resena form-resena--gracias">
-      <button type="button" class="modal__close" aria-label="Cerrar">✕</button>
+      <button type="button" class="modal__close" aria-label="Cerrar">${icono("x")}</button>
       ${icono("check", "icono--grande")}
       <h3>¡Gracias por tu compra!</h3>
       ${num ? `<p class="form-resena__pedido">Pedido <strong>${escaparHtml(num)}</strong>${total ? ` · ${escaparHtml(total)}` : ""}</p>` : ""}
@@ -2112,7 +2132,7 @@ function abrirModal(id) {
   $("#modal-card").innerHTML = `
     <div class="modal__img"><img src="${p.imagen}" alt="${p.nombre}"></div>
     <div class="modal__body" data-card="${p.id}">
-      <button class="modal__close" aria-label="Cerrar">✕</button>
+      <button class="modal__close" aria-label="Cerrar">${icono("x")}</button>
       <h3>${p.nombre}</h3>
       ${(p.region || p.origen) ? `<p class="modal__region">${icono("pin")} ${escaparHtml(p.region || p.origen)}</p>` : ""}
       <p class="modal__desc">${p.descripcion || ""}</p>
@@ -2257,7 +2277,9 @@ document.addEventListener("click", (e) => {
   const add = e.target.closest("[data-add]");
   if (add && !add.disabled) {
     const card = add.closest("[data-card]");
-    return agregar(add.dataset.add, presSeleccionada(card, add.dataset.add));
+    const ok = agregar(add.dataset.add, presSeleccionada(card, add.dataset.add));
+    if (ok) confirmarAgregado(add);
+    return;
   }
 
   const addModal = e.target.closest("[data-add-modal]");
@@ -2464,7 +2486,7 @@ function pintarFormResena() {
   $("#modal-card").classList.add("modal__card--simple");
   $("#modal-card").innerHTML = `
     <form class="modal__body form-resena" id="form-resena" novalidate>
-      <button type="button" class="modal__close" aria-label="Cerrar">✕</button>
+      <button type="button" class="modal__close" aria-label="Cerrar">${icono("x")}</button>
       <h3>¿Qué te pareció?</h3>
       <p class="form-resena__pedido">Tu pedido ${escaparHtml(numeroPedido(f.numero))}${f.productos ? ` · ${escaparHtml(f.productos)}` : ""}</p>
       <div class="form-resena__estrellas" role="radiogroup" aria-label="Puntaje">${estrellasFormResena()}</div>
@@ -2500,7 +2522,7 @@ async function enviarFormResena() {
     formResena = null;
     $("#modal-card").innerHTML = `
       <div class="modal__body form-resena form-resena--gracias">
-        <button type="button" class="modal__close" aria-label="Cerrar">✕</button>
+        <button type="button" class="modal__close" aria-label="Cerrar">${icono("x")}</button>
         ${icono("cafe", "icono--grande")}
         <h3>¡Gracias${nombre ? `, ${escaparHtml(nombre.split(" ")[0])}` : ""}!</h3>
         <p>${res.status === 409 ? escaparHtml(data.error) : "Recibimos tu opinión. La vamos a publicar en la web en los próximos días."}</p>
