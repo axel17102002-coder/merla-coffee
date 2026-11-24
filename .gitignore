@@ -22,3 +22,6 @@ public/img/*.jpeg
 # también matchea *.jpg. Las versiones optimizadas para la web llevan el sufijo
 # _web y se listan acá para que sí entren al repo.
 !public/img/*_web.jpg
+
+# Piezas para redes (pesadas, no van a la web)
+marketing/
